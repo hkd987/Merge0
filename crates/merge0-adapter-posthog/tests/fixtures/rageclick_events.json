@@ -1,0 +1,40 @@
+{
+  "endpoint": "rageclick_events",
+  "context": { "project_base_url": "https://us.posthog.com/project/1" },
+  "payload": {
+    "results": [
+      {
+        "id": "e1",
+        "event": "$rageclick",
+        "distinct_id": "teacher-104",
+        "timestamp": "2026-08-05T14:00:00Z",
+        "properties": {
+          "$pathname": "/districts/sync",
+          "$current_url": "https://app.example.com/districts/sync",
+          "$session_id": "sess-aaa"
+        }
+      },
+      {
+        "id": "e2",
+        "event": "$rageclick",
+        "distinct_id": "teacher-233",
+        "timestamp": "2026-08-05T15:30:00Z",
+        "properties": {
+          "$pathname": "/districts/sync",
+          "$current_url": "https://app.example.com/districts/sync",
+          "$session_id": "sess-bbb"
+        }
+      },
+      {
+        "id": "e3",
+        "event": "$rageclick",
+        "distinct_id": "admin-7",
+        "timestamp": "2026-08-05T16:00:00Z",
+        "properties": {
+          "$current_url": "https://app.example.com/reports/export?format=csv",
+          "$session_id": "sess-ccc"
+        }
+      }
+    ]
+  }
+}

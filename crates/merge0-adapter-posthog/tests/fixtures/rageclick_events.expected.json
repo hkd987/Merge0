@@ -1,0 +1,90 @@
+[
+  {
+    "affected_count": 2,
+    "body": "2 rage-click event(s) from 2 distinct user(s) on /districts/sync",
+    "evidence": [
+      {
+        "kind": "replay",
+        "label": "Session replay sess-aaa",
+        "url": "https://us.posthog.com/project/1/replay/sess-aaa"
+      },
+      {
+        "kind": "replay",
+        "label": "Session replay sess-bbb",
+        "url": "https://us.posthog.com/project/1/replay/sess-bbb"
+      }
+    ],
+    "fingerprint": "posthog:fbcf7f72c4af53141f2d042e6ed3f330",
+    "first_seen": "2026-08-05T14:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {
+      "url_path": "/districts/sync"
+    },
+    "kind": "ux_friction",
+    "last_seen": "2026-08-05T15:30:00Z",
+    "raw": [
+      {
+        "distinct_id": "teacher-104",
+        "event": "$rageclick",
+        "id": "e1",
+        "properties": {
+          "$current_url": "https://app.example.com/districts/sync",
+          "$pathname": "/districts/sync",
+          "$session_id": "sess-aaa"
+        },
+        "timestamp": "2026-08-05T14:00:00Z"
+      },
+      {
+        "distinct_id": "teacher-233",
+        "event": "$rageclick",
+        "id": "e2",
+        "properties": {
+          "$current_url": "https://app.example.com/districts/sync",
+          "$pathname": "/districts/sync",
+          "$session_id": "sess-bbb"
+        },
+        "timestamp": "2026-08-05T15:30:00Z"
+      }
+    ],
+    "severity": "low",
+    "source": "posthog",
+    "source_ref": "rageclick:/districts/sync",
+    "title": "Rage clicks on /districts/sync"
+  },
+  {
+    "affected_count": 1,
+    "body": "1 rage-click event(s) from 1 distinct user(s) on /reports/export",
+    "evidence": [
+      {
+        "kind": "replay",
+        "label": "Session replay sess-ccc",
+        "url": "https://us.posthog.com/project/1/replay/sess-ccc"
+      }
+    ],
+    "fingerprint": "posthog:51898132a3d57d87a91975fb1008c23d",
+    "first_seen": "2026-08-05T16:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {
+      "account_id": "admin-7",
+      "url_path": "/reports/export"
+    },
+    "kind": "ux_friction",
+    "last_seen": "2026-08-05T16:00:00Z",
+    "raw": [
+      {
+        "distinct_id": "admin-7",
+        "event": "$rageclick",
+        "id": "e3",
+        "properties": {
+          "$current_url": "https://app.example.com/reports/export?format=csv",
+          "$session_id": "sess-ccc"
+        },
+        "timestamp": "2026-08-05T16:00:00Z"
+      }
+    ],
+    "severity": "low",
+    "source": "posthog",
+    "source_ref": "rageclick:/reports/export",
+    "title": "Rage clicks on /reports/export"
+  }
+]

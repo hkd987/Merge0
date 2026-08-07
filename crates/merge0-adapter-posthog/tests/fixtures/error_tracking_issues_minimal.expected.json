@@ -1,0 +1,30 @@
+[
+  {
+    "body": "",
+    "evidence": [
+      {
+        "kind": "issue",
+        "label": "PostHog issue UnhandledRejection",
+        "url": "https://us.posthog.com/project/1/error_tracking/0198a5f2-3333-7aaa-bbbb-3c4d5e6f7a8b"
+      }
+    ],
+    "fingerprint": "posthog:bf4d4925db4c1f69dbecf30b3a536fd4",
+    "first_seen": "2026-08-04T00:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {
+      "stack_hash": "3c80335c2d54a2351a0f8d66ea441e27"
+    },
+    "kind": "exception",
+    "last_seen": "2026-08-04T00:00:00Z",
+    "raw": {
+      "first_seen": "2026-08-04T00:00:00Z",
+      "id": "0198a5f2-3333-7aaa-bbbb-3c4d5e6f7a8b",
+      "last_seen": "2026-08-04T00:00:00Z",
+      "name": "UnhandledRejection"
+    },
+    "severity": "low",
+    "source": "posthog",
+    "source_ref": "0198a5f2-3333-7aaa-bbbb-3c4d5e6f7a8b",
+    "title": "UnhandledRejection"
+  }
+]

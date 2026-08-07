@@ -1,0 +1,12 @@
+{
+  "endpoint": "issues",
+  "payload": [
+    {
+      "id": "5399999999",
+      "title": "ValueError: invalid grade band",
+      "permalink": "https://sentry.example.com/organizations/chalk/issues/5399999999",
+      "firstSeen": "2026-08-04T12:00:00Z",
+      "lastSeen": "2026-08-04T12:00:00Z"
+    }
+  ]
+}

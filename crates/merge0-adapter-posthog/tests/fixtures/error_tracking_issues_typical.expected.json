@@ -1,0 +1,72 @@
+[
+  {
+    "affected_count": 42,
+    "body": "Cannot read properties of undefined (reading 'districtId')",
+    "evidence": [
+      {
+        "kind": "issue",
+        "label": "PostHog issue TypeError",
+        "url": "https://us.posthog.com/project/1/error_tracking/0198a5f2-1111-7aaa-bbbb-3c4d5e6f7a8b"
+      }
+    ],
+    "fingerprint": "posthog:e99c4aa3c06fbdcd5c6b9fdf28ec4948",
+    "first_seen": "2026-08-01T04:12:00Z",
+    "id": "<ulid>",
+    "join_keys": {
+      "stack_hash": "470d0690857f7fcebe706459a24c3430"
+    },
+    "kind": "exception",
+    "last_seen": "2026-08-06T22:30:00Z",
+    "raw": {
+      "assignee": null,
+      "description": "Cannot read properties of undefined (reading 'districtId')",
+      "first_seen": "2026-08-01T04:12:00Z",
+      "id": "0198a5f2-1111-7aaa-bbbb-3c4d5e6f7a8b",
+      "last_seen": "2026-08-06T22:30:00Z",
+      "name": "TypeError",
+      "occurrences": 310,
+      "sessions": 120,
+      "status": "active",
+      "users": 42
+    },
+    "severity": "high",
+    "source": "posthog",
+    "source_ref": "0198a5f2-1111-7aaa-bbbb-3c4d5e6f7a8b",
+    "title": "TypeError"
+  },
+  {
+    "affected_count": 3,
+    "body": "The user aborted a request.",
+    "evidence": [
+      {
+        "kind": "issue",
+        "label": "PostHog issue AbortError",
+        "url": "https://us.posthog.com/project/1/error_tracking/0198a5f2-2222-7aaa-bbbb-3c4d5e6f7a8b"
+      }
+    ],
+    "fingerprint": "posthog:cb474fa6fe18078ec2a2bb371b43d444",
+    "first_seen": "2026-08-03T09:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {
+      "stack_hash": "e2f3df3c7589eabaa2f80eada699ce38"
+    },
+    "kind": "exception",
+    "last_seen": "2026-08-05T18:45:00Z",
+    "raw": {
+      "assignee": null,
+      "description": "The user aborted a request.",
+      "first_seen": "2026-08-03T09:00:00Z",
+      "id": "0198a5f2-2222-7aaa-bbbb-3c4d5e6f7a8b",
+      "last_seen": "2026-08-05T18:45:00Z",
+      "name": "AbortError",
+      "occurrences": 6,
+      "sessions": 4,
+      "status": "active",
+      "users": 3
+    },
+    "severity": "low",
+    "source": "posthog",
+    "source_ref": "0198a5f2-2222-7aaa-bbbb-3c4d5e6f7a8b",
+    "title": "AbortError"
+  }
+]

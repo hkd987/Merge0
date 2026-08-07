@@ -2,6 +2,9 @@
 resolver = "2"
 members = [
     "crates/merge0-signal",
+    "crates/merge0-adapters",
+    "crates/merge0-adapter-posthog",
+    "crates/merge0-adapter-sentry",
 ]
 
 [workspace.package]
@@ -20,3 +23,4 @@ sha2 = "0.10"
 toml = "0.8"
 
 merge0-signal = { path = "crates/merge0-signal" }
+merge0-adapters = { path = "crates/merge0-adapters" }

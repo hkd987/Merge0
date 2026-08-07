@@ -1,0 +1,98 @@
+[
+  {
+    "affected_count": 42,
+    "body": "Cannot read properties of undefined (reading 'districtId') (in SyncStatusPanel(app/components/sync))",
+    "evidence": [
+      {
+        "kind": "issue",
+        "label": "Sentry issue CHALK-123",
+        "url": "https://sentry.example.com/organizations/chalk/issues/5312345678/"
+      },
+      {
+        "kind": "stack_trace",
+        "label": "Latest event",
+        "url": "https://sentry.example.com/organizations/chalk/issues/5312345678/events/latest/"
+      }
+    ],
+    "fingerprint": "sentry:12bed4bad1d7c77d627f259efff91b57",
+    "first_seen": "2026-08-01T04:12:00Z",
+    "id": "<ulid>",
+    "join_keys": {
+      "release": "v2.3.0",
+      "stack_hash": "470d0690857f7fcebe706459a24c3430"
+    },
+    "kind": "exception",
+    "last_seen": "2026-08-06T22:30:00Z",
+    "raw": {
+      "count": "310",
+      "culprit": "SyncStatusPanel(app/components/sync)",
+      "firstRelease": {
+        "version": "v2.3.0"
+      },
+      "firstSeen": "2026-08-01T04:12:00Z",
+      "id": "5312345678",
+      "lastRelease": {
+        "version": "v2.4.1"
+      },
+      "lastSeen": "2026-08-06T22:30:00Z",
+      "level": "error",
+      "metadata": {
+        "type": "TypeError",
+        "value": "Cannot read properties of undefined (reading 'districtId')"
+      },
+      "permalink": "https://sentry.example.com/organizations/chalk/issues/5312345678/",
+      "platform": "javascript",
+      "shortId": "CHALK-123",
+      "status": "unresolved",
+      "title": "TypeError: Cannot read properties of undefined (reading 'districtId')",
+      "type": "error",
+      "userCount": 42
+    },
+    "severity": "high",
+    "source": "sentry",
+    "source_ref": "5312345678",
+    "title": "TypeError: Cannot read properties of undefined (reading 'districtId')"
+  },
+  {
+    "affected_count": 2,
+    "body": "in app/jobs/roster_import.py in run",
+    "evidence": [
+      {
+        "kind": "issue",
+        "label": "Sentry issue CHALK-140",
+        "url": "https://sentry.example.com/organizations/chalk/issues/5312345999/"
+      },
+      {
+        "kind": "stack_trace",
+        "label": "Latest event",
+        "url": "https://sentry.example.com/organizations/chalk/issues/5312345999/events/latest/"
+      }
+    ],
+    "fingerprint": "sentry:49a19bd2eb12f5cc38e7d1005ca45b24",
+    "first_seen": "2026-08-02T08:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "exception",
+    "last_seen": "2026-08-06T08:00:00Z",
+    "raw": {
+      "count": "18",
+      "culprit": "app/jobs/roster_import.py in run",
+      "firstSeen": "2026-08-02T08:00:00Z",
+      "id": "5312345999",
+      "lastSeen": "2026-08-06T08:00:00Z",
+      "level": "warning",
+      "metadata": {},
+      "permalink": "https://sentry.example.com/organizations/chalk/issues/5312345999/",
+      "platform": "python",
+      "shortId": "CHALK-140",
+      "status": "unresolved",
+      "title": "Slow database query on roster import",
+      "type": "default",
+      "userCount": 2
+    },
+    "severity": "medium",
+    "source": "sentry",
+    "source_ref": "5312345999",
+    "title": "Slow database query on roster import"
+  }
+]

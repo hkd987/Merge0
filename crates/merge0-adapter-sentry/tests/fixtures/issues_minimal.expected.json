@@ -1,0 +1,34 @@
+[
+  {
+    "body": "",
+    "evidence": [
+      {
+        "kind": "issue",
+        "label": "Sentry issue 5399999999",
+        "url": "https://sentry.example.com/organizations/chalk/issues/5399999999"
+      },
+      {
+        "kind": "stack_trace",
+        "label": "Latest event",
+        "url": "https://sentry.example.com/organizations/chalk/issues/5399999999/events/latest/"
+      }
+    ],
+    "fingerprint": "sentry:41bf9965786e1fa1e88fa4efe5176b1a",
+    "first_seen": "2026-08-04T12:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "exception",
+    "last_seen": "2026-08-04T12:00:00Z",
+    "raw": {
+      "firstSeen": "2026-08-04T12:00:00Z",
+      "id": "5399999999",
+      "lastSeen": "2026-08-04T12:00:00Z",
+      "permalink": "https://sentry.example.com/organizations/chalk/issues/5399999999",
+      "title": "ValueError: invalid grade band"
+    },
+    "severity": "medium",
+    "source": "sentry",
+    "source_ref": "5399999999",
+    "title": "ValueError: invalid grade band"
+  }
+]

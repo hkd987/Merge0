@@ -1,0 +1,42 @@
+{
+  "endpoint": "issues",
+  "payload": [
+    {
+      "id": "5312345678",
+      "shortId": "CHALK-123",
+      "title": "TypeError: Cannot read properties of undefined (reading 'districtId')",
+      "culprit": "SyncStatusPanel(app/components/sync)",
+      "permalink": "https://sentry.example.com/organizations/chalk/issues/5312345678/",
+      "level": "error",
+      "status": "unresolved",
+      "platform": "javascript",
+      "type": "error",
+      "metadata": {
+        "type": "TypeError",
+        "value": "Cannot read properties of undefined (reading 'districtId')"
+      },
+      "count": "310",
+      "userCount": 42,
+      "firstSeen": "2026-08-01T04:12:00Z",
+      "lastSeen": "2026-08-06T22:30:00Z",
+      "firstRelease": { "version": "v2.3.0" },
+      "lastRelease": { "version": "v2.4.1" }
+    },
+    {
+      "id": "5312345999",
+      "shortId": "CHALK-140",
+      "title": "Slow database query on roster import",
+      "culprit": "app/jobs/roster_import.py in run",
+      "permalink": "https://sentry.example.com/organizations/chalk/issues/5312345999/",
+      "level": "warning",
+      "status": "unresolved",
+      "platform": "python",
+      "type": "default",
+      "metadata": {},
+      "count": "18",
+      "userCount": 2,
+      "firstSeen": "2026-08-02T08:00:00Z",
+      "lastSeen": "2026-08-06T08:00:00Z"
+    }
+  ]
+}

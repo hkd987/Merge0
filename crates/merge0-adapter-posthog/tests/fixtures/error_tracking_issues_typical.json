@@ -1,0 +1,32 @@
+{
+  "endpoint": "error_tracking_issues",
+  "context": { "project_base_url": "https://us.posthog.com/project/1" },
+  "payload": {
+    "results": [
+      {
+        "id": "0198a5f2-1111-7aaa-bbbb-3c4d5e6f7a8b",
+        "name": "TypeError",
+        "description": "Cannot read properties of undefined (reading 'districtId')",
+        "status": "active",
+        "assignee": null,
+        "first_seen": "2026-08-01T04:12:00Z",
+        "last_seen": "2026-08-06T22:30:00Z",
+        "occurrences": 310,
+        "sessions": 120,
+        "users": 42
+      },
+      {
+        "id": "0198a5f2-2222-7aaa-bbbb-3c4d5e6f7a8b",
+        "name": "AbortError",
+        "description": "The user aborted a request.",
+        "status": "active",
+        "assignee": null,
+        "first_seen": "2026-08-03T09:00:00Z",
+        "last_seen": "2026-08-05T18:45:00Z",
+        "occurrences": 6,
+        "sessions": 4,
+        "users": 3
+      }
+    ]
+  }
+}
