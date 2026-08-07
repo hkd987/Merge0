@@ -1,0 +1,21 @@
+{
+  "report_id": "01K21Y8ZC50000000000000002",
+  "repo": "chalk/chalk",
+  "summary": "Gradebook CSV import panics on the last row of every class",
+  "evidence": [
+    {
+      "kind": "issue",
+      "label": "sentry issue",
+      "url": "https://sentry.example.com/organizations/chalk/issues/3300/"
+    }
+  ],
+  "repro": "Call import_rows with any non-empty roster; it panics indexing one past the end. In production: import a 230-student class on /gradebook/import.",
+  "suspect_change": null,
+  "success_criteria": "cargo test passes: import_rows returns every row it was given in order and handles an empty roster.",
+  "constraints": "Keep the fix to the iteration bounds; do not change the function signature.",
+  "prior_attempts": [],
+  "diff_budget": {
+    "max_files": 4,
+    "max_total_lines": 150
+  }
+}

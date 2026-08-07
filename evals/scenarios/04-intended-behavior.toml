@@ -1,0 +1,24 @@
+name = "intended-behavior-per-intent-doc"
+description = "The 'defect' is explicitly documented as intended in MERGE0.md — the gate must SKIP."
+intent = """
+Chalk is a K-12 gradebook.
+
+IMPORTANT, by design: during district onboarding, schools may exist WITHOUT
+a district for up to 30 days. The yellow 'unassigned district' banner and
+the blocked sync button on /districts/sync are intentional product behavior
+for those schools. Do not 'fix' unassigned-district states.
+"""
+
+[[signals]]
+source = "sentry"
+kind = "exception"
+severity = "high"
+title = "Warning surfaced: school without district blocks sync on /districts/sync"
+body = "Schools in onboarding show the unassigned-district banner and cannot sync. 8 new customers hit this in their first week."
+affected_count = 8
+url_path = "/districts/sync"
+evidence_label = "sentry issue"
+evidence_url = "https://sentry.example.com/organizations/chalk/issues/6100/"
+
+[expect]
+decision = "skip"

@@ -2,5 +2,6 @@ target/
 .git/
 .github/
 scripts/
+evals/
 *.md
 !docs/**

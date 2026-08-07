@@ -1,0 +1,20 @@
+name = "release-regression"
+description = "Exception cleanly attributed to a release — WORK, and the order should carry the suspect change."
+intent = "Chalk is a K-12 gradebook."
+suspect_release = "v4.1.2"
+
+[[signals]]
+source = "sentry"
+kind = "regression"
+severity = "high"
+title = "Regression: attendance export empty CSV after v4.1.2"
+body = "export_attendance returns zero rows for every school since v4.1.2; previously worked. 12 districts affected."
+affected_count = 12
+release = "v4.1.2"
+url_path = "/reports/attendance/export"
+evidence_label = "sentry regression issue"
+evidence_url = "https://sentry.example.com/organizations/chalk/issues/5150/"
+
+[expect]
+decision = "work"
+work_order_mentions = ["4.1.2", "attendance"]

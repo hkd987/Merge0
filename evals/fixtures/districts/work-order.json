@@ -1,0 +1,21 @@
+{
+  "report_id": "01K21Y8ZC50000000000000001",
+  "repo": "chalk/chalk",
+  "summary": "Crash on /districts/sync for schools without a district",
+  "evidence": [
+    {
+      "kind": "issue",
+      "label": "sentry issue CHALK-9",
+      "url": "https://sentry.example.com/organizations/chalk/issues/9001/"
+    }
+  ],
+  "repro": "Create a School with district = None and call resolve_district(); it panics. In production: open /districts/sync as a school still in onboarding.",
+  "suspect_change": "regressed in v2.3.0",
+  "success_criteria": "cargo test passes: schools without a district resolve to \"unassigned\" instead of panicking; assigned schools keep resolving to their district name.",
+  "constraints": "Schools may exist without districts during onboarding \u2014 this state is valid and must render, not error. Keep the change minimal.",
+  "prior_attempts": [],
+  "diff_budget": {
+    "max_files": 4,
+    "max_total_lines": 150
+  }
+}

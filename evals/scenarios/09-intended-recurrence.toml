@@ -1,0 +1,18 @@
+name = "intended-recurrence"
+description = "A ticket about behavior previously dismissed as intended — rerouted to Opportunity, never re-gated."
+intent = "Chalk is a K-12 gradebook."
+intended_history = true
+
+[[signals]]
+source = "zendesk"
+kind = "ticket"
+severity = "medium"
+title = "Another school asking why sync is blocked during onboarding"
+body = "Fourth ticket about the intentional onboarding sync block. Product wants a better empty-state, not a code fix."
+url_path = "/districts/sync"
+evidence_label = "zendesk ticket"
+evidence_url = "https://chalk.zendesk.example.com/agent/tickets/512"
+
+[expect]
+decision = "opportunity"
+model_called = false

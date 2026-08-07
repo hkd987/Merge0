@@ -1,0 +1,24 @@
+name = "clear-crash"
+description = "A well-evidenced production exception with a repro path — the canonical WORK case."
+intent = """
+Chalk is a K-12 gradebook. Data integrity over speed. Districts own schools;
+the district sync on /districts/sync must never drop a school.
+"""
+suspect_release = "v2.3.0"
+
+[[signals]]
+source = "sentry"
+kind = "exception"
+severity = "high"
+title = "TypeError: Cannot read properties of undefined (reading 'districtId')"
+body = "Top frame: districtSync.ts:88 resolveDistrict(). Started after the v2.3.0 deploy; 33 distinct schools hit it on /districts/sync."
+affected_count = 33
+stack_hash = "d34db33f"
+url_path = "/districts/sync"
+release = "v2.3.0"
+evidence_label = "sentry issue CHALK-9"
+evidence_url = "https://sentry.example.com/organizations/chalk/issues/9001/"
+
+[expect]
+decision = "work"
+work_order_mentions = ["district"]

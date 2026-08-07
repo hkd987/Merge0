@@ -41,6 +41,7 @@ test-passing pull requests — using the customer's own coding agent and compute
 | `crates/merge0-registry` | P2 curated skill registry: ed25519-signed index, installs as manifest-change PRs. |
 | `crates/merge0-server` | The Axum service: ingestion (envelope + native vendor webhooks), scheduled fetch + triage, inbox, onboarding bundle, runner callback, GitHub webhooks, hardening + meta triggers, telemetry dashboard, Slack digest + interactions. |
 | `crates/merge0-e2e` | Full-pipeline end-to-end tests. |
+| `crates/merge0-evals` | Real-model judgment evals (gate decisions + agent runs) driven by the Claude Code CLI — see `evals/README.md`. Run manually; costs model spend. |
 | `ee/merge0-ee` | Commercial (non-MIT): multi-tenant org management, RBAC, audit log, metering/billing, cross-tenant outcome priors. |
 | `ee/merge0-hosted` | Commercial control-plane binary over `merge0-ee`: tenant lifecycle, membership, usage/invoice, audit, priors — behind `MERGE0_EE_ADMIN_TOKEN`. |
 | `config/` | Scout + gate prompts and budgets — versioned config so the meta-loop proposes changes as ordinary PRs. |
@@ -60,6 +61,11 @@ cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings
 ```
 
 CI runs the same three gates against a Postgres 16 service container.
+
+Model-judgment quality has its own harness — `evals/README.md`: gate
+decisions scored against a curated corpus and agent runs against
+seeded-bug fixtures, both powered by the Claude Code CLI. Manual, costs
+model spend, never in CI.
 
 ## Running the server
 

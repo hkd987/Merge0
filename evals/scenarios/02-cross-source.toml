@@ -1,0 +1,32 @@
+name = "cross-source-corroboration"
+description = "Same defect visible in Sentry AND PostHog (shared stack hash) — corroboration should make WORK easy."
+intent = "Chalk is a K-12 gradebook. Small, well-tested fixes only."
+suspect_release = "v2.3.0"
+
+[[signals]]
+source = "sentry"
+kind = "exception"
+severity = "high"
+title = "TypeError: districtId undefined in districtSync"
+body = "resolveDistrict() throws when a school has no district; regressed in v2.3.0."
+affected_count = 33
+stack_hash = "abc123"
+url_path = "/districts/sync"
+evidence_label = "sentry issue"
+evidence_url = "https://sentry.example.com/organizations/chalk/issues/42/"
+
+[[signals]]
+source = "posthog"
+kind = "ux_friction"
+severity = "medium"
+title = "Rage clicks on /districts/sync save button"
+body = "21 users rage-clicked save after the page froze."
+affected_count = 21
+stack_hash = "abc123"
+url_path = "/districts/sync"
+evidence_label = "posthog session replays"
+evidence_url = "https://us.posthog.com/project/1/replay/777"
+
+[expect]
+decision = "work"
+work_order_mentions = ["district"]

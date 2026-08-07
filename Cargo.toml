@@ -24,6 +24,7 @@ members = [
     "crates/merge0-registry",
     "crates/merge0-server",
     "crates/merge0-e2e",
+    "crates/merge0-evals",
     "ee/merge0-ee",
     "ee/merge0-hosted",
 ]

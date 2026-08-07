@@ -1,0 +1,16 @@
+name = "below-severity-floor"
+description = "Low severity — the deterministic guard must answer without any model spend."
+intent = "Chalk is a K-12 gradebook."
+
+[[signals]]
+source = "sentry"
+kind = "exception"
+severity = "low"
+title = "Console warning: deprecated API use in legacy widget"
+body = "Noise-level deprecation warning."
+evidence_label = "sentry issue"
+evidence_url = "https://sentry.example.com/organizations/chalk/issues/7000/"
+
+[expect]
+decision = "skip"
+model_called = false

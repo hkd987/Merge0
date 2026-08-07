@@ -1,0 +1,30 @@
+name = "support-corroborated-defect"
+description = "A support ticket corroborated by a crash with the same stack hash — WORK with the ticket's user impact in view."
+intent = "Chalk is a K-12 gradebook."
+
+[[signals]]
+source = "sentry"
+kind = "exception"
+severity = "high"
+title = "IndexError in gradebook CSV import for classes over 200 students"
+body = "import_grades.ts:41 slices the roster at 200 and throws on the next row."
+affected_count = 9
+stack_hash = "imp0rt41"
+url_path = "/gradebook/import"
+evidence_label = "sentry issue"
+evidence_url = "https://sentry.example.com/organizations/chalk/issues/3300/"
+
+[[signals]]
+source = "zendesk"
+kind = "ticket"
+severity = "high"
+title = "Large-school gradebook import fails halfway"
+body = "District admin: importing a 230-student class fails at row 200 every time; smaller classes import fine."
+affected_count = 3
+stack_hash = "imp0rt41"
+evidence_label = "zendesk ticket"
+evidence_url = "https://chalk.zendesk.example.com/agent/tickets/876"
+
+[expect]
+decision = "work"
+work_order_mentions = ["import", "200"]

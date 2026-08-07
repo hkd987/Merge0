@@ -1,0 +1,27 @@
+name = "repeated-reverts"
+description = "Outcome memory shows two prior attempts both reverted — the gate should stop burning reviewer trust and SKIP."
+intent = "Chalk is a K-12 gradebook. The scheduler is fragile legacy code owned by the platform team."
+
+[[signals]]
+source = "sentry"
+kind = "exception"
+severity = "high"
+title = "Intermittent NullPointerException in scheduler tick"
+body = "Same flaky scheduler NPE as before; reproduces only under production load."
+affected_count = 5
+stack_hash = "5ched111"
+evidence_label = "sentry issue"
+evidence_url = "https://sentry.example.com/organizations/chalk/issues/2200/"
+
+[[prior_attempts]]
+outcome = "reverted"
+days_ago = 40
+note = "fix reverted: broke admin dashboard rendering"
+
+[[prior_attempts]]
+outcome = "reverted"
+days_ago = 12
+note = "second attempt reverted: same admin regression plus a flaky test"
+
+[expect]
+decision = "skip"

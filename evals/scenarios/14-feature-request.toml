@@ -1,0 +1,16 @@
+name = "feature-request"
+description = "A feature ask dressed as a ticket — not maintenance, the gate must SKIP (humans decide features)."
+intent = "Chalk is a K-12 gradebook. Merge0 handles maintenance only; product decisions belong to humans."
+
+[[signals]]
+source = "zendesk"
+kind = "ticket"
+severity = "medium"
+title = "Please add dark mode to the teacher portal"
+body = "Several teachers grading at night have asked for a dark theme. Well-specified, but a new feature, not a defect."
+affected_count = 15
+evidence_label = "zendesk ticket"
+evidence_url = "https://chalk.zendesk.example.com/agent/tickets/999"
+
+[expect]
+decision = "skip"

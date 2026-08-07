@@ -1,0 +1,15 @@
+name = "no-evidence-guard"
+description = "High severity but zero evidence links — the deterministic guard must skip without model spend."
+intent = "Chalk is a K-12 gradebook."
+
+[[signals]]
+source = "webhook"
+kind = "exception"
+severity = "high"
+title = "Unverifiable report of grade loss"
+body = "Pushed via generic webhook with no links back to any tool."
+no_evidence = true
+
+[expect]
+decision = "skip"
+model_called = false

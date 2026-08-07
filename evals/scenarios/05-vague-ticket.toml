@@ -1,0 +1,15 @@
+name = "vague-ticket"
+description = "A support grumble with no repro, no location, no numbers — un-actionable, must SKIP."
+intent = "Chalk is a K-12 gradebook."
+
+[[signals]]
+source = "zendesk"
+kind = "ticket"
+severity = "medium"
+title = "App feels slow sometimes"
+body = "Customer says the app 'feels slow sometimes, mostly in the afternoon maybe'. No page, no timing, no reproduction."
+evidence_label = "zendesk ticket"
+evidence_url = "https://chalk.zendesk.example.com/agent/tickets/311"
+
+[expect]
+decision = "skip"
