@@ -77,6 +77,8 @@ for fixture in "${FIXTURES[@]}"; do
   [ "$files" -gt "$budget_files" ] || [ "$lines" -gt "$budget_lines" ] && within_budget=false
   tests_touched=$(git diff --cached --name-only | grep -c '^tests/' || true)
   echo "   tests_green=$tests_green files=$files lines=$lines within_budget=$within_budget tests_touched=$tests_touched"
+  # The diff IS the deliverable — show it so verdicts are explainable.
+  git --no-pager diff --cached -- . ':!Cargo.lock' | sed 's/^/   | /'
 
   case "$expect" in
     fix)
