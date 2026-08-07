@@ -21,7 +21,7 @@ pub async fn prior_attempts(
             }
         }
     }
-    attempts.sort_by(|a, b| b.occurred_at.cmp(&a.occurred_at));
+    attempts.sort_by_key(|attempt| std::cmp::Reverse(attempt.occurred_at));
     attempts.truncate(cap);
     Ok(attempts)
 }

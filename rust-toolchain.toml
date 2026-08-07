@@ -1,3 +1,7 @@
+# Pinned so local dev and CI run the exact same rustc/clippy — clippy
+# -D warnings against a floating "stable" breaks the build whenever a new
+# stable ships a new lint. Bump deliberately, fixing new lints in the same
+# PR.
 [toolchain]
-channel = "stable"
+channel = "1.97.1"
 components = ["rustfmt", "clippy"]

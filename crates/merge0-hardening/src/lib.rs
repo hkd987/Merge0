@@ -191,7 +191,7 @@ pub async fn find_candidates(
         }
     }
     // Stable sort: recurring defect classes first, ties keep recency order.
-    candidates.sort_by(|a, b| b.recurrence_count.cmp(&a.recurrence_count));
+    candidates.sort_by_key(|candidate| std::cmp::Reverse(candidate.recurrence_count));
     Ok(candidates)
 }
 

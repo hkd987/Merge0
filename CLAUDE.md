@@ -65,4 +65,5 @@ Rules (mirroring PRD §5c/§5d discipline):
 - [2026-08-07] Postgres `timestamptz` truncates to microseconds: a chrono timestamp written and read back can compare `<` its original. Never use exact `>=`-on-now filters against round-tripped timestamps; add a small tolerance or truncate before storing.
 - [2026-08-07] In axum handlers, extractor-based body parsing (`Json<T>`) runs before the handler body, so auth checks inside the handler happen after a 422 parse rejection. For authenticated endpoints, take `Bytes` and parse after the auth check.
 - [2026-08-07] clippy's `await_holding_lock` is not satisfied by an explicit `drop(guard)` — scope the `MutexGuard` in a block that ends before the `.await`.
+- [2026-08-07] "Local clippy clean" proves nothing if CI resolves a newer stable with new lints — pin the toolchain version in rust-toolchain.toml (not `channel = "stable"`) and verify with the pinned version before pushing.
 <!-- merge0:lessons:end -->

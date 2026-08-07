@@ -19,7 +19,7 @@ pub async fn page(State(state): State<AppState>) -> Result<Html<String>, ApiErro
         .list_reports(Some(ReportStatus::HandedOff))
         .await?;
     reports.extend(handed_off);
-    reports.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    reports.sort_by_key(|item| std::cmp::Reverse(item.created_at));
     Ok(Html(render(&reports)))
 }
 
