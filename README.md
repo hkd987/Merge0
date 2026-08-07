@@ -27,7 +27,8 @@ test-passing pull requests — using the customer's own coding agent and compute
 | `crates/merge0-adapters` | `Adapter` trait + golden-payload conformance harness (`MERGE0_BLESS=1` to regenerate goldens). |
 | `crates/merge0-adapter-{posthog,sentry}` | Phase 0 adapters (P0-1/P0-2). |
 | `crates/merge0-adapter-{zendesk,github-issues,webhook,datadog,loopforge}` | P1/P2 adapters. `webhook` also carries the OTLP-logs adapter; its `signals` endpoint is the published integration surface. |
-| `crates/merge0-store` | Postgres, schema-per-tenant: deduped signals, report lifecycle, outcome memory (incl. revert mapping), releases, telemetry queries. |
+| `crates/merge0-store` | Postgres, schema-per-tenant: deduped signals, report lifecycle, outcome memory (incl. revert mapping), releases, telemetry queries, versioned migrations, webhook-delivery dedupe, fetch cursors. |
+| `crates/merge0-fetch` | The vendor I/O layer: pollers (PostHog, Sentry, Zendesk, Datadog, GitHub Issues) driven by `config/sources.toml` + native webhook verification/envelope builders. Feeds the adapters in-process. |
 | `crates/merge0-model` | Model abstraction: Anthropic client (BYO key) + scripted fake. |
 | `crates/merge0-context` | Intent docs (MERGE0.md fence enforcement), release attribution, prior-attempts assembly. |
 | `crates/merge0-triage` | Scouts (config-driven) → deterministic clustering → model gate. Evidence budgets, Opportunity Reports, fail-closed gate parsing. |
@@ -38,9 +39,10 @@ test-passing pull requests — using the customer's own coding agent and compute
 | `crates/merge0-slack` | Block Kit messages, interaction parsing, signature verification, weekly digest. |
 | `crates/merge0-broker` | P2 credential broker: per-Work-Order, single-repo, ≤10-minute tokens via git credential helper. |
 | `crates/merge0-registry` | P2 curated skill registry: ed25519-signed index, installs as manifest-change PRs. |
-| `crates/merge0-server` | The Axum service: ingestion, triage runs, inbox (HTML + JSON), runner callback, GitHub webhooks, telemetry dashboard, Slack. |
+| `crates/merge0-server` | The Axum service: ingestion (envelope + native vendor webhooks), scheduled fetch + triage, inbox, onboarding bundle, runner callback, GitHub webhooks, hardening + meta triggers, telemetry dashboard, Slack digest + interactions. |
 | `crates/merge0-e2e` | Full-pipeline end-to-end tests. |
 | `ee/merge0-ee` | Commercial (non-MIT): multi-tenant org management, RBAC, audit log, metering/billing, cross-tenant outcome priors. |
+| `ee/merge0-hosted` | Commercial control-plane binary over `merge0-ee`: tenant lifecycle, membership, usage/invoice, audit, priors — behind `MERGE0_EE_ADMIN_TOKEN`. |
 | `config/` | Scout + gate prompts and budgets — versioned config so the meta-loop proposes changes as ordinary PRs. |
 
 ## Build & test
@@ -74,13 +76,49 @@ MERGE0_GITHUB_WEBHOOK_SECRET=... \
 cargo run -p merge0-server
 ```
 
-Optional: `MERGE0_SLACK_WEBHOOK_URL`, `MERGE0_INTENT_DOC` (path to your
-MERGE0.md), `MERGE0_TRIAGE_INTERVAL_SECS` (default nightly), `MERGE0_AGENT`
-(`codex-cli` or `custom:<command>`), `MERGE0_GATE_MODEL`.
+Optional env:
 
-Surfaces: `/inbox` (review queue), `/telemetry` (acceptance-rate dashboard),
-`/safety` (branch-protection verification), `POST /ingest/{source}`,
-`POST /triage/run`.
+- `MERGE0_SLACK_WEBHOOK_URL` + `MERGE0_SLACK_SIGNING_SECRET` — digest and
+  interactive Approve/Dismiss from Slack.
+- Vendor webhook verification (only for `/webhooks/{vendor}` you point at the
+  server): `MERGE0_SENTRY_WEBHOOK_SECRET`, `MERGE0_POSTHOG_WEBHOOK_TOKEN`,
+  `MERGE0_ZENDESK_WEBHOOK_SECRET`, `MERGE0_DATADOG_WEBHOOK_TOKEN`.
+- `MERGE0_TRIAGE_INTERVAL_SECS` (default nightly; the fetch layer polls the
+  sources enabled in `config/sources.toml` on the same schedule),
+  `MERGE0_HARDENING_ENABLED=1` (§5c prevention PRs after merges),
+  `MERGE0_META_ENABLED=1` (weekly §5d config-change proposals),
+  `MERGE0_RAW_RETENTION_DAYS` (purge verbatim vendor payloads after N days).
+- `MERGE0_AGENT` (`codex-cli` or `custom:<command>`), `MERGE0_GATE_MODEL`,
+  `MERGE0_INTENT_FALLBACK` (used until `MERGE0.md` exists in the repo —
+  the intent doc is fetched from the customer repo on every triage run).
+
+Surfaces: `/inbox` (review queue; paste the API token once, stored in the
+browser), `/onboarding` (generated workflow + MERGE0.md + agent.toml bundle
+and setup checklist), `/telemetry`, `/safety`, `POST /ingest/{source}`
+(envelope), `POST /webhooks/{sentry,posthog,zendesk,datadog}` (native,
+vendor-signature-verified), `POST /triage/run`, `POST /slack/interactions`.
+All product routes require `Authorization: Bearer $MERGE0_API_TOKEN`;
+webhooks and the runner callback authenticate with their own schemes.
+
+## Deploying
+
+```sh
+cp .env.example .env   # fill in
+docker compose up --build
+```
+
+The `Dockerfile` is a multi-stage build pinned to the same toolchain as CI
+(building behind a TLS-inspecting proxy: pass its CA with
+`docker build --secret id=extra_ca_certs,src=proxy-ca.pem .`). On Coolify
+(PRD target: a small DO box), create a Docker Compose service from this
+repo, set the `.env` values in the UI, and put the app behind HTTPS —
+`MERGE0_PUBLIC_URL` must match the public URL GitHub/vendors call back to.
+The hosted control plane (`merge0-hosted`, in the image) is a separate
+binary — run it only for multi-tenant installs.
+
+For customer-repo setup, `GET /onboarding` returns the three files to commit
+(`.github/workflows/merge0.yml`, `MERGE0.md`, `.merge0/agent.toml`) plus the
+Actions secrets to configure.
 
 ## Architecture invariants
 

@@ -1,0 +1,64 @@
+# Local / single-box deployment: Postgres + merge0-server.
+#
+# Secrets come from the shell environment (or an .env file next to this
+# compose file) — never write real values here. Copy .env.example to .env
+# and fill it in.
+#
+#   docker compose up --build
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: merge0
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-merge0}
+      POSTGRES_DB: merge0
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U merge0"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  server:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      MERGE0_DATABASE_URL: postgres://merge0:${POSTGRES_PASSWORD:-merge0}@postgres:5432/merge0
+      MERGE0_TENANT: ${MERGE0_TENANT:-default}
+      MERGE0_REPO: ${MERGE0_REPO:?set MERGE0_REPO to owner/name}
+      MERGE0_PUBLIC_URL: ${MERGE0_PUBLIC_URL:-http://127.0.0.1:8080}
+      # Auth (generate long random values; all three should differ).
+      MERGE0_API_TOKEN: ${MERGE0_API_TOKEN:?set MERGE0_API_TOKEN}
+      MERGE0_RUNNER_TOKEN: ${MERGE0_RUNNER_TOKEN:?set MERGE0_RUNNER_TOKEN}
+      MERGE0_GITHUB_WEBHOOK_SECRET: ${MERGE0_GITHUB_WEBHOOK_SECRET:?set MERGE0_GITHUB_WEBHOOK_SECRET}
+      # GitHub App (P0-11: app auth only, no PATs).
+      MERGE0_GITHUB_APP_ID: ${MERGE0_GITHUB_APP_ID:-}
+      MERGE0_GITHUB_APP_PRIVATE_KEY: ${MERGE0_GITHUB_APP_PRIVATE_KEY:-}
+      MERGE0_GITHUB_INSTALLATION_ID: ${MERGE0_GITHUB_INSTALLATION_ID:-}
+      # Model + optional surfaces.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      MERGE0_GATE_MODEL: ${MERGE0_GATE_MODEL:-}
+      MERGE0_SLACK_WEBHOOK_URL: ${MERGE0_SLACK_WEBHOOK_URL:-}
+      MERGE0_SLACK_SIGNING_SECRET: ${MERGE0_SLACK_SIGNING_SECRET:-}
+      # Vendor credentials for pollers enabled in config/sources.toml are
+      # referenced there by env-var NAME — export the ones you enable, e.g.:
+      # POSTHOG_API_KEY, SENTRY_API_TOKEN, ZENDESK_API_TOKEN, DATADOG_API_KEY…
+      # Vendor webhook verification secrets (only for /webhooks/{vendor} you use).
+      MERGE0_SENTRY_WEBHOOK_SECRET: ${MERGE0_SENTRY_WEBHOOK_SECRET:-}
+      MERGE0_POSTHOG_WEBHOOK_TOKEN: ${MERGE0_POSTHOG_WEBHOOK_TOKEN:-}
+      MERGE0_ZENDESK_WEBHOOK_SECRET: ${MERGE0_ZENDESK_WEBHOOK_SECRET:-}
+      MERGE0_DATADOG_WEBHOOK_TOKEN: ${MERGE0_DATADOG_WEBHOOK_TOKEN:-}
+      # Loop behavior.
+      MERGE0_TRIAGE_INTERVAL_SECS: ${MERGE0_TRIAGE_INTERVAL_SECS:-86400}
+      MERGE0_HARDENING_ENABLED: ${MERGE0_HARDENING_ENABLED:-0}
+      MERGE0_META_ENABLED: ${MERGE0_META_ENABLED:-0}
+      MERGE0_RAW_RETENTION_DAYS: ${MERGE0_RAW_RETENTION_DAYS:-30}
+
+volumes:
+  pgdata:
