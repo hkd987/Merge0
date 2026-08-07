@@ -28,7 +28,7 @@ fn scouts() -> Vec<ScoutConfig> {
         description = "d"
         schedule = "nightly"
         sources = ["posthog", "sentry", "zendesk"]
-        query_template = "q"
+        query_template = "*"
         prompt = "new clusters?"
         "#,
     )

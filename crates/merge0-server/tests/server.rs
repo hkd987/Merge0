@@ -35,6 +35,7 @@ struct HarnessOptions {
     protected: bool,
     model_responses: Vec<&'static str>,
     hardening: bool,
+    rate_limit_per_second: u32,
 }
 
 impl Default for HarnessOptions {
@@ -43,6 +44,7 @@ impl Default for HarnessOptions {
             protected: true,
             model_responses: vec![WORK_JSON],
             hardening: false,
+            rate_limit_per_second: 0,
         }
     }
 }
@@ -64,7 +66,7 @@ impl Harness {
             description = "d"
             schedule = "nightly"
             sources = ["posthog", "sentry", "zendesk", "webhook"]
-            query_template = "q"
+            query_template = "*"
             prompt = "p"
             "#,
         )
@@ -106,6 +108,10 @@ impl Harness {
                 zendesk_agent_base_url: "https://chalk.zendesk.example.com/agent".into(),
                 datadog_app_base_url: "https://app.datadog.example.com".into(),
             }),
+            rate_limiter: merge0_server::ratelimit::RateLimiter::from_rate(
+                options.rate_limit_per_second,
+            )
+            .map(Arc::new),
         };
 
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -371,6 +377,7 @@ async fn every_data_route_requires_the_bearer_token() {
         "/reports?status=awaiting_review",
         detail_path.as_str(),
         "/telemetry",
+        "/metrics",
         "/safety",
         "/onboarding",
     ] {
@@ -851,5 +858,74 @@ async fn native_vendor_webhooks_verify_and_normalize() {
         .unwrap();
     assert_eq!(res.status(), 404);
 
+    h.teardown().await;
+}
+
+/// Open routes are per-IP rate limited: a burst beyond capacity gets 429,
+/// and the bearer-authed product surface is NOT limited.
+#[tokio::test]
+async fn open_routes_rate_limit_bursts_with_429() {
+    let h = Harness::start(HarnessOptions {
+        rate_limit_per_second: 10, // burst capacity 30
+        ..Default::default()
+    })
+    .await;
+
+    // Test connections carry no connect info, so all requests share one
+    // bucket — deterministic for this assertion.
+    let mut statuses = Vec::new();
+    for _ in 0..35 {
+        let res = h
+            .client
+            .get(format!("{}/healthz", h.base))
+            .send()
+            .await
+            .unwrap();
+        statuses.push(res.status().as_u16());
+    }
+    assert!(
+        statuses.iter().filter(|s| **s == 200).count() >= 30,
+        "burst capacity admitted: {statuses:?}"
+    );
+    assert!(
+        statuses.contains(&429),
+        "over-burst requests limited: {statuses:?}"
+    );
+
+    // The protected surface stays unlimited.
+    for _ in 0..35 {
+        let res = h.get("/telemetry").await;
+        assert_eq!(res.status(), 200);
+    }
+
+    h.teardown().await;
+}
+
+/// `/metrics` renders the telemetry snapshot as Prometheus text, behind the
+/// bearer token.
+#[tokio::test]
+async fn metrics_scrape_is_prometheus_text_over_real_counts() {
+    let h = Harness::start(HarnessOptions::default()).await;
+    let report_id = h.seed_awaiting_report().await;
+
+    let res = h.get("/metrics").await;
+    assert_eq!(res.status(), 200);
+    assert!(res
+        .headers()
+        .get("content-type")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .starts_with("text/plain"));
+    let body = res.text().await.unwrap();
+    assert!(body.contains("# TYPE merge0_work_orders_dispatched gauge"));
+    assert!(
+        body.contains("merge0_reports{status=\"awaiting_review\"} 1"),
+        "queue gauge reflects the seeded report: {body}"
+    );
+    assert!(body.contains("merge0_phase0_gate_met 0"));
+
+    // Silence the unused-variable pedantry honestly: the report exists.
+    assert!(!report_id.is_empty());
     h.teardown().await;
 }

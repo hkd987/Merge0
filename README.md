@@ -31,7 +31,7 @@ test-passing pull requests — using the customer's own coding agent and compute
 | `crates/merge0-fetch` | The vendor I/O layer: pollers (PostHog, Sentry, Zendesk, Datadog, GitHub Issues) driven by `config/sources.toml` + native webhook verification/envelope builders. Feeds the adapters in-process. |
 | `crates/merge0-model` | Model abstraction: Anthropic client (BYO key) + scripted fake. |
 | `crates/merge0-context` | Intent docs (MERGE0.md fence enforcement), release attribution, prior-attempts assembly. |
-| `crates/merge0-triage` | Scouts (config-driven) → deterministic clustering → model gate. Evidence budgets, Opportunity Reports, fail-closed gate parsing. |
+| `crates/merge0-triage` | Scouts (config-driven, with executed `query_template` filters) → deterministic clustering → model gate. Evidence budgets, Opportunity Reports, fail-closed gate parsing. |
 | `crates/merge0-github` | GitHub App auth (installation tokens only), API trait + fake, webhooks + revert detection, safety verification. |
 | `crates/merge0-runner` | `repository_dispatch` runner, sanitized payloads, budget enforcement, agent-agnostic configs, the customer-side Actions workflow template. |
 | `crates/merge0-hardening` | Post-merge prevention PRs: lint > regression test > fenced intent-doc amendment (PRD §5c). |
@@ -91,10 +91,15 @@ Optional env:
 - `MERGE0_AGENT` (`codex-cli` or `custom:<command>`), `MERGE0_GATE_MODEL`,
   `MERGE0_INTENT_FALLBACK` (used until `MERGE0.md` exists in the repo —
   the intent doc is fetched from the customer repo on every triage run).
+- `MERGE0_RATE_LIMIT_PER_SECOND` (default 10, burst 3×/min 30, `0` disables) —
+  per-IP limit on the self-authenticated open routes (webhooks, runner
+  callback, Slack interactions, inbox shell).
 
 Surfaces: `/inbox` (review queue; paste the API token once, stored in the
 browser), `/onboarding` (generated workflow + MERGE0.md + agent.toml bundle
-and setup checklist), `/telemetry`, `/safety`, `POST /ingest/{source}`
+and setup checklist), `/telemetry`, `/metrics` (Prometheus text — point your
+scraper at it with `authorization: Bearer $MERGE0_API_TOKEN`), `/safety`,
+`POST /ingest/{source}`
 (envelope), `POST /webhooks/{sentry,posthog,zendesk,datadog}` (native,
 vendor-signature-verified), `POST /triage/run`, `POST /slack/interactions`.
 All product routes require `Authorization: Bearer $MERGE0_API_TOKEN`;
@@ -119,6 +124,11 @@ binary — run it only for multi-tenant installs.
 For customer-repo setup, `GET /onboarding` returns the three files to commit
 (`.github/workflows/merge0.yml`, `MERGE0.md`, `.merge0/agent.toml`) plus the
 Actions secrets to configure.
+
+**Backups:** all durable state lives in Postgres. Snapshot the `pgdata`
+volume or run a `pg_dump` cron against the compose database (`docker compose
+exec postgres pg_dump -U merge0 merge0 > backup.sql`) — the server itself is
+stateless and can be rebuilt from the image at any time.
 
 ## Architecture invariants
 

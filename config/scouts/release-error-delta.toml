@@ -1,4 +1,6 @@
 # Scout: anomalous error-rate delta after a release (release-context join).
+# query_template is EXECUTED as a deterministic Signal filter — grammar
+# documented in new-exception-clusters.toml; typos fail the triage run loudly.
 
 name = "release-error-delta"
 description = "Any release with anomalous error-rate delta?"

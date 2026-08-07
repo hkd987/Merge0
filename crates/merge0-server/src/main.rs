@@ -174,6 +174,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         hardening_enabled: std::env::var("MERGE0_HARDENING_ENABLED").as_deref() == Ok("1"),
         fetchers: Arc::new(fetchers),
         vendor_webhooks: Arc::new(vendor_webhooks),
+        // Open-route flood control: default 10 req/s per IP (burst 30);
+        // MERGE0_RATE_LIMIT_PER_SECOND=0 disables.
+        rate_limiter: merge0_server::ratelimit::RateLimiter::from_rate(
+            std::env::var("MERGE0_RATE_LIMIT_PER_SECOND")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(10),
+        )
+        .map(Arc::new),
     };
 
     spawn_schedulers(&state);
@@ -183,9 +192,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let bind = std::env::var("MERGE0_BIND").unwrap_or_else(|_| "127.0.0.1:8080".into());
     let listener = tokio::net::TcpListener::bind(&bind).await?;
     tracing::info!("merge0-server listening on {bind}");
-    axum::serve(listener, app(state))
-        .with_graceful_shutdown(shutdown_signal())
-        .await?;
+    axum::serve(
+        listener,
+        app(state).into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await?;
     Ok(())
 }
 

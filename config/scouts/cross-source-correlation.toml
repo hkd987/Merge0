@@ -1,4 +1,6 @@
 # Scout: the insights-agnostic payoff — the same defect visible in ≥2 sources.
+# query_template is EXECUTED as a deterministic Signal filter — grammar
+# documented in new-exception-clusters.toml; typos fail the triage run loudly.
 
 name = "cross-source-correlation"
 description = "Same fingerprint/join_keys appearing in two or more sources?"

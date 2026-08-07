@@ -1,13 +1,16 @@
 //! Scouts (PRD §4): standing questions defined as config, not code.
 //!
-//! v1 semantics: each enabled scout selects candidate signals by its
-//! configured `sources` over its schedule window; the union (deduplicated)
-//! is clustering's input. The scout `prompt` travels into gate context as
+//! Each enabled scout selects candidate signals by its configured `sources`
+//! over its schedule window, filtered and ordered by its executed
+//! `query_template` (see [`crate::query`]); the union (deduplicated) is
+//! clustering's input. The scout `prompt` travels into gate context as
 //! provenance. A model-driven scout runtime (prompt over the selected
 //! signals → findings) slots in behind the same config without changes to
 //! the files in `config/scouts/` — which is the point of config-as-files.
 
 use crate::config::ScoutConfig;
+use crate::query::Query;
+use crate::TriageError;
 use chrono::{DateTime, Duration, Utc};
 use merge0_signal::Signal;
 
@@ -22,9 +25,17 @@ pub fn schedule_window(schedule: &str) -> Duration {
     }
 }
 
-/// Select the candidate set for one scout from pre-fetched recent signals.
+/// Parse a scout's `query_template`, attributing errors to the scout.
+pub fn parse_query(scout: &ScoutConfig) -> crate::Result<Query> {
+    Query::parse(&scout.query_template)
+        .map_err(|e| TriageError::Config(format!("scout {:?} query_template: {e}", scout.name)))
+}
+
+/// Select the candidate set for one scout from pre-fetched recent signals:
+/// enabled + schedule window + sources + executed query, in query order.
 pub fn select<'a>(
     scout: &ScoutConfig,
+    query: &Query,
     signals: &'a [Signal],
     now: DateTime<Utc>,
 ) -> Vec<&'a Signal> {
@@ -32,29 +43,35 @@ pub fn select<'a>(
         return Vec::new();
     }
     let cutoff = now - schedule_window(&scout.schedule);
-    signals
+    let mut selection: Vec<&Signal> = signals
         .iter()
-        .filter(|s| s.last_seen >= cutoff && scout.sources.contains(&s.source))
-        .collect()
+        .filter(|s| {
+            s.last_seen >= cutoff && scout.sources.contains(&s.source) && query.matches(s, cutoff)
+        })
+        .collect();
+    query.apply_order(&mut selection);
+    selection
 }
 
-/// Union of all scouts' selections, deduplicated by signal id, input order
-/// preserved.
+/// Union of all scouts' selections, deduplicated by signal id, selection
+/// order preserved. A malformed `query_template` fails the whole run
+/// (fail-closed — a typo must not silently change what scouts see).
 pub fn union_candidates<'a>(
     scouts: &[ScoutConfig],
     signals: &'a [Signal],
     now: DateTime<Utc>,
-) -> Vec<&'a Signal> {
+) -> crate::Result<Vec<&'a Signal>> {
     let mut seen = std::collections::HashSet::new();
     let mut selected = Vec::new();
     for scout in scouts {
-        for signal in select(scout, signals, now) {
+        let query = parse_query(scout)?;
+        for signal in select(scout, &query, signals, now) {
             if seen.insert(signal.id) {
                 selected.push(signal);
             }
         }
     }
-    selected
+    Ok(selected)
 }
 
 #[cfg(test)]
@@ -65,6 +82,15 @@ mod tests {
     use ulid::Ulid;
 
     fn scout(sources: &[Source], schedule: &str, enabled: bool) -> ScoutConfig {
+        scout_with_query(sources, schedule, enabled, "")
+    }
+
+    fn scout_with_query(
+        sources: &[Source],
+        schedule: &str,
+        enabled: bool,
+        query_template: &str,
+    ) -> ScoutConfig {
         let sources = sources
             .iter()
             .map(|s| format!("\"{}\"", s.as_str()))
@@ -76,7 +102,7 @@ mod tests {
             description = "d"
             schedule = "{schedule}"
             sources = [{sources}]
-            query_template = "q"
+            query_template = "{query_template}"
             prompt = "p"
             enabled = {enabled}
             "#
@@ -123,12 +149,44 @@ mod tests {
         let signals = vec![fresh_sentry.clone(), stale_sentry, fresh_posthog];
 
         let s = scout(&[Source::Sentry], "nightly", true);
-        let picked = select(&s, &signals, now());
+        let query = parse_query(&s).unwrap();
+        let picked = select(&s, &query, &signals, now());
         assert_eq!(picked.len(), 1);
         assert_eq!(picked[0].id, fresh_sentry.id);
 
         let disabled = scout(&[Source::Sentry], "nightly", false);
-        assert!(select(&disabled, &signals, now()).is_empty());
+        assert!(select(&disabled, &query, &signals, now()).is_empty());
+    }
+
+    #[test]
+    fn executed_query_narrows_selection_and_orders_it() {
+        // Two fresh sentry signals; the query keeps only exceptions and
+        // orders by affected_count DESC.
+        let mut quiet = signal(Source::Sentry, now() - Duration::hours(1));
+        quiet.affected_count = Some(2);
+        let mut loud = signal(Source::Sentry, now() - Duration::hours(1));
+        loud.affected_count = Some(50);
+        let mut ticket = signal(Source::Sentry, now() - Duration::hours(1));
+        ticket.kind = SignalKind::Ticket;
+        let signals = vec![quiet.clone(), loud.clone(), ticket];
+
+        let s = scout_with_query(
+            &[Source::Sentry],
+            "nightly",
+            true,
+            "kind = 'exception' ORDER BY affected_count DESC",
+        );
+        let query = parse_query(&s).unwrap();
+        let picked = select(&s, &query, &signals, now());
+        assert_eq!(picked.len(), 2, "the ticket is filtered out");
+        assert_eq!(picked[0].id, loud.id, "highest affected_count first");
+    }
+
+    #[test]
+    fn malformed_query_fails_the_union_loudly() {
+        let s = scout_with_query(&[Source::Sentry], "nightly", true, "kindd = 'oops'");
+        let err = union_candidates(&[s], &[], now()).expect_err("must fail");
+        assert!(err.to_string().contains("query_template"), "{err}");
     }
 
     #[test]
@@ -140,7 +198,7 @@ mod tests {
             scout(&[Source::Sentry, Source::Posthog], "nightly", true),
             scout(&[Source::Sentry], "nightly", true),
         ];
-        let union = union_candidates(&scouts, &signals, now());
+        let union = union_candidates(&scouts, &signals, now()).unwrap();
         assert_eq!(union.len(), 2, "signal picked by two scouts appears once");
     }
 }

@@ -46,7 +46,7 @@ pub async fn run_triage(
         .into_iter()
         .filter(|s| s.last_seen >= now - widest_window)
         .collect();
-    let candidates: Vec<Signal> = scouts::union_candidates(scout_configs, &recent, now)
+    let candidates: Vec<Signal> = scouts::union_candidates(scout_configs, &recent, now)?
         .into_iter()
         .cloned()
         .collect();

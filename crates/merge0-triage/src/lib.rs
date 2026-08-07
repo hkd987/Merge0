@@ -23,6 +23,7 @@ pub mod cluster;
 pub mod config;
 pub mod gate;
 pub mod pipeline;
+pub mod query;
 pub mod scouts;
 
 #[derive(Debug, thiserror::Error)]

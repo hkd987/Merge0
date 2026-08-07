@@ -4,6 +4,7 @@ pub mod actions;
 pub mod health;
 pub mod inbox;
 pub mod ingest;
+pub mod metrics;
 pub mod onboarding;
 pub mod reports;
 pub mod runner;

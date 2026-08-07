@@ -26,6 +26,7 @@ pub fn app(state: AppState) -> Router {
         .route("/reports/{id}/approve", post(handlers::reports::approve))
         .route("/reports/{id}/dismiss", post(handlers::reports::dismiss))
         .route("/telemetry", get(handlers::telemetry::snapshot))
+        .route("/metrics", get(handlers::metrics::scrape))
         .route("/safety", get(handlers::safety::verify))
         .route("/onboarding", get(handlers::onboarding::bundle))
         .route("/slack/digest", post(handlers::slack::digest))
@@ -36,6 +37,8 @@ pub fn app(state: AppState) -> Router {
 
     // Self-authenticated or data-free routes. (`/webhooks/github` is a
     // static route and takes precedence over the `{vendor}` capture.)
+    // Rate-limited per IP: these verify their own signatures, but the
+    // verification itself must not be a free DoS vector.
     let open = Router::new()
         .route("/healthz", get(handlers::health::healthz))
         .route("/inbox", get(handlers::inbox::page))
@@ -45,7 +48,11 @@ pub fn app(state: AppState) -> Router {
             "/webhooks/{vendor}",
             post(handlers::vendor_webhooks::receive),
         )
-        .route("/slack/interactions", post(handlers::slack::interactions));
+        .route("/slack/interactions", post(handlers::slack::interactions))
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            rate_limit_open_routes,
+        ));
 
     protected
         .merge(open)
@@ -56,6 +63,26 @@ pub fn app(state: AppState) -> Router {
         ))
         .layer(tower_http::trace::TraceLayer::new_for_http())
         .with_state(state)
+}
+
+/// Per-IP token-bucket check for the open surface. The peer IP comes from
+/// connect info when the server is built with it (main() is); without it,
+/// all peers share one bucket — limiting fails toward closed, not open.
+async fn rate_limit_open_routes(
+    State(state): State<AppState>,
+    request: Request,
+    next: Next,
+) -> Result<Response, StatusCode> {
+    if let Some(limiter) = &state.rate_limiter {
+        let ip = request
+            .extensions()
+            .get::<axum::extract::ConnectInfo<std::net::SocketAddr>>()
+            .map(|info| info.0.ip());
+        if !limiter.allow(ip) {
+            return Err(StatusCode::TOO_MANY_REQUESTS);
+        }
+    }
+    Ok(next.run(request).await)
 }
 
 /// Router-level bearer check for the protected API surface.

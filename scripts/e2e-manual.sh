@@ -52,7 +52,7 @@ check "healthz (DB-backed)" "$(curl -sf "$BASE/healthz")" "ok"
 NOW="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 say "1. Auth: every product route is closed without the API token"
-for route in "reports" "telemetry" "safety" "onboarding"; do
+for route in "reports" "telemetry" "metrics" "safety" "onboarding"; do
   STATUS=$(curl -s -o /dev/null -w '%{http_code}' "$BASE/$route")
   check "GET /$route unauthenticated -> 401" "$STATUS" "401"
 done
@@ -168,6 +168,9 @@ check "1 dispatched" "$TELEMETRY" '"dispatched":1'
 check "1 merged" "$TELEMETRY" '"prs_merged":1'
 check "merge rate 100%" "$TELEMETRY" '"merge_rate":1.0'
 check "cost accounting" "$TELEMETRY" '"tokens_per_merged_pr":110000.0'
+METRICS=$(auth "$BASE/metrics")
+check "prometheus metrics render" "$METRICS" "# TYPE merge0_prs_merged gauge"
+check "prometheus merge count" "$METRICS" "merge0_prs_merged 1"
 
 say "9. Revert detection: push reverting the merge -> hard negative"
 PUSH_BODY=$(cat <<EOF

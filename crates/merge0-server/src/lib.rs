@@ -14,6 +14,7 @@ use std::sync::Arc;
 
 pub mod handlers;
 pub mod intent;
+pub mod ratelimit;
 pub mod router;
 
 pub use router::app;
@@ -58,6 +59,8 @@ pub struct AppState {
     pub fetchers: Arc<Vec<Box<dyn merge0_fetch::Fetcher>>>,
     /// Native vendor webhook verification + deep-link context.
     pub vendor_webhooks: Arc<VendorWebhooks>,
+    /// Per-IP rate limiting on the OPEN routes (None = disabled).
+    pub rate_limiter: Option<Arc<ratelimit::RateLimiter>>,
 }
 
 /// Configuration for `/webhooks/{vendor}` receivers: per-vendor

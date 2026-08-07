@@ -1,5 +1,16 @@
 # Scout: a standing question, defined as config — not code (PRD §4).
 # The meta-loop (PRD §5d) proposes changes to these files as ordinary PRs.
+#
+# query_template is EXECUTED as a deterministic Signal filter. Grammar:
+# conditions joined by AND/OR (AND binds tighter) from
+#   kind = '<exception|ux_friction|ticket|regression|custom>'
+#   source = '<source>' | severity = '<level>' | severity >= '<level>'
+#   affected_count >= <n> | <join_keys.stack_hash|join_keys.url_path|
+#   join_keys.release|affected_count> IS NOT NULL
+#   first_seen|last_seen >= {{period_start}}   (the schedule window start)
+# plus optional: ORDER BY <affected_count|first_seen|last_seen|severity> [ASC|DESC]
+# Empty or "*" selects everything in the window. Typos fail the triage
+# run loudly — a scout never silently widens or narrows.
 
 name = "new-exception-clusters"
 description = "New exception clusters this period?"

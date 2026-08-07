@@ -67,7 +67,7 @@ Rules (mirroring PRD §5c/§5d discipline):
 - [2026-08-07] clippy's `await_holding_lock` is not satisfied by an explicit `drop(guard)` — scope the `MutexGuard` in a block that ends before the `.await`.
 - [2026-08-07] "Local clippy clean" proves nothing if CI resolves a newer stable with new lints — pin the toolchain version in rust-toolchain.toml (not `channel = "stable"`) and verify with the pinned version before pushing.
 - [2026-08-07] Clean up after local verification (user instruction): `cargo clean`, drop throwaway DB schemas, stop the dev Postgres when done — a 13GB target/ plus idle daemons caused disk pressure and an OOM-killed Postgres mid-test-run.
-- [2026-08-07] `Result::unwrap_err()` needs `Debug` on the Ok type — when the Ok side is a trait object (e.g. `Vec<Box<dyn Trait>>`), assert the error via `.err().expect(...)` and match instead.
+- [2026-08-07] `Result::unwrap_err()`/`expect_err()` need `Debug` on the Ok type — for non-Debug Ok sides (trait objects) use `.err().expect(...)`; when the Ok type IS Debug, clippy's `err_expect` lint demands `expect_err` instead.
 - [2026-08-07] Official `rust:` Docker images ship the minimal rustup profile, so a rust-toolchain.toml that requests components forces a mid-build channel download — set `RUSTUP_TOOLCHAIN` in the builder stage to use the preinstalled toolchain.
 - [2026-08-07] File-sized build inputs (CA bundles, keys) blow past `--build-arg` argv limits — pass them into `docker build` as BuildKit secret mounts.
 <!-- merge0:lessons:end -->

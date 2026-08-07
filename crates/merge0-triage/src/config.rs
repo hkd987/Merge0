@@ -19,7 +19,8 @@ pub struct ScoutConfig {
     pub schedule: String,
     /// Which sources this scout queries.
     pub sources: Vec<Source>,
-    /// Template over the Signal store, expanded by the scout runtime.
+    /// Executed filter over the Signal store (see [`crate::query`] for the
+    /// grammar). Empty or `"*"` selects everything in the window.
     pub query_template: String,
     /// The standing question posed to the scout model.
     pub prompt: String,
@@ -155,6 +156,9 @@ mod tests {
                 scout.name
             );
             assert!(!scout.sources.is_empty(), "{}: no sources", scout.name);
+            // query_template is EXECUTED (audit M7) — every shipped
+            // template must parse, or triage runs fail at runtime.
+            crate::scouts::parse_query(scout).expect("shipped query_template must parse");
         }
     }
 
@@ -188,7 +192,7 @@ mod tests {
             description = "d"
             schedule = "nightly"
             sources = ["sentry"]
-            query_template = "q"
+            query_template = "*"
             prompt = "p"
             "#,
         )
