@@ -1,0 +1,14 @@
+# Scout: anomalous error-rate delta after a release (release-context join).
+
+name = "release-error-delta"
+description = "Any release with anomalous error-rate delta?"
+schedule = "nightly"
+sources = ["sentry"]
+query_template = "kind = 'exception' AND join_keys.release IS NOT NULL AND first_seen >= {{period_start}}"
+prompt = """
+Compare exception Signals grouped by join_keys.release against the release
+timeline from release context. Flag releases whose new-exception rate is
+anomalous relative to the preceding releases. For each flagged release,
+produce a candidate finding naming the release, the new fingerprints it
+introduced, and first-bad-release attribution where the data supports it.
+"""

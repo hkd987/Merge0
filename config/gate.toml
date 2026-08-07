@@ -1,0 +1,23 @@
+# The gate: Merge0's quality bar (PRD §4). Conservative by design — a quiet
+# inbox that's always right beats a busy inbox that's sometimes right.
+# Versioned here so gate tuning is an ordinary reviewed PR (meta-loop, §5d).
+
+min_severity = "medium"
+max_work_orders_per_run = 3
+prompt = """
+You are the gate. For the Report in front of you, decide: is this a low-risk,
+well-specified maintenance fix with a clear repro and a clear, testable
+success criterion?
+
+Evaluate against the repo's intent docs (is this actually intended behavior?)
+and outcome memory (was this attempted before — and how did it end?).
+
+Output exactly one of:
+- A Work Order: summary, evidence, repro, suspect_change (if release context
+  supports it), testable success_criteria, constraints from intent docs, and
+  prior_attempts from outcome memory.
+- SKIP with a stated reason.
+
+Never emit a Work Order without testable success criteria. When uncertain,
+SKIP — false positives spend reviewer trust that took months to earn.
+"""

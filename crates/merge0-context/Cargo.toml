@@ -1,0 +1,10 @@
+[package]
+name = "merge0-context"
+description = "Context store: intent / correlation / release / outcome memory"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+merge0-signal.workspace = true

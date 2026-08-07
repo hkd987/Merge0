@@ -1,0 +1,16 @@
+# Scout: a standing question, defined as config — not code (PRD §4).
+# The meta-loop (PRD §5d) proposes changes to these files as ordinary PRs.
+
+name = "new-exception-clusters"
+description = "New exception clusters this period?"
+schedule = "nightly"
+sources = ["posthog", "sentry"]
+query_template = "kind = 'exception' AND first_seen >= {{period_start}} ORDER BY affected_count DESC"
+prompt = """
+You are reviewing newly ingested exception Signals from the last period.
+Identify clusters that represent a single underlying defect (use fingerprint,
+join_keys.stack_hash, and join_keys.release). For each cluster worth human
+attention, produce a candidate finding: what broke, since when (release if
+known), how many accounts are affected, and the strongest evidence links.
+Ignore known-flaky noise and anything already covered by an open Report.
+"""

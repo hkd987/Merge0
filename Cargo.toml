@@ -5,6 +5,10 @@ members = [
     "crates/merge0-adapters",
     "crates/merge0-adapter-posthog",
     "crates/merge0-adapter-sentry",
+    "crates/merge0-context",
+    "crates/merge0-triage",
+    "crates/merge0-runner",
+    "crates/merge0-server",
 ]
 
 [workspace.package]

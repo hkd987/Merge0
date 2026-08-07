@@ -1,0 +1,12 @@
+[package]
+name = "merge0-runner"
+description = "BYO-agent, BYO-compute dispatch: WorkOrder in, PRResult out"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+merge0-signal.workspace = true
+serde.workspace = true
+thiserror.workspace = true

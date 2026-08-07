@@ -1,0 +1,10 @@
+[package]
+name = "merge0-server"
+description = "Merge0 service: ingestion scheduling, triage runs, inbox (stub)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+merge0-signal.workspace = true
