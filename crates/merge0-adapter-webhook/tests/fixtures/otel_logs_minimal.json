@@ -1,0 +1,25 @@
+{
+  "endpoint": "otel_logs",
+  "payload": {
+    "resourceLogs": [
+      {
+        "resource": {
+          "attributes": [
+            { "key": "service.name", "value": { "stringValue": "chalk-api" } }
+          ]
+        },
+        "scopeLogs": [
+          {
+            "logRecords": [
+              {
+                "timeUnixNano": 1785938400000000000,
+                "severityText": "ERROR",
+                "body": { "stringValue": "unhandled error in request pipeline" }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

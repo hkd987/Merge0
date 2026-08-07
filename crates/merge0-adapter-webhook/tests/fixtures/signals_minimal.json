@@ -1,0 +1,14 @@
+{
+  "endpoint": "signals",
+  "payload": [
+    {
+      "kind": "custom",
+      "severity": "low",
+      "title": "Manual QA note: tooltip flickers on hover",
+      "body": "",
+      "dedupe_key": "qa-tooltip-flicker",
+      "first_seen": "2026-08-05T14:00:00Z",
+      "last_seen": "2026-08-05T14:00:00Z"
+    }
+  ]
+}

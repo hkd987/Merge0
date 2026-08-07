@@ -1,0 +1,20 @@
+[package]
+name = "merge0-registry"
+description = "Curated signed skill registry: ed25519-signed index, content-hashed packages, manifest-change-PR install plans (PRD §5b P2)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+chrono.workspace = true
+thiserror.workspace = true
+ed25519-dalek.workspace = true
+sha2.workspace = true
+hex.workspace = true
+
+[dev-dependencies]
+rand.workspace = true

@@ -1,0 +1,14 @@
+{
+  "endpoint": "tickets",
+  "context": { "agent_base_url": "https://acme.zendesk.com/agent/" },
+  "payload": {
+    "tickets": [
+      {
+        "id": 5001,
+        "subject": "Cannot log in",
+        "created_at": "2026-08-05T14:00:00Z",
+        "updated_at": "2026-08-05T14:00:00Z"
+      }
+    ]
+  }
+}

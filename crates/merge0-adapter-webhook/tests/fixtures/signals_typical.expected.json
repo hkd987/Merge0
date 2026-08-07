@@ -1,0 +1,71 @@
+[
+  {
+    "affected_count": 240,
+    "body": "Conversion on /checkout dropped from 61% to 53% after the 14:00 deploy.",
+    "evidence": [
+      {
+        "kind": "other",
+        "label": "Conversion dashboard",
+        "url": "https://metrics.example.com/dashboards/checkout"
+      }
+    ],
+    "fingerprint": "webhook:9307c229582861de65da21e6d18104a9",
+    "first_seen": "2026-08-05T14:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {
+      "release": "v2.3.0",
+      "url_path": "/checkout"
+    },
+    "kind": "regression",
+    "last_seen": "2026-08-06T14:00:00Z",
+    "raw": {
+      "affected_count": 240,
+      "body": "Conversion on /checkout dropped from 61% to 53% after the 14:00 deploy.",
+      "dedupe_key": "checkout-conversion-drop",
+      "evidence": [
+        {
+          "kind": "other",
+          "label": "Conversion dashboard",
+          "url": "https://metrics.example.com/dashboards/checkout"
+        }
+      ],
+      "first_seen": "2026-08-05T14:00:00Z",
+      "join_keys": {
+        "release": "v2.3.0",
+        "url_path": "/checkout"
+      },
+      "kind": "regression",
+      "last_seen": "2026-08-06T14:00:00Z",
+      "severity": "high",
+      "team": "growth",
+      "title": "Checkout conversion dropped 8%"
+    },
+    "severity": "high",
+    "source": "webhook",
+    "source_ref": "checkout-conversion-drop",
+    "title": "Checkout conversion dropped 8%"
+  },
+  {
+    "body": "The 02:00 backup job finished in 96 minutes; the 30-day median is 31 minutes.",
+    "evidence": [],
+    "fingerprint": "webhook:66062f2a34cc5af250bdc39e44e192b0",
+    "first_seen": "2026-08-06T02:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "custom",
+    "last_seen": "2026-08-06T04:00:00Z",
+    "raw": {
+      "body": "The 02:00 backup job finished in 96 minutes; the 30-day median is 31 minutes.",
+      "dedupe_key": "nightly-backup-slow",
+      "first_seen": "2026-08-06T02:00:00Z",
+      "kind": "custom",
+      "last_seen": "2026-08-06T04:00:00Z",
+      "severity": "medium",
+      "title": "Nightly backup took 3x longer than usual"
+    },
+    "severity": "medium",
+    "source": "webhook",
+    "source_ref": "nightly-backup-slow",
+    "title": "Nightly backup took 3x longer than usual"
+  }
+]

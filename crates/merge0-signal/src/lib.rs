@@ -1,13 +1,23 @@
 //! The Signal schema — the contract between every Merge0 component.
 //!
-//! Normative spec: `docs/signal-schema.md` (v0.1). A test below round-trips
+//! Normative spec: `docs/signal-schema.md` (v0.2). A test below round-trips
 //! the doc's JSON example, so this crate and the doc cannot drift silently.
 //! Schema changes must update the doc (and its version) in the same PR.
+//!
+//! Alongside the Signal itself this crate defines the downstream pipeline
+//! contract: [`report::Report`], [`WorkOrder`], gate decisions, outcome
+//! records, and telemetry — the types every component exchanges.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use ulid::Ulid;
+
+pub mod report;
+pub mod telemetry;
+
+pub use report::{DismissReason, GateDecision, Report, ReportKind, ReportStatus};
+pub use telemetry::TelemetrySnapshot;
 
 /// Where a Signal was ingested from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -16,8 +26,15 @@ pub enum Source {
     Posthog,
     Sentry,
     Zendesk,
+    Intercom,
     Github,
     Webhook,
+    Otel,
+    Datadog,
+    Loopforge,
+    /// Merge0's own operational telemetry, ingested as just another source
+    /// (the meta-loop, PRD §5d).
+    Meta,
 }
 
 impl Source {
@@ -27,8 +44,13 @@ impl Source {
             Source::Posthog => "posthog",
             Source::Sentry => "sentry",
             Source::Zendesk => "zendesk",
+            Source::Intercom => "intercom",
             Source::Github => "github",
             Source::Webhook => "webhook",
+            Source::Otel => "otel",
+            Source::Datadog => "datadog",
+            Source::Loopforge => "loopforge",
+            Source::Meta => "meta",
         }
     }
 }
@@ -158,6 +180,34 @@ pub struct WorkOrder {
     pub success_criteria: String,
     pub constraints: String,
     pub prior_attempts: Vec<OutcomeRef>,
+    /// Maximum change footprint (PRD §5): a run whose fix exceeds this
+    /// discards itself with a "fix larger than expected" outcome.
+    #[serde(default)]
+    pub diff_budget: DiffBudget,
+}
+
+/// The empirical two-regime finding: small scoped PRs merge, sprawling ones
+/// die in review. Defaults are the Phase 0 starting point.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DiffBudget {
+    pub max_files: u32,
+    pub max_total_lines: u32,
+}
+
+impl Default for DiffBudget {
+    fn default() -> Self {
+        DiffBudget {
+            max_files: 4,
+            max_total_lines: 150,
+        }
+    }
+}
+
+impl DiffBudget {
+    /// Is an observed diff within budget?
+    pub fn allows(&self, files_changed: u32, total_lines: u32) -> bool {
+        files_changed <= self.max_files && total_lines <= self.max_total_lines
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -277,9 +327,18 @@ mod tests {
                 occurred_at: Utc::now(),
                 note: Some("March attempt reverted: broke district admin view".into()),
             }],
+            diff_budget: DiffBudget::default(),
         };
         let json = serde_json::to_string(&order).unwrap();
         let back: WorkOrder = serde_json::from_str(&json).unwrap();
         assert_eq!(order, back);
+    }
+
+    #[test]
+    fn diff_budget_boundaries() {
+        let budget = DiffBudget::default();
+        assert!(budget.allows(4, 150));
+        assert!(!budget.allows(5, 10));
+        assert!(!budget.allows(1, 151));
     }
 }

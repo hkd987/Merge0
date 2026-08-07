@@ -38,10 +38,53 @@ pub struct GateConfig {
     pub min_severity: Severity,
     /// Hard cap per triage run — a quiet inbox that's right beats a busy one.
     pub max_work_orders_per_run: u32,
+    /// Evidence budget: max links assembled onto a Report/Work Order.
+    #[serde(default = "default_max_evidence_items")]
+    pub max_evidence_items: usize,
+    /// Evidence budget: character cap per assembled text section.
+    #[serde(default = "default_max_section_chars")]
+    pub max_section_chars: usize,
+    /// Diff budget stamped on emitted Work Orders (PRD §5).
+    #[serde(default = "default_max_files")]
+    pub diff_max_files: u32,
+    #[serde(default = "default_max_total_lines")]
+    pub diff_max_total_lines: u32,
+    /// Cap on prior attempts assembled from outcome memory.
+    #[serde(default = "default_prior_attempts_cap")]
+    pub prior_attempts_cap: usize,
+}
+
+impl GateConfig {
+    pub fn diff_budget(&self) -> merge0_signal::DiffBudget {
+        merge0_signal::DiffBudget {
+            max_files: self.diff_max_files,
+            max_total_lines: self.diff_max_total_lines,
+        }
+    }
 }
 
 fn default_true() -> bool {
     true
+}
+
+fn default_max_evidence_items() -> usize {
+    8
+}
+
+fn default_max_section_chars() -> usize {
+    2000
+}
+
+fn default_max_files() -> u32 {
+    merge0_signal::DiffBudget::default().max_files
+}
+
+fn default_max_total_lines() -> u32 {
+    merge0_signal::DiffBudget::default().max_total_lines
+}
+
+fn default_prior_attempts_cap() -> usize {
+    5
 }
 
 #[derive(Debug, thiserror::Error)]

@@ -1,0 +1,64 @@
+[
+  {
+    "affected_count": 6,
+    "body": "Prefer the shared retry helper over hand-rolled backoff loops; this is the sixth PR reinventing it.",
+    "evidence": [
+      {
+        "kind": "other",
+        "label": "Originating PR",
+        "url": "https://github.com/acme/chalk/pull/121"
+      }
+    ],
+    "fingerprint": "loopforge:f977855ca930b2126c0edf0ad7b613d4",
+    "first_seen": "2026-08-05T14:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "custom",
+    "last_seen": "2026-08-05T14:00:00Z",
+    "raw": {
+      "author": "chalk-reviewer",
+      "comment": "Prefer the shared retry helper over hand-rolled backoff loops; this is the sixth PR reinventing it.",
+      "created_at": "2026-08-05T14:00:00Z",
+      "file": "src/sync/backoff.rs",
+      "id": "lf-2041",
+      "line": 42,
+      "occurrences": 6,
+      "pr_url": "https://github.com/acme/chalk/pull/121"
+    },
+    "severity": "medium",
+    "source": "loopforge",
+    "source_ref": "lf-2041",
+    "title": "Review pattern in src/sync/backoff.rs"
+  },
+  {
+    "affected_count": 2,
+    "body": "Missing null-district guard before dereferencing districtId.",
+    "evidence": [
+      {
+        "kind": "other",
+        "label": "Originating PR",
+        "url": "https://github.com/acme/chalk/pull/124"
+      }
+    ],
+    "fingerprint": "loopforge:c116385fe32d63e7eb1d1171caf8082b",
+    "first_seen": "2026-08-06T10:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "custom",
+    "last_seen": "2026-08-06T10:00:00Z",
+    "raw": {
+      "author": "chalk-lead",
+      "comment": "Missing null-district guard before dereferencing districtId.",
+      "created_at": "2026-08-06T10:00:00Z",
+      "file": "app/components/sync/SyncStatusPanel.tsx",
+      "id": "lf-2044",
+      "line": 88,
+      "occurrences": 2,
+      "pr_url": "https://github.com/acme/chalk/pull/124"
+    },
+    "severity": "low",
+    "source": "loopforge",
+    "source_ref": "lf-2044",
+    "title": "Review pattern in app/components/sync/SyncStatusPanel.tsx"
+  }
+]

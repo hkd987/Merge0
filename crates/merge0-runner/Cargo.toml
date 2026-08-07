@@ -8,5 +8,13 @@ publish.workspace = true
 
 [dependencies]
 merge0-signal.workspace = true
+merge0-github.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
+async-trait.workspace = true
+ulid.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true
+chrono.workspace = true

@@ -1,0 +1,10 @@
+[package]
+name = "merge0-e2e"
+description = "Merge0 component (implementation in progress)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+merge0-signal.workspace = true

@@ -4,6 +4,19 @@
 
 min_severity = "medium"
 max_work_orders_per_run = 3
+
+# Evidence budgets (PRD §4): a noisy incident can never drown the agent's
+# context. Over-budget content is truncated with deep links, never dropped.
+max_evidence_items = 8
+max_section_chars = 2000
+
+# Diff budget stamped on Work Orders (PRD §5): small scoped PRs merge,
+# sprawling ones die in review. A run exceeding this discards itself.
+diff_max_files = 4
+diff_max_total_lines = 150
+
+# Prior attempts from outcome memory carried into each Work Order.
+prior_attempts_cap = 5
 prompt = """
 You are the gate. For the Report in front of you, decide: is this a low-risk,
 well-specified maintenance fix with a clear repro and a clear, testable

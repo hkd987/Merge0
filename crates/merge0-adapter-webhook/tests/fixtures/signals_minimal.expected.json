@@ -1,0 +1,25 @@
+[
+  {
+    "body": "",
+    "evidence": [],
+    "fingerprint": "webhook:af234e279c9e3fc38656be73505893cc",
+    "first_seen": "2026-08-05T14:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "custom",
+    "last_seen": "2026-08-05T14:00:00Z",
+    "raw": {
+      "body": "",
+      "dedupe_key": "qa-tooltip-flicker",
+      "first_seen": "2026-08-05T14:00:00Z",
+      "kind": "custom",
+      "last_seen": "2026-08-05T14:00:00Z",
+      "severity": "low",
+      "title": "Manual QA note: tooltip flickers on hover"
+    },
+    "severity": "low",
+    "source": "webhook",
+    "source_ref": "qa-tooltip-flicker",
+    "title": "Manual QA note: tooltip flickers on hover"
+  }
+]

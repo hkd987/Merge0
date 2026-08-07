@@ -1,0 +1,71 @@
+{
+  "endpoint": "otel_logs",
+  "payload": {
+    "resourceLogs": [
+      {
+        "resource": {
+          "attributes": [
+            { "key": "service.name", "value": { "stringValue": "chalk-api" } },
+            { "key": "service.version", "value": { "stringValue": "v2.3.0" } },
+            { "key": "deployment.environment", "value": { "stringValue": "prod" } }
+          ]
+        },
+        "scopeLogs": [
+          {
+            "scope": { "name": "chalk.roster" },
+            "logRecords": [
+              {
+                "timeUnixNano": "1785938400000000000",
+                "observedTimeUnixNano": "1785938401000000000",
+                "severityNumber": 17,
+                "severityText": "ERROR",
+                "body": {
+                  "stringValue": "NullPointerException: district is null\n  at RosterService.load(RosterService.java:88)"
+                },
+                "attributes": [
+                  { "key": "url.path", "value": { "stringValue": "/districts/42/roster" } },
+                  { "key": "enduser.id", "value": { "stringValue": "user-77" } }
+                ],
+                "traceId": "0123456789abcdef0123456789abcdef"
+              },
+              {
+                "timeUnixNano": "1785938460000000000",
+                "severityNumber": 9,
+                "severityText": "INFO",
+                "body": { "stringValue": "roster sync finished in 4.2s" }
+              },
+              {
+                "timeUnixNano": "1785942000000000000",
+                "severityNumber": 13,
+                "severityText": "WARN",
+                "body": { "stringValue": "grade band cache miss rate above 40%" },
+                "attributes": [
+                  { "key": "http.route", "value": { "stringValue": "/reports/:id" } }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "resource": {
+          "attributes": [
+            { "key": "service.name", "value": { "stringValue": "chalk-worker" } }
+          ]
+        },
+        "scopeLogs": [
+          {
+            "logRecords": [
+              {
+                "timeUnixNano": "1785945600000000000",
+                "severityNumber": 21,
+                "severityText": "FATAL",
+                "body": { "stringValue": "worker crashed: out of memory importing roster batch 12" }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

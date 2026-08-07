@@ -1,0 +1,107 @@
+[
+  {
+    "body": "Every time I open the sync status page for Lincoln Elementary the page goes blank. Started after the last update.",
+    "evidence": [
+      {
+        "kind": "ticket",
+        "label": "Zendesk ticket #4812",
+        "url": "https://acme.zendesk.com/agent/tickets/4812"
+      }
+    ],
+    "fingerprint": "zendesk:fe87ae57754c95e297d5115dc46ccd84",
+    "first_seen": "2026-08-05T14:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {
+      "account_id": "360012345"
+    },
+    "kind": "ticket",
+    "last_seen": "2026-08-06T09:30:00Z",
+    "raw": {
+      "created_at": "2026-08-05T14:00:00Z",
+      "description": "Every time I open the sync status page for Lincoln Elementary the page goes blank. Started after the last update.",
+      "id": 4812,
+      "organization_id": 360012345,
+      "priority": "urgent",
+      "requester_id": 900222333,
+      "status": "open",
+      "subject": "Sync status page crashes when opening district view",
+      "tags": [
+        "sync",
+        "crash"
+      ],
+      "type": "incident",
+      "updated_at": "2026-08-06T09:30:00Z",
+      "url": "https://acme.zendesk.com/api/v2/tickets/4812.json"
+    },
+    "severity": "critical",
+    "source": "zendesk",
+    "source_ref": "4812",
+    "title": "Sync status page crashes when opening district view"
+  },
+  {
+    "body": "It would be helpful to export the full roster as a CSV file.",
+    "evidence": [
+      {
+        "kind": "ticket",
+        "label": "Zendesk ticket #4820",
+        "url": "https://acme.zendesk.com/agent/tickets/4820"
+      }
+    ],
+    "fingerprint": "zendesk:1a7ee8a914fe1b7ca9dcb6b7b56acdd2",
+    "first_seen": "2026-08-06T10:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {
+      "account_id": "900444555"
+    },
+    "kind": "ticket",
+    "last_seen": "2026-08-06T10:00:00Z",
+    "raw": {
+      "created_at": "2026-08-06T10:00:00Z",
+      "description": "It would be helpful to export the full roster as a CSV file.",
+      "id": 4820,
+      "priority": "low",
+      "requester_id": 900444555,
+      "status": "new",
+      "subject": "Feature request: export roster as CSV",
+      "type": "task",
+      "updated_at": "2026-08-06T10:00:00Z",
+      "url": "https://acme.zendesk.com/api/v2/tickets/4820.json"
+    },
+    "severity": "low",
+    "source": "zendesk",
+    "source_ref": "4820",
+    "title": "Feature request: export roster as CSV"
+  },
+  {
+    "body": "The grade band dropdown on the reports page lists each band twice.",
+    "evidence": [
+      {
+        "kind": "ticket",
+        "label": "Zendesk ticket #4825",
+        "url": "https://acme.zendesk.com/agent/tickets/4825"
+      }
+    ],
+    "fingerprint": "zendesk:41d83349fd6a6d3a8d37d8a1e17bec66",
+    "first_seen": "2026-08-06T15:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {
+      "account_id": "360098765"
+    },
+    "kind": "ticket",
+    "last_seen": "2026-08-07T08:00:00Z",
+    "raw": {
+      "created_at": "2026-08-06T15:00:00Z",
+      "description": "The grade band dropdown on the reports page lists each band twice.",
+      "id": 4825,
+      "organization_id": 360098765,
+      "priority": "normal",
+      "status": "open",
+      "subject": "Grade band dropdown shows duplicates",
+      "updated_at": "2026-08-07T08:00:00Z"
+    },
+    "severity": "medium",
+    "source": "zendesk",
+    "source_ref": "4825",
+    "title": "Grade band dropdown shows duplicates"
+  }
+]

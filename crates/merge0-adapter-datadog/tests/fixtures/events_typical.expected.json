@@ -1,0 +1,113 @@
+[
+  {
+    "body": "Error rate on chalk-api exceeded 5% over the last 10 minutes.",
+    "evidence": [
+      {
+        "kind": "issue",
+        "label": "Datadog event AQAAAZFexampleAAA1",
+        "url": "https://app.datadoghq.com/event/explorer?event=AQAAAZFexampleAAA1"
+      }
+    ],
+    "fingerprint": "datadog:8330e069cca9ea43a34e8fd96670a434",
+    "first_seen": "2026-08-05T14:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {
+      "release": "v2.3.0"
+    },
+    "kind": "exception",
+    "last_seen": "2026-08-05T14:00:00Z",
+    "raw": {
+      "attributes": {
+        "alert_type": "error",
+        "message": "Error rate on chalk-api exceeded 5% over the last 10 minutes.",
+        "monitor_id": 7654321,
+        "status": "alert",
+        "tags": [
+          "env:prod",
+          "service:chalk-api",
+          "version:v2.3.0"
+        ],
+        "timestamp": "2026-08-05T14:00:00Z",
+        "title": "[Triggered] High error rate on chalk-api"
+      },
+      "id": "AQAAAZFexampleAAA1",
+      "type": "event"
+    },
+    "severity": "high",
+    "source": "datadog",
+    "source_ref": "AQAAAZFexampleAAA1",
+    "title": "[Triggered] High error rate on chalk-api"
+  },
+  {
+    "body": "Queue depth reached 640 on chalk-worker.",
+    "evidence": [
+      {
+        "kind": "issue",
+        "label": "Datadog event AQAAAZFexampleAAA2",
+        "url": "https://app.datadoghq.com/event/explorer?event=AQAAAZFexampleAAA2"
+      }
+    ],
+    "fingerprint": "datadog:11e8e89bc0ef5a37ec380986a4d83db7",
+    "first_seen": "2026-08-06T09:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "custom",
+    "last_seen": "2026-08-06T09:00:00Z",
+    "raw": {
+      "attributes": {
+        "alert_type": "warning",
+        "message": "Queue depth reached 640 on chalk-worker.",
+        "monitor_id": 7654400,
+        "tags": [
+          "env:prod",
+          "service:chalk-worker"
+        ],
+        "timestamp": "2026-08-06T09:00:00Z",
+        "title": "[Warn] Roster import queue depth above 500"
+      },
+      "id": "AQAAAZFexampleAAA2",
+      "type": "event"
+    },
+    "severity": "medium",
+    "source": "datadog",
+    "source_ref": "AQAAAZFexampleAAA2",
+    "title": "[Warn] Roster import queue depth above 500"
+  },
+  {
+    "body": "Deployed by ci@example.com",
+    "evidence": [
+      {
+        "kind": "issue",
+        "label": "Datadog event AQAAAZFexampleAAA3",
+        "url": "https://app.datadoghq.com/event/explorer?event=AQAAAZFexampleAAA3"
+      }
+    ],
+    "fingerprint": "datadog:83cc531cdf5a8ecb85346dcdccb234ff",
+    "first_seen": "2026-08-06T12:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {
+      "release": "v2.3.1"
+    },
+    "kind": "custom",
+    "last_seen": "2026-08-06T12:00:00Z",
+    "raw": {
+      "attributes": {
+        "alert_type": "info",
+        "message": "Deployed by ci@example.com",
+        "tags": [
+          "env:prod",
+          "service:chalk-api",
+          "version:v2.3.1"
+        ],
+        "timestamp": "2026-08-06T12:00:00Z",
+        "title": "Deployment finished: chalk-api v2.3.1"
+      },
+      "id": "AQAAAZFexampleAAA3",
+      "type": "event"
+    },
+    "severity": "low",
+    "source": "datadog",
+    "source_ref": "AQAAAZFexampleAAA3",
+    "title": "Deployment finished: chalk-api v2.3.1"
+  }
+]

@@ -1,0 +1,44 @@
+{
+  "endpoint": "tickets",
+  "context": { "agent_base_url": "https://acme.zendesk.com/agent" },
+  "payload": {
+    "tickets": [
+      {
+        "id": 4812,
+        "url": "https://acme.zendesk.com/api/v2/tickets/4812.json",
+        "subject": "Sync status page crashes when opening district view",
+        "description": "Every time I open the sync status page for Lincoln Elementary the page goes blank. Started after the last update.",
+        "priority": "urgent",
+        "status": "open",
+        "type": "incident",
+        "tags": ["sync", "crash"],
+        "requester_id": 900222333,
+        "organization_id": 360012345,
+        "created_at": "2026-08-05T14:00:00Z",
+        "updated_at": "2026-08-06T09:30:00Z"
+      },
+      {
+        "id": 4820,
+        "url": "https://acme.zendesk.com/api/v2/tickets/4820.json",
+        "subject": "Feature request: export roster as CSV",
+        "description": "It would be helpful to export the full roster as a CSV file.",
+        "priority": "low",
+        "status": "new",
+        "type": "task",
+        "requester_id": 900444555,
+        "created_at": "2026-08-06T10:00:00Z",
+        "updated_at": "2026-08-06T10:00:00Z"
+      },
+      {
+        "id": 4825,
+        "subject": "Grade band dropdown shows duplicates",
+        "description": "The grade band dropdown on the reports page lists each band twice.",
+        "priority": "normal",
+        "status": "open",
+        "organization_id": 360098765,
+        "created_at": "2026-08-06T15:00:00Z",
+        "updated_at": "2026-08-07T08:00:00Z"
+      }
+    ]
+  }
+}

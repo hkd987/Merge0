@@ -1,0 +1,99 @@
+[
+  {
+    "body": "NullPointerException: district is null\n  at RosterService.load(RosterService.java:88)",
+    "evidence": [],
+    "fingerprint": "otel:59275feb49521ab117a0aa7a512c9dd1",
+    "first_seen": "2026-08-05T14:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {
+      "account_id": "user-77",
+      "release": "v2.3.0",
+      "url_path": "/districts/42/roster"
+    },
+    "kind": "exception",
+    "last_seen": "2026-08-05T14:00:00Z",
+    "raw": {
+      "attributes": [
+        {
+          "key": "url.path",
+          "value": {
+            "stringValue": "/districts/42/roster"
+          }
+        },
+        {
+          "key": "enduser.id",
+          "value": {
+            "stringValue": "user-77"
+          }
+        }
+      ],
+      "body": {
+        "stringValue": "NullPointerException: district is null\n  at RosterService.load(RosterService.java:88)"
+      },
+      "observedTimeUnixNano": "1785938401000000000",
+      "severityNumber": 17,
+      "severityText": "ERROR",
+      "timeUnixNano": "1785938400000000000",
+      "traceId": "0123456789abcdef0123456789abcdef"
+    },
+    "severity": "high",
+    "source": "otel",
+    "source_ref": "chalk-api:1785938400000000000",
+    "title": "NullPointerException: district is null"
+  },
+  {
+    "body": "grade band cache miss rate above 40%",
+    "evidence": [],
+    "fingerprint": "otel:f556a6b394d244667c10d667205329ad",
+    "first_seen": "2026-08-05T15:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {
+      "release": "v2.3.0",
+      "url_path": "/reports/:id"
+    },
+    "kind": "exception",
+    "last_seen": "2026-08-05T15:00:00Z",
+    "raw": {
+      "attributes": [
+        {
+          "key": "http.route",
+          "value": {
+            "stringValue": "/reports/:id"
+          }
+        }
+      ],
+      "body": {
+        "stringValue": "grade band cache miss rate above 40%"
+      },
+      "severityNumber": 13,
+      "severityText": "WARN",
+      "timeUnixNano": "1785942000000000000"
+    },
+    "severity": "medium",
+    "source": "otel",
+    "source_ref": "chalk-api:1785942000000000000",
+    "title": "grade band cache miss rate above 40%"
+  },
+  {
+    "body": "worker crashed: out of memory importing roster batch 12",
+    "evidence": [],
+    "fingerprint": "otel:8f9600ffd7bd0b207f9b3523deb05b4c",
+    "first_seen": "2026-08-05T16:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "exception",
+    "last_seen": "2026-08-05T16:00:00Z",
+    "raw": {
+      "body": {
+        "stringValue": "worker crashed: out of memory importing roster batch 12"
+      },
+      "severityNumber": 21,
+      "severityText": "FATAL",
+      "timeUnixNano": "1785945600000000000"
+    },
+    "severity": "critical",
+    "source": "otel",
+    "source_ref": "chalk-worker:1785945600000000000",
+    "title": "worker crashed: out of memory importing roster batch 12"
+  }
+]

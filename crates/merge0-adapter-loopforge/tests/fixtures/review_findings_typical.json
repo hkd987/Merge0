@@ -1,0 +1,27 @@
+{
+  "endpoint": "review_findings",
+  "payload": {
+    "findings": [
+      {
+        "id": "lf-2041",
+        "comment": "Prefer the shared retry helper over hand-rolled backoff loops; this is the sixth PR reinventing it.",
+        "file": "src/sync/backoff.rs",
+        "line": 42,
+        "author": "chalk-reviewer",
+        "occurrences": 6,
+        "pr_url": "https://github.com/acme/chalk/pull/121",
+        "created_at": "2026-08-05T14:00:00Z"
+      },
+      {
+        "id": "lf-2044",
+        "comment": "Missing null-district guard before dereferencing districtId.",
+        "file": "app/components/sync/SyncStatusPanel.tsx",
+        "line": 88,
+        "author": "chalk-lead",
+        "occurrences": 2,
+        "pr_url": "https://github.com/acme/chalk/pull/124",
+        "created_at": "2026-08-06T10:00:00Z"
+      }
+    ]
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "endpoint": "issues",
+  "context": { "repo": "acme/chalk" },
+  "payload": [
+    {
+      "number": 130,
+      "title": "Typo on the settings page",
+      "body": null,
+      "html_url": "https://github.com/acme/chalk/issues/130",
+      "created_at": "2026-08-06T12:00:00Z",
+      "updated_at": "2026-08-06T12:00:00Z"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+[
+  {
+    "body": "",
+    "evidence": [
+      {
+        "kind": "ticket",
+        "label": "Zendesk ticket #5001",
+        "url": "https://acme.zendesk.com/agent/tickets/5001"
+      }
+    ],
+    "fingerprint": "zendesk:605624372ed824d49153538ee8a3681f",
+    "first_seen": "2026-08-05T14:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "ticket",
+    "last_seen": "2026-08-05T14:00:00Z",
+    "raw": {
+      "created_at": "2026-08-05T14:00:00Z",
+      "id": 5001,
+      "subject": "Cannot log in",
+      "updated_at": "2026-08-05T14:00:00Z"
+    },
+    "severity": "low",
+    "source": "zendesk",
+    "source_ref": "5001",
+    "title": "Cannot log in"
+  }
+]

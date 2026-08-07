@@ -1,0 +1,104 @@
+[
+  {
+    "affected_count": 12,
+    "body": "Importing a roster CSV where some students have an empty grade band silently drops those rows.\n\nSteps:\n1. Upload the attached CSV\n2. Note the row count mismatch",
+    "evidence": [
+      {
+        "kind": "ticket",
+        "label": "GitHub issue acme/chalk#118",
+        "url": "https://github.com/acme/chalk/issues/118"
+      }
+    ],
+    "fingerprint": "github:fce1f29fb6e8e9a1ac2594e54ee33815",
+    "first_seen": "2026-08-04T09:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {
+      "account_id": "chalk-teacher"
+    },
+    "kind": "ticket",
+    "last_seen": "2026-08-06T16:00:00Z",
+    "raw": {
+      "body": "Importing a roster CSV where some students have an empty grade band silently drops those rows.\n\nSteps:\n1. Upload the attached CSV\n2. Note the row count mismatch",
+      "created_at": "2026-08-04T09:00:00Z",
+      "html_url": "https://github.com/acme/chalk/issues/118",
+      "id": 2412345678,
+      "labels": [
+        {
+          "color": "d73a4a",
+          "id": 1,
+          "name": "bug"
+        },
+        {
+          "color": "b60205",
+          "id": 2,
+          "name": "priority: critical"
+        }
+      ],
+      "number": 118,
+      "reactions": {
+        "+1": 11,
+        "eyes": 1,
+        "total_count": 12
+      },
+      "state": "open",
+      "title": "Roster import drops students with no grade band",
+      "updated_at": "2026-08-06T16:00:00Z",
+      "user": {
+        "id": 5550101,
+        "login": "chalk-teacher"
+      }
+    },
+    "severity": "critical",
+    "source": "github",
+    "source_ref": "118",
+    "title": "Roster import drops students with no grade band"
+  },
+  {
+    "affected_count": 3,
+    "body": "In dark mode the report table header renders dark-gray on black.",
+    "evidence": [
+      {
+        "kind": "ticket",
+        "label": "GitHub issue acme/chalk#124",
+        "url": "https://github.com/acme/chalk/issues/124"
+      }
+    ],
+    "fingerprint": "github:d55dca296589bc44eb784fade936d3f3",
+    "first_seen": "2026-08-05T14:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {
+      "account_id": "chalk-admin"
+    },
+    "kind": "ticket",
+    "last_seen": "2026-08-05T18:00:00Z",
+    "raw": {
+      "body": "In dark mode the report table header renders dark-gray on black.",
+      "created_at": "2026-08-05T14:00:00Z",
+      "html_url": "https://github.com/acme/chalk/issues/124",
+      "id": 2412346111,
+      "labels": [
+        {
+          "color": "e99695",
+          "id": 3,
+          "name": "P1"
+        }
+      ],
+      "number": 124,
+      "reactions": {
+        "+1": 3,
+        "total_count": 3
+      },
+      "state": "open",
+      "title": "Dark mode: report table header unreadable",
+      "updated_at": "2026-08-05T18:00:00Z",
+      "user": {
+        "id": 5550103,
+        "login": "chalk-admin"
+      }
+    },
+    "severity": "high",
+    "source": "github",
+    "source_ref": "124",
+    "title": "Dark mode: report table header unreadable"
+  }
+]

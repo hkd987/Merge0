@@ -1,4 +1,4 @@
-# Signal Schema — v0.1
+# Signal Schema — v0.2
 
 The Signal is the contract between every Merge0 component and the integration
 surface for external adapters (including the future generic webhook adapter).
@@ -12,6 +12,13 @@ and the types cannot drift silently.
 
 - The schema is versioned as a whole (this document's title). Breaking changes
   bump the version and are called out in a changelog section.
+
+### Changelog
+
+- **v0.2** — `source` enum extended with `intercom`, `otel`, `datadog`,
+  `loopforge`, and `meta` (Merge0's own operational telemetry, ingested for
+  the meta-loop). Additive only; no field changes.
+- **v0.1** — initial schema.
 - **Adapters may not invent fields.** Extensions go through schema versioning
   here, never through ad-hoc additions in an adapter.
 - Vendor-specific data that has no schema home belongs in `raw`, which is for
@@ -22,7 +29,7 @@ and the types cannot drift silently.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `id` | ULID string | yes | Assigned by the adapter at normalization time. Not stable across re-ingestion — use `fingerprint` for dedupe. |
-| `source` | enum | yes | `posthog`, `sentry`, `zendesk`, `github`, `webhook` |
+| `source` | enum | yes | `posthog`, `sentry`, `zendesk`, `intercom`, `github`, `webhook`, `otel`, `datadog`, `loopforge`, `meta` |
 | `kind` | enum | yes | `exception`, `ux_friction`, `ticket`, `regression`, `custom` |
 | `severity` | enum | yes | `low`, `medium`, `high`, `critical` |
 | `source_ref` | string | yes | Vendor-native ID for the underlying object (issue ID, session ID, ticket ID). Deep links go in `evidence`. |

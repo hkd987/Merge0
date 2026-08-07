@@ -5,10 +5,25 @@ members = [
     "crates/merge0-adapters",
     "crates/merge0-adapter-posthog",
     "crates/merge0-adapter-sentry",
+    "crates/merge0-adapter-zendesk",
+    "crates/merge0-adapter-github-issues",
+    "crates/merge0-adapter-webhook",
+    "crates/merge0-adapter-datadog",
+    "crates/merge0-adapter-loopforge",
+    "crates/merge0-store",
+    "crates/merge0-model",
     "crates/merge0-context",
     "crates/merge0-triage",
+    "crates/merge0-github",
     "crates/merge0-runner",
+    "crates/merge0-hardening",
+    "crates/merge0-meta",
+    "crates/merge0-slack",
+    "crates/merge0-broker",
+    "crates/merge0-registry",
     "crates/merge0-server",
+    "crates/merge0-e2e",
+    "ee/merge0-ee",
 ]
 
 [workspace.package]
@@ -25,6 +40,39 @@ chrono = { version = "0.4", features = ["serde"] }
 thiserror = "2"
 sha2 = "0.10"
 toml = "0.8"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time"] }
+axum = "0.8"
+sqlx = { version = "0.8", default-features = false, features = ["postgres", "runtime-tokio", "tls-rustls", "chrono", "json", "migrate"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+jsonwebtoken = "9"
+hmac = "0.12"
+hex = "0.4"
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+rand = "0.8"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+async-trait = "0.1"
+rsa = "0.9"
 
 merge0-signal = { path = "crates/merge0-signal" }
 merge0-adapters = { path = "crates/merge0-adapters" }
+merge0-store = { path = "crates/merge0-store" }
+merge0-model = { path = "crates/merge0-model" }
+merge0-context = { path = "crates/merge0-context" }
+merge0-triage = { path = "crates/merge0-triage" }
+merge0-github = { path = "crates/merge0-github" }
+merge0-runner = { path = "crates/merge0-runner" }
+merge0-hardening = { path = "crates/merge0-hardening" }
+merge0-meta = { path = "crates/merge0-meta" }
+merge0-slack = { path = "crates/merge0-slack" }
+merge0-broker = { path = "crates/merge0-broker" }
+merge0-registry = { path = "crates/merge0-registry" }
+merge0-adapter-posthog = { path = "crates/merge0-adapter-posthog" }
+merge0-adapter-sentry = { path = "crates/merge0-adapter-sentry" }
+merge0-adapter-zendesk = { path = "crates/merge0-adapter-zendesk" }
+merge0-adapter-github-issues = { path = "crates/merge0-adapter-github-issues" }
+merge0-adapter-webhook = { path = "crates/merge0-adapter-webhook" }
+merge0-adapter-datadog = { path = "crates/merge0-adapter-datadog" }
+merge0-adapter-loopforge = { path = "crates/merge0-adapter-loopforge" }
+merge0-server = { path = "crates/merge0-server" }
+merge0-ee = { path = "ee/merge0-ee" }

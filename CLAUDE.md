@@ -61,4 +61,7 @@ Rules (mirroring PRD §5c/§5d discipline):
 
 <!-- merge0:lessons:start (machine-managed — appended by Claude; pruned periodically; do not hand-edit outside PR review) -->
 - [2026-08-07] Deps used only inside `#[cfg(test)]` still need a `[dev-dependencies]` entry in that crate's own Cargo.toml — being in `[workspace.dependencies]` is not enough; `cargo build` succeeding does not prove `cargo test` compiles.
+- [2026-08-07] Compute fixture constants (epoch nanos, hashes) programmatically or via bless mode, never by mental arithmetic.
+- [2026-08-07] Postgres `timestamptz` truncates to microseconds: a chrono timestamp written and read back can compare `<` its original. Never use exact `>=`-on-now filters against round-tripped timestamps; add a small tolerance or truncate before storing.
+- [2026-08-07] In axum handlers, extractor-based body parsing (`Json<T>`) runs before the handler body, so auth checks inside the handler happen after a 422 parse rejection. For authenticated endpoints, take `Bytes` and parse after the auth check.
 <!-- merge0:lessons:end -->

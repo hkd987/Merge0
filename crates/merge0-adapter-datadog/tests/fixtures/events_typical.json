@@ -1,0 +1,44 @@
+{
+  "endpoint": "events",
+  "context": { "app_base_url": "https://app.datadoghq.com" },
+  "payload": {
+    "data": [
+      {
+        "id": "AQAAAZFexampleAAA1",
+        "type": "event",
+        "attributes": {
+          "timestamp": "2026-08-05T14:00:00Z",
+          "title": "[Triggered] High error rate on chalk-api",
+          "message": "Error rate on chalk-api exceeded 5% over the last 10 minutes.",
+          "alert_type": "error",
+          "monitor_id": 7654321,
+          "tags": ["env:prod", "service:chalk-api", "version:v2.3.0"],
+          "status": "alert"
+        }
+      },
+      {
+        "id": "AQAAAZFexampleAAA2",
+        "type": "event",
+        "attributes": {
+          "timestamp": "2026-08-06T09:00:00Z",
+          "title": "[Warn] Roster import queue depth above 500",
+          "message": "Queue depth reached 640 on chalk-worker.",
+          "alert_type": "warning",
+          "monitor_id": 7654400,
+          "tags": ["env:prod", "service:chalk-worker"]
+        }
+      },
+      {
+        "id": "AQAAAZFexampleAAA3",
+        "type": "event",
+        "attributes": {
+          "timestamp": "2026-08-06T12:00:00Z",
+          "title": "Deployment finished: chalk-api v2.3.1",
+          "message": "Deployed by ci@example.com",
+          "alert_type": "info",
+          "tags": ["env:prod", "service:chalk-api", "version:v2.3.1"]
+        }
+      }
+    ]
+  }
+}

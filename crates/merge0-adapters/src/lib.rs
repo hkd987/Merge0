@@ -43,7 +43,8 @@ pub enum AdapterError {
 /// Implementations must be pure with respect to the input (no I/O): the fetch
 /// layer does the talking to vendor APIs, adapters only normalize. That is
 /// what makes golden-payload conformance testing possible.
-pub trait Adapter {
+/// (`Send + Sync` because the server holds adapters across await points.)
+pub trait Adapter: Send + Sync {
     /// The source every emitted Signal must carry.
     fn source(&self) -> Source;
 

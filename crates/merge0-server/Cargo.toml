@@ -1,6 +1,6 @@
 [package]
 name = "merge0-server"
-description = "Merge0 service: ingestion scheduling, triage runs, inbox (stub)"
+description = "Merge0 service: ingestion, triage runs, inbox, webhooks, telemetry"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,3 +8,35 @@ publish.workspace = true
 
 [dependencies]
 merge0-signal.workspace = true
+merge0-adapters.workspace = true
+merge0-adapter-posthog.workspace = true
+merge0-adapter-sentry.workspace = true
+merge0-adapter-zendesk.workspace = true
+merge0-adapter-github-issues.workspace = true
+merge0-adapter-webhook.workspace = true
+merge0-adapter-datadog.workspace = true
+merge0-adapter-loopforge.workspace = true
+merge0-store.workspace = true
+merge0-model.workspace = true
+merge0-context.workspace = true
+merge0-triage.workspace = true
+merge0-github.workspace = true
+merge0-runner.workspace = true
+merge0-slack.workspace = true
+axum.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+ulid.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+reqwest.workspace = true
+
+[dev-dependencies]
+hmac.workspace = true
+sha2.workspace = true
+hex.workspace = true
+toml.workspace = true
+reqwest.workspace = true

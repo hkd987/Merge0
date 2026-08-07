@@ -1,0 +1,23 @@
+[
+  {
+    "body": "unhandled error in request pipeline",
+    "evidence": [],
+    "fingerprint": "otel:aac845bb87a4168175f91079eb0df7c5",
+    "first_seen": "2026-08-05T14:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "exception",
+    "last_seen": "2026-08-05T14:00:00Z",
+    "raw": {
+      "body": {
+        "stringValue": "unhandled error in request pipeline"
+      },
+      "severityText": "ERROR",
+      "timeUnixNano": 1785938400000000000
+    },
+    "severity": "high",
+    "source": "otel",
+    "source_ref": "chalk-api:1785938400000000000",
+    "title": "unhandled error in request pipeline"
+  }
+]

@@ -1,23 +1,16 @@
 //! Context store — a thin assembly layer, not a warehouse (PRD §3).
 //!
-//! Four context types feed triage; storage lands with the Postgres layer in
-//! a follow-up branch. The module boundaries exist now so the Phase 0 work
-//! has stable homes.
+//! Four context types feed triage:
+//!
+//! - **Intent** ([`intent`]): the customer-authored MERGE0.md docs pack,
+//!   with the machine-managed fenced section the hardening pass may write
+//!   (fence rule enforced in code, PRD §5c).
+//! - **Correlation**: `join_keys` on Signals — lives in the store's queries.
+//! - **Release** ([`release`]): deploy timeline → first-bad-release
+//!   attribution (PRD P0-4).
+//! - **Outcome memory** ([`outcome`]): verdicts and PR fates by fingerprint
+//!   (PRD P0-8), assembled into `WorkOrder::prior_attempts`.
 
-/// Intent context: per-repo docs pack (MERGE0.md, invariants, feature notes),
-/// customer-authored, fetched from git at run time — never stored here.
-pub mod intent {}
-
-/// Correlation context: cross-source joins over `Signal::join_keys`
-/// (Postgres signal table + join queries).
-pub mod correlation {}
-
-/// Release context: deploy timeline and changelog from GitHub Releases +
-/// deploy webhooks (`releases` table). Drives first-bad-release attribution
-/// (PRD P0-4).
-pub mod release {}
-
-/// Outcome memory: inbox verdicts and PR fates (merged / closed / reverted),
-/// including revert-as-hard-negative (PRD P0-8). The compounding moat — it
-/// only accumulates from running the loop.
-pub mod outcome {}
+pub mod intent;
+pub mod outcome;
+pub mod release;

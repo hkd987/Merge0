@@ -6,10 +6,25 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  MERGE0_TEST_DATABASE_URL: postgres://merge0:merge0@localhost:5432/merge0
 
 jobs:
   check:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: merge0
+          POSTGRES_PASSWORD: merge0
+          POSTGRES_DB: merge0
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U merge0"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable

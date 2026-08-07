@@ -1,0 +1,15 @@
+[package]
+name = "merge0-broker"
+description = "Credential broker for non-Actions runners: per-Work-Order, single-repo, short-TTL tokens via git credential helper (PRD §5a P2)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+merge0-signal.workspace = true
+chrono.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+ulid.workspace = true

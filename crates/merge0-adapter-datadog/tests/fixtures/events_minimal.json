@@ -1,0 +1,16 @@
+{
+  "endpoint": "events",
+  "context": { "app_base_url": "https://app.datadoghq.com/" },
+  "payload": {
+    "data": [
+      {
+        "id": "AQAAAZFexampleBBB1",
+        "type": "event",
+        "attributes": {
+          "timestamp": "2026-08-05T14:00:00Z",
+          "title": "Custom event from chalk cron"
+        }
+      }
+    ]
+  }
+}

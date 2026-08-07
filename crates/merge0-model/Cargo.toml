@@ -1,0 +1,17 @@
+[package]
+name = "merge0-model"
+description = "Model abstraction: Anthropic client for gate/clustering, scripted fake for tests"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+reqwest.workspace = true
+async-trait.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true

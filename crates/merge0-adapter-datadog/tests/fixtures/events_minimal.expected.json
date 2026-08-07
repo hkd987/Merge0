@@ -1,0 +1,30 @@
+[
+  {
+    "body": "",
+    "evidence": [
+      {
+        "kind": "issue",
+        "label": "Datadog event AQAAAZFexampleBBB1",
+        "url": "https://app.datadoghq.com/event/explorer?event=AQAAAZFexampleBBB1"
+      }
+    ],
+    "fingerprint": "datadog:c2483f87671470556a2ddaa77bf1590c",
+    "first_seen": "2026-08-05T14:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "custom",
+    "last_seen": "2026-08-05T14:00:00Z",
+    "raw": {
+      "attributes": {
+        "timestamp": "2026-08-05T14:00:00Z",
+        "title": "Custom event from chalk cron"
+      },
+      "id": "AQAAAZFexampleBBB1",
+      "type": "event"
+    },
+    "severity": "medium",
+    "source": "datadog",
+    "source_ref": "AQAAAZFexampleBBB1",
+    "title": "Custom event from chalk cron"
+  }
+]
