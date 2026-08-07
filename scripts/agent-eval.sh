@@ -44,6 +44,9 @@ for fixture in "${FIXTURES[@]}"; do
 
   WORKDIRS+=("$work")
   pushd "$work" > /dev/null
+  # Real repos commit Cargo.lock; generate it before the base commit so
+  # running tests never shows up as agent diff.
+  cargo generate-lockfile -q 2>/dev/null || true
   git init -q && git add -A && git commit -qm "fixture base" 2>&1 | tail -0
 
   # Sanity: seeded-bug fixtures must start red; conflict starts green.

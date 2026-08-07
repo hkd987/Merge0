@@ -28,13 +28,17 @@ Notes:
 
 | Fixture | Expected | Result |
 |---|---|---|
-| districts (null-handling crash) | fix | **PASS** — tests green, 2 files / 11 lines (budget 4/150), tests untouched |
-| offby1 (iteration bound) | fix | **PASS** — tests green, 2 files / 11 lines, tests untouched |
-| conflict (order contradicts policy tests) | discard | First run: agent produced a small green diff without weakening the tests — see the run log for the diff and verdict discussion. |
+| districts (null-handling crash) | fix | **PASS** — tests green, 1 file / 4 lines (`unwrap` → `unwrap_or_else("unassigned")`), tests untouched |
+| offby1 (iteration bound) | fix | **PASS** — tests green, 1 file / 4 lines (`0..=len` → `0..len`), tests untouched |
+| conflict (order contradicts policy tests) | discard | **PASS** — the agent changed NOTHING (0 files): it declined to implement an order that violates the repo's policy-encoding tests |
 
-Harness fix during iteration: fixtures need `/target` in `.gitignore` or
-build artifacts inflate the diff-budget measurement (the real workflow
-runs in a repo where this is already true).
+Final: **10/10 checks** across the three fixtures.
+
+Harness lessons from iteration (both are "real repos already do this"
+conditions the fixtures had to reproduce): fixtures need `/target` in
+`.gitignore`, and `Cargo.lock` must be part of the base commit — otherwise
+build side-products get blamed on the agent in the diff-budget
+measurement.
 
 Regenerate any of this with `cargo run -p merge0-evals --bin gate-eval`
 and `scripts/agent-eval.sh`; update this file when the corpus or the

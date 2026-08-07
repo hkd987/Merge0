@@ -70,4 +70,6 @@ Rules (mirroring PRD §5c/§5d discipline):
 - [2026-08-07] `Result::unwrap_err()`/`expect_err()` need `Debug` on the Ok type — for non-Debug Ok sides (trait objects) use `.err().expect(...)`; when the Ok type IS Debug, clippy's `err_expect` lint demands `expect_err` instead.
 - [2026-08-07] Official `rust:` Docker images ship the minimal rustup profile, so a rust-toolchain.toml that requests components forces a mid-build channel download — set `RUSTUP_TOOLCHAIN` in the builder stage to use the preinstalled toolchain.
 - [2026-08-07] File-sized build inputs (CA bundles, keys) blow past `--build-arg` argv limits — pass them into `docker build` as BuildKit secret mounts.
+- [2026-08-07] Model-output parsers must tolerate benign shape variance (models emit lists where a string was asked for): strict serde + fail-closed silently zeroes yield — a failure class only live-model evals catch, never scripted-model tests.
+- [2026-08-07] In diff-measuring harnesses, build side-products (Cargo.lock, target/) must be in the base commit or .gitignore, or the measurement blames the agent for them.
 <!-- merge0:lessons:end -->
