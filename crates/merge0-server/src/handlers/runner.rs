@@ -2,10 +2,11 @@
 //!
 //! Budgets are re-enforced server-side (`enforce_budgets`): the runner's
 //! self-report is checked, not trusted. No red PRs reach the inbox (P0-6);
-//! failed runs write a failure outcome and open nothing.
+//! failed runs write a failure outcome and open nothing. Retried callbacks
+//! (Actions re-runs, network retries) are detected via the dispatch status
+//! and produce no duplicate outcomes or notifications (audit C4).
 
-use super::ingest::auth_header;
-use super::{parse_report_id, ApiError};
+use super::{auth_header, parse_report_id, ApiError};
 use crate::router::require_bearer;
 use crate::AppState;
 use axum::body::Bytes;
@@ -15,6 +16,7 @@ use axum::Json;
 use chrono::Utc;
 use merge0_runner::{enforce_budgets, RunReport, RunStatus};
 use merge0_signal::ReportStatus;
+use merge0_store::DispatchStatus;
 
 pub async fn callback(
     State(state): State<AppState>,
@@ -32,6 +34,18 @@ pub async fn callback(
             "no work order for report {id}"
         )));
     };
+    let Some(dispatch) = state.tenant.dispatch(id).await? else {
+        return Err(ApiError::conflict("report was never dispatched"));
+    };
+    // Idempotency: only a Dispatched run can transition. A retried callback
+    // finds the dispatch already terminal and becomes a recorded no-op.
+    if dispatch.status != DispatchStatus::Dispatched {
+        return Ok(Json(serde_json::json!({
+            "recorded": id.to_string(),
+            "duplicate": true,
+            "current_status": dispatch.status,
+        })));
+    }
 
     let report = enforce_budgets(&order, report);
     let now = Utc::now();

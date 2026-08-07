@@ -12,6 +12,8 @@ serde_json.workspace = true
 reqwest.workspace = true
 async-trait.workspace = true
 thiserror.workspace = true
+tokio.workspace = true
 
 [dev-dependencies]
 tokio.workspace = true
+wiremock.workspace = true

@@ -1,16 +1,19 @@
-//! Tenant schema provisioning.
+//! Tenant schema provisioning: an ordered migration-step registry.
 //!
-//! Idempotent DDL executed inside the tenant's schema. A `schema_meta` table
-//! records the applied store version so future releases can migrate forward;
-//! within one release the DDL is immutable (PRD §5d: the executor changes
-//! only through versioned releases).
+//! Each step is `(version, DDL statements)`. `provision` applies, in order,
+//! every step strictly greater than the recorded version, then records the
+//! new version — so a tenant provisioned at v1 picks up v2's `ALTER`s, and
+//! a fresh tenant runs every step from scratch. Within one release the
+//! registry is immutable (PRD §5d: the executor changes only through
+//! versioned releases); a release adds steps, never edits shipped ones.
 
 use crate::Result;
 use sqlx::PgPool;
 
-/// Bump when the DDL below changes shape; `provision` applies steps
-/// strictly greater than the recorded version.
-const STORE_VERSION: i32 = 1;
+/// The registry. Append-only across releases.
+fn steps(schema: &str) -> Vec<(i32, Vec<String>)> {
+    vec![(1, ddl_v1(schema)), (2, ddl_v2(schema))]
+}
 
 pub(crate) async fn provision(pool: &PgPool, schema: &str) -> Result<()> {
     // `schema` is validated by the caller (Store::tenant) before we get here.
@@ -30,22 +33,58 @@ pub(crate) async fn provision(pool: &PgPool, schema: &str) -> Result<()> {
     ))
     .fetch_optional(pool)
     .await?;
+    let current = current.unwrap_or(0);
 
-    if current.unwrap_or(0) < STORE_VERSION {
-        for statement in ddl_v1(schema) {
+    let mut applied = current;
+    for (version, statements) in steps(schema) {
+        if version <= current {
+            continue;
+        }
+        for statement in statements {
             sqlx::query(&statement).execute(pool).await?;
         }
+        applied = version;
+    }
+    if applied != current {
         sqlx::query(&format!("DELETE FROM \"{schema}\".schema_meta"))
             .execute(pool)
             .await?;
         sqlx::query(&format!(
             "INSERT INTO \"{schema}\".schema_meta (version) VALUES ($1)"
         ))
-        .bind(STORE_VERSION)
+        .bind(applied)
         .execute(pool)
         .await?;
     }
     Ok(())
+}
+
+/// v2 — idempotency + ingestion state:
+/// - one outcome row per (report, kind): GitHub redelivers webhooks
+///   at-least-once and inflated outcome counts corrupt the Phase 0 metric
+/// - `webhook_deliveries`: `x-github-delivery` dedupe
+/// - `fetch_state`: per-source poll cursors for the fetch layer
+fn ddl_v2(schema: &str) -> Vec<String> {
+    let s = schema;
+    vec![
+        format!(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_outcomes_report_kind
+                 ON \"{s}\".outcomes (report_id, kind)"
+        ),
+        format!(
+            "CREATE TABLE IF NOT EXISTS \"{s}\".webhook_deliveries (
+                 delivery_id TEXT PRIMARY KEY,
+                 received_at TIMESTAMPTZ NOT NULL
+             )"
+        ),
+        format!(
+            "CREATE TABLE IF NOT EXISTS \"{s}\".fetch_state (
+                 source TEXT PRIMARY KEY,
+                 cursor TEXT,
+                 last_run TIMESTAMPTZ
+             )"
+        ),
+    ]
 }
 
 fn ddl_v1(schema: &str) -> Vec<String> {

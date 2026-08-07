@@ -14,9 +14,11 @@ use merge0_github::{GitHubApi, GitHubError, RepoRef};
 use merge0_signal::WorkOrder;
 use serde::{Deserialize, Serialize};
 
+pub mod manifest;
 pub mod report;
 pub mod workflow;
 
+pub use manifest::{AgentManifest, ManifestError};
 pub use report::{enforce_budgets, RunReport, RunStatus};
 
 /// The event type the customer workflow subscribes to.
@@ -86,6 +88,10 @@ pub struct ActionsRunner<A> {
     pub agent: AgentKind,
     /// Where the customer workflow calls back with its RunReport.
     pub callback_url: String,
+    /// Manifest attribution (PRD §5b) echoed back by the workflow so
+    /// per-run extension usage lands in outcome memory. `None` when the
+    /// repo has no manifest.
+    pub attribution: Option<serde_json::Value>,
 }
 
 #[async_trait]
@@ -93,7 +99,7 @@ impl<A: GitHubApi> Runner for ActionsRunner<A> {
     async fn dispatch(&self, order: &WorkOrder) -> Result<DispatchReceipt, RunnerError> {
         let repo = RepoRef::parse(&order.repo)
             .map_err(|e| RunnerError::Sanitization(format!("bad repo: {e}")))?;
-        let payload = sanitized_payload(order, &self.callback_url)?;
+        let payload = sanitized_payload(order, &self.callback_url, self.attribution.as_ref())?;
         self.api
             .repository_dispatch(&repo, DISPATCH_EVENT, &payload)
             .await?;
@@ -107,9 +113,12 @@ impl<A: GitHubApi> Runner for ActionsRunner<A> {
 /// Build the dispatch payload. Sanitization invariants (PRD §5 Secrets):
 /// no raw vendor payloads, no credentials, evidence restricted to URLs and
 /// labels — enforced here because the payload crosses into customer CI logs.
+/// (The attribution block carries manifest *names* only — the manifest
+/// parser already rejects anything shaped like a credential value.)
 pub fn sanitized_payload(
     order: &WorkOrder,
     callback_url: &str,
+    attribution: Option<&serde_json::Value>,
 ) -> Result<serde_json::Value, RunnerError> {
     let value = serde_json::to_value(order).expect("work order serializes");
     // Defense in depth: WorkOrder has no `raw` field by construction, but a
@@ -131,6 +140,7 @@ pub fn sanitized_payload(
         "work_order": value,
         "callback_url": callback_url,
         "repair_budget": DEFAULT_REPAIR_BUDGET,
+        "attribution": attribution,
     }))
 }
 
@@ -163,6 +173,7 @@ mod tests {
             api,
             agent: AgentKind::ClaudeCode,
             callback_url: "https://merge0.example.com/runner/callback".into(),
+            attribution: Some(serde_json::json!({"mcp": ["internal-api"]})),
         };
         let receipt = runner.dispatch(&order()).await.unwrap();
         assert_eq!(receipt.runner_kind, "claude-code");
@@ -188,6 +199,7 @@ mod tests {
             api,
             agent: AgentKind::ClaudeCode,
             callback_url: "https://cb".into(),
+            attribution: None,
         };
         assert!(matches!(
             runner.dispatch(&bad).await,
@@ -205,6 +217,7 @@ mod tests {
             api,
             agent: AgentKind::ClaudeCode,
             callback_url: "https://cb".into(),
+            attribution: None,
         };
         assert!(runner.dispatch(&bad).await.is_err());
         assert!(runner.api.state.lock().unwrap().dispatches.is_empty());

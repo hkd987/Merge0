@@ -155,6 +155,7 @@ async fn the_complete_loop_fix_harden_meta() {
         api: github.clone(),
         agent: merge0_runner::AgentKind::ClaudeCode,
         callback_url: "https://merge0.example.com/runner/callback".into(),
+        attribution: None,
     };
     let receipt = runner.dispatch(&order).await.unwrap();
     tenant

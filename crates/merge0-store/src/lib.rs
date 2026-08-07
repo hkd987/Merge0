@@ -92,6 +92,12 @@ impl TenantStore {
         &self.schema
     }
 
+    /// Liveness check for health probes: one round-trip to the database.
+    pub async fn ping(&self) -> Result<()> {
+        sqlx::query("SELECT 1").execute(&self.pool).await?;
+        Ok(())
+    }
+
     pub(crate) fn table(&self, name: &str) -> String {
         format!("\"{}\".{name}", self.schema)
     }

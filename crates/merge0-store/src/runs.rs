@@ -39,6 +39,97 @@ pub struct DispatchRecord {
 }
 
 impl TenantStore {
+    /// Human approval + dispatch bookkeeping in ONE transaction, closing the
+    /// window where a crash between the verdict and the dispatch record
+    /// could leave an approvable report with a live runner job (audit
+    /// finding O4). Records the manifest/extension attribution at dispatch
+    /// time (PRD §5b).
+    pub async fn approve_for_dispatch(
+        &self,
+        report_id: Ulid,
+        runner_kind: &str,
+        extensions: Option<&serde_json::Value>,
+        now: DateTime<Utc>,
+    ) -> Result<()> {
+        let mut tx = self.pool().begin().await?;
+        let verdict_sql = format!(
+            "UPDATE {t} SET status = $2, decided_at = $3 WHERE id = $1 AND status = $4",
+            t = self.table("reports")
+        );
+        let updated = sqlx::query(&verdict_sql)
+            .bind(report_id.to_string())
+            .bind(enum_str(&merge0_signal::ReportStatus::Dispatched))
+            .bind(now)
+            .bind(enum_str(&merge0_signal::ReportStatus::AwaitingReview))
+            .execute(&mut *tx)
+            .await?;
+        if updated.rows_affected() == 0 {
+            return Err(StoreError::NotFound(format!(
+                "report {report_id} not awaiting review"
+            )));
+        }
+        let dispatch_sql = format!(
+            "INSERT INTO {t} (report_id, runner_kind, dispatched_at, status, extensions)
+             VALUES ($1,$2,$3,$4,$5)
+             ON CONFLICT (report_id) DO UPDATE SET
+                 runner_kind = EXCLUDED.runner_kind,
+                 dispatched_at = EXCLUDED.dispatched_at,
+                 status = EXCLUDED.status,
+                 extensions = EXCLUDED.extensions,
+                 pr_url = NULL, branch = NULL, pr_opened_at = NULL,
+                 discard_reason = NULL, diagnosis = NULL",
+            t = self.table("dispatches")
+        );
+        sqlx::query(&dispatch_sql)
+            .bind(report_id.to_string())
+            .bind(runner_kind)
+            .bind(now)
+            .bind(enum_str(&DispatchStatus::Dispatched))
+            .bind(extensions)
+            .execute(&mut *tx)
+            .await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
+    /// Undo `approve_for_dispatch` when the actual `repository_dispatch`
+    /// API call fails: the report returns to the inbox and the dispatch
+    /// record is removed, so the approval can be retried cleanly.
+    pub async fn rollback_dispatch(&self, report_id: Ulid) -> Result<()> {
+        let mut tx = self.pool().begin().await?;
+        sqlx::query(&format!(
+            "DELETE FROM {t} WHERE report_id = $1",
+            t = self.table("dispatches")
+        ))
+        .bind(report_id.to_string())
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query(&format!(
+            "UPDATE {t} SET status = $2, decided_at = NULL WHERE id = $1",
+            t = self.table("reports")
+        ))
+        .bind(report_id.to_string())
+        .bind(enum_str(&merge0_signal::ReportStatus::AwaitingReview))
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
+    /// Retention (audit finding O7): redact `signals.raw` older than the
+    /// cutoff. The normalized fields stay; only the verbatim vendor payload
+    /// (the potential PII carrier) is replaced with a purge marker. Returns
+    /// the number of rows redacted.
+    pub async fn purge_raw_older_than(&self, cutoff: DateTime<Utc>) -> Result<u64> {
+        let sql = format!(
+            "UPDATE {t} SET raw = '{{\"purged\": true}}'::jsonb
+             WHERE ingested_at < $1 AND raw != '{{\"purged\": true}}'::jsonb",
+            t = self.table("signals")
+        );
+        let result = sqlx::query(&sql).bind(cutoff).execute(self.pool()).await?;
+        Ok(result.rows_affected())
+    }
+
     pub async fn record_dispatch(
         &self,
         report_id: Ulid,
@@ -103,6 +194,8 @@ impl TenantStore {
 
     /// Runner callback: the run self-discarded (repair budget exhausted or
     /// diff budget exceeded). Also writes the discarded outcome + salvage.
+    /// Returns whether the outcome was newly recorded (false on a retried
+    /// callback — idempotent like `record_outcome`).
     pub async fn record_discard(
         &self,
         report_id: Ulid,
@@ -110,7 +203,7 @@ impl TenantStore {
         diagnosis: &str,
         now: DateTime<Utc>,
         tokens_spent: Option<u64>,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         let sql = format!(
             "UPDATE {t} SET status = $2, discard_reason = $3, diagnosis = $4, tokens_spent = $5
              WHERE report_id = $1",
@@ -220,7 +313,11 @@ impl TenantStore {
         row.map(|r| parse_ulid(r.get("report_id"))).transpose()
     }
 
-    /// Append to outcome memory (PRD P0-8).
+    /// Append to outcome memory (PRD P0-8). Idempotent per `(report, kind)`
+    /// — GitHub delivers webhooks at-least-once, and a duplicate outcome
+    /// would inflate the acceptance-rate metric. Returns whether a new
+    /// outcome was actually recorded (callers use this to skip duplicate
+    /// side effects like Slack notifications).
     pub async fn record_outcome(
         &self,
         report_id: Ulid,
@@ -229,13 +326,14 @@ impl TenantStore {
         occurred_at: DateTime<Utc>,
         note: Option<&str>,
         tokens_spent: Option<u64>,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         let sql = format!(
             "INSERT INTO {t} (id, report_id, kind, pr_url, occurred_at, note, tokens_spent)
-             VALUES ($1,$2,$3,$4,$5,$6,$7)",
+             VALUES ($1,$2,$3,$4,$5,$6,$7)
+             ON CONFLICT (report_id, kind) DO NOTHING",
             t = self.table("outcomes")
         );
-        sqlx::query(&sql)
+        let result = sqlx::query(&sql)
             .bind(Ulid::new().to_string())
             .bind(report_id.to_string())
             .bind(enum_str(&kind))
@@ -243,6 +341,61 @@ impl TenantStore {
             .bind(occurred_at)
             .bind(note)
             .bind(tokens_spent.map(|n| n as i64))
+            .execute(self.pool())
+            .await?;
+        Ok(result.rows_affected() > 0)
+    }
+
+    /// Record a webhook delivery id; returns false if it was already seen
+    /// (GitHub's `x-github-delivery` dedupe — the first idempotency line).
+    pub async fn record_webhook_delivery(
+        &self,
+        delivery_id: &str,
+        now: DateTime<Utc>,
+    ) -> Result<bool> {
+        let sql = format!(
+            "INSERT INTO {t} (delivery_id, received_at) VALUES ($1,$2)
+             ON CONFLICT (delivery_id) DO NOTHING",
+            t = self.table("webhook_deliveries")
+        );
+        let result = sqlx::query(&sql)
+            .bind(delivery_id)
+            .bind(now)
+            .execute(self.pool())
+            .await?;
+        Ok(result.rows_affected() > 0)
+    }
+
+    // ---- fetch layer cursors ----
+
+    pub async fn fetch_cursor(&self, source: &str) -> Result<Option<String>> {
+        let sql = format!(
+            "SELECT cursor FROM {t} WHERE source = $1",
+            t = self.table("fetch_state")
+        );
+        let row = sqlx::query(&sql)
+            .bind(source)
+            .fetch_optional(self.pool())
+            .await?;
+        Ok(row.and_then(|r| r.get::<Option<String>, _>("cursor")))
+    }
+
+    pub async fn set_fetch_cursor(
+        &self,
+        source: &str,
+        cursor: Option<&str>,
+        now: DateTime<Utc>,
+    ) -> Result<()> {
+        let sql = format!(
+            "INSERT INTO {t} (source, cursor, last_run) VALUES ($1,$2,$3)
+             ON CONFLICT (source) DO UPDATE SET
+                 cursor = EXCLUDED.cursor, last_run = EXCLUDED.last_run",
+            t = self.table("fetch_state")
+        );
+        sqlx::query(&sql)
+            .bind(source)
+            .bind(cursor)
+            .bind(now)
             .execute(self.pool())
             .await?;
         Ok(())

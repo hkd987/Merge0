@@ -11,6 +11,7 @@ members = [
     "crates/merge0-adapter-datadog",
     "crates/merge0-adapter-loopforge",
     "crates/merge0-store",
+    "crates/merge0-fetch",
     "crates/merge0-model",
     "crates/merge0-context",
     "crates/merge0-triage",
@@ -24,6 +25,7 @@ members = [
     "crates/merge0-server",
     "crates/merge0-e2e",
     "ee/merge0-ee",
+    "ee/merge0-hosted",
 ]
 
 [workspace.package]
@@ -40,7 +42,7 @@ chrono = { version = "0.4", features = ["serde"] }
 thiserror = "2"
 sha2 = "0.10"
 toml = "0.8"
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time", "signal"] }
 axum = "0.8"
 sqlx = { version = "0.8", default-features = false, features = ["postgres", "runtime-tokio", "tls-rustls", "chrono", "json", "migrate"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
@@ -53,6 +55,11 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 async-trait = "0.1"
 rsa = "0.9"
+wiremock = "0.6"
+tower = { version = "0.5", features = ["util", "timeout", "limit"] }
+tower-http = { version = "0.6", features = ["trace", "limit", "timeout"] }
+
+merge0-fetch = { path = "crates/merge0-fetch" }
 
 merge0-signal = { path = "crates/merge0-signal" }
 merge0-adapters = { path = "crates/merge0-adapters" }
@@ -76,3 +83,4 @@ merge0-adapter-datadog = { path = "crates/merge0-adapter-datadog" }
 merge0-adapter-loopforge = { path = "crates/merge0-adapter-loopforge" }
 merge0-server = { path = "crates/merge0-server" }
 merge0-ee = { path = "ee/merge0-ee" }
+merge0-hosted = { path = "ee/merge0-hosted" }

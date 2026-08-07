@@ -101,6 +101,24 @@ pub trait GitHubApi: Send + Sync {
     ) -> Result<PrInfo, GitHubError>;
 
     async fn list_releases(&self, repo: &RepoRef) -> Result<Vec<ReleaseInfo>, GitHubError>;
+
+    /// Read a file from the repo's default branch. `Ok(None)` when the file
+    /// does not exist — used to fetch the customer's MERGE0.md at run time
+    /// (PRD §3: intent context is fetched from the customer repo, not
+    /// stored server-side).
+    async fn get_file_content(
+        &self,
+        repo: &RepoRef,
+        path: &str,
+    ) -> Result<Option<String>, GitHubError>;
+
+    /// List issues updated since a timestamp (raw issue JSON — the GitHub
+    /// Issues adapter normalizes; this method just fetches).
+    async fn list_issues(
+        &self,
+        repo: &RepoRef,
+        since: Option<chrono::DateTime<chrono::Utc>>,
+    ) -> Result<Vec<serde_json::Value>, GitHubError>;
 }
 
 /// Trait objects behind `Arc` are first-class API handles (the server holds
@@ -158,6 +176,22 @@ impl<T: GitHubApi + ?Sized> GitHubApi for std::sync::Arc<T> {
     async fn list_releases(&self, repo: &RepoRef) -> Result<Vec<ReleaseInfo>, GitHubError> {
         (**self).list_releases(repo).await
     }
+
+    async fn get_file_content(
+        &self,
+        repo: &RepoRef,
+        path: &str,
+    ) -> Result<Option<String>, GitHubError> {
+        (**self).get_file_content(repo, path).await
+    }
+
+    async fn list_issues(
+        &self,
+        repo: &RepoRef,
+        since: Option<chrono::DateTime<chrono::Utc>>,
+    ) -> Result<Vec<serde_json::Value>, GitHubError> {
+        (**self).list_issues(repo, since).await
+    }
 }
 
 // ---- Real client ----
@@ -174,7 +208,11 @@ pub struct RestGitHub<T: crate::auth::TokenSource> {
 impl<T: crate::auth::TokenSource> RestGitHub<T> {
     pub fn new(tokens: T) -> Self {
         RestGitHub {
-            client: reqwest::Client::new(),
+            client: reqwest::Client::builder()
+                .connect_timeout(std::time::Duration::from_secs(10))
+                .timeout(std::time::Duration::from_secs(30))
+                .build()
+                .expect("reqwest client with static configuration"),
             base_url: "https://api.github.com".into(),
             tokens,
         }
@@ -185,39 +223,73 @@ impl<T: crate::auth::TokenSource> RestGitHub<T> {
         self
     }
 
+    /// Issue one API request, with retries.
+    ///
+    /// Retry policy: HTTP 429, 5xx, and 403-with-`x-ratelimit-remaining: 0`
+    /// (GitHub's secondary rate limit) are retried up to 3 times (4 attempts
+    /// total) with exponential backoff — 1s, 2s, 4s via `tokio::time::sleep`.
+    /// A `retry-after` seconds header, when present, overrides the backoff
+    /// for that attempt, capped at 30s. Every other non-success status fails
+    /// immediately, as do transport errors.
     async fn request(
         &self,
         method: reqwest::Method,
         path: &str,
         body: Option<&serde_json::Value>,
     ) -> Result<serde_json::Value, GitHubError> {
-        let token = self.tokens.token().await?;
-        let mut request = self
-            .client
-            .request(method, format!("{}{path}", self.base_url))
-            .header("authorization", format!("Bearer {token}"))
-            .header("accept", "application/vnd.github+json")
-            .header("user-agent", "merge0");
-        if let Some(body) = body {
-            request = request.json(body);
+        const MAX_RETRIES: u32 = 3;
+        let mut attempt: u32 = 0;
+        loop {
+            let token = self.tokens.token().await?;
+            let mut request = self
+                .client
+                .request(method.clone(), format!("{}{path}", self.base_url))
+                .header("authorization", format!("Bearer {token}"))
+                .header("accept", "application/vnd.github+json")
+                .header("user-agent", "merge0");
+            if let Some(body) = body {
+                request = request.json(body);
+            }
+            let response = request
+                .send()
+                .await
+                .map_err(|e| GitHubError::Transport(e.to_string()))?;
+            let status = response.status();
+            let secondary_rate_limited = status == reqwest::StatusCode::FORBIDDEN
+                && response
+                    .headers()
+                    .get("x-ratelimit-remaining")
+                    .and_then(|v| v.to_str().ok())
+                    == Some("0");
+            let retryable = status == reqwest::StatusCode::TOO_MANY_REQUESTS
+                || status.is_server_error()
+                || secondary_rate_limited;
+            if retryable && attempt < MAX_RETRIES {
+                let backoff = std::time::Duration::from_secs(1 << attempt);
+                let delay = response
+                    .headers()
+                    .get("retry-after")
+                    .and_then(|v| v.to_str().ok())
+                    .and_then(|s| s.trim().parse::<u64>().ok())
+                    .map(|secs| std::time::Duration::from_secs(secs.min(30)))
+                    .unwrap_or(backoff);
+                tokio::time::sleep(delay).await;
+                attempt += 1;
+                continue;
+            }
+            let value: serde_json::Value = if status == reqwest::StatusCode::NO_CONTENT {
+                serde_json::Value::Null
+            } else {
+                response.json().await.unwrap_or(serde_json::Value::Null)
+            };
+            if !status.is_success() {
+                return Err(GitHubError::Api {
+                    status: status.as_u16(),
+                    message: value["message"].as_str().unwrap_or("unknown").to_string(),
+                });
+            }
+            return Ok(value);
         }
-        let response = request
-            .send()
-            .await
-            .map_err(|e| GitHubError::Transport(e.to_string()))?;
-        let status = response.status();
-        let value: serde_json::Value = if status == reqwest::StatusCode::NO_CONTENT {
-            serde_json::Value::Null
-        } else {
-            response.json().await.unwrap_or(serde_json::Value::Null)
-        };
-        if !status.is_success() {
-            return Err(GitHubError::Api {
-                status: status.as_u16(),
-                message: value["message"].as_str().unwrap_or("unknown").to_string(),
-            });
-        }
-        Ok(value)
     }
 }
 
@@ -296,9 +368,14 @@ impl<T: crate::auth::TokenSource> GitHubApi for RestGitHub<T> {
                 None,
             )
             .await?;
+        // A ref response without `object.sha` is malformed — creating a ref
+        // from an empty SHA must never happen silently.
         let sha = head["object"]["sha"]
             .as_str()
-            .unwrap_or_default()
+            .ok_or_else(|| GitHubError::Api {
+                status: 200,
+                message: format!("git ref for {base} is missing object.sha"),
+            })?
             .to_string();
         self.request(
             reqwest::Method::POST,
@@ -312,7 +389,10 @@ impl<T: crate::auth::TokenSource> GitHubApi for RestGitHub<T> {
         for (path, content) in files {
             use base64_mini::encode as b64;
             // Fetch existing file sha on the new branch (update vs create).
-            let existing = self
+            // Only a 404 means "file absent" — any other failure (500, auth,
+            // transport) must propagate, otherwise the PUT would omit the sha
+            // and clobber-or-fail unpredictably.
+            let existing = match self
                 .request(
                     reqwest::Method::GET,
                     &format!(
@@ -322,7 +402,11 @@ impl<T: crate::auth::TokenSource> GitHubApi for RestGitHub<T> {
                     None,
                 )
                 .await
-                .ok();
+            {
+                Ok(value) => Some(value),
+                Err(GitHubError::Api { status: 404, .. }) => None,
+                Err(e) => return Err(e),
+            };
             let mut body = serde_json::json!({
                 "message": message,
                 "content": b64(content.as_bytes()),
@@ -367,6 +451,56 @@ impl<T: crate::auth::TokenSource> GitHubApi for RestGitHub<T> {
         })
     }
 
+    async fn get_file_content(
+        &self,
+        repo: &RepoRef,
+        path: &str,
+    ) -> Result<Option<String>, GitHubError> {
+        match self
+            .request(
+                reqwest::Method::GET,
+                &format!("/repos/{}/{}/contents/{path}", repo.owner, repo.name),
+                None,
+            )
+            .await
+        {
+            Ok(value) => {
+                let encoded = value["content"].as_str().unwrap_or_default();
+                let decoded = base64_mini::decode(encoded).map_err(|e| GitHubError::Api {
+                    status: 200,
+                    message: format!("contents API returned undecodable base64: {e}"),
+                })?;
+                String::from_utf8(decoded)
+                    .map(Some)
+                    .map_err(|_| GitHubError::Api {
+                        status: 200,
+                        message: format!("{path} is not valid UTF-8"),
+                    })
+            }
+            Err(GitHubError::Api { status: 404, .. }) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    async fn list_issues(
+        &self,
+        repo: &RepoRef,
+        since: Option<chrono::DateTime<chrono::Utc>>,
+    ) -> Result<Vec<serde_json::Value>, GitHubError> {
+        let mut path = format!(
+            "/repos/{}/{}/issues?state=all&per_page=100",
+            repo.owner, repo.name
+        );
+        if let Some(since) = since {
+            path.push_str(&format!(
+                "&since={}",
+                since.to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
+            ));
+        }
+        let value = self.request(reqwest::Method::GET, &path, None).await?;
+        Ok(value.as_array().cloned().unwrap_or_default())
+    }
+
     async fn list_releases(&self, repo: &RepoRef) -> Result<Vec<ReleaseInfo>, GitHubError> {
         let value = self
             .request(
@@ -397,6 +531,31 @@ impl<T: crate::auth::TokenSource> GitHubApi for RestGitHub<T> {
 /// single contents-API use.
 mod base64_mini {
     const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+    /// Decode, tolerating the newlines GitHub inserts into `content`.
+    pub fn decode(input: &str) -> Result<Vec<u8>, String> {
+        let mut out = Vec::with_capacity(input.len() / 4 * 3);
+        let mut buffer = 0u32;
+        let mut bits = 0u8;
+        for ch in input.bytes() {
+            let value = match ch {
+                b'A'..=b'Z' => ch - b'A',
+                b'a'..=b'z' => ch - b'a' + 26,
+                b'0'..=b'9' => ch - b'0' + 52,
+                b'+' => 62,
+                b'/' => 63,
+                b'\n' | b'\r' | b'=' => continue,
+                other => return Err(format!("invalid base64 byte {other:#x}")),
+            };
+            buffer = (buffer << 6) | value as u32;
+            bits += 6;
+            if bits >= 8 {
+                bits -= 8;
+                out.push((buffer >> bits) as u8);
+            }
+        }
+        Ok(out)
+    }
 
     pub fn encode(input: &[u8]) -> String {
         let mut out = String::with_capacity(input.len().div_ceil(3) * 4);
@@ -446,6 +605,10 @@ pub struct FakeState {
     pub releases: Vec<ReleaseInfo>,
     pub default_branch: String,
     pub next_pr_number: u64,
+    /// Repo files served by `get_file_content` (path → content).
+    pub files: std::collections::HashMap<String, String>,
+    /// Raw issue JSON served by `list_issues`.
+    pub issues: Vec<serde_json::Value>,
 }
 
 impl FakeGitHub {
@@ -537,6 +700,22 @@ impl GitHubApi for FakeGitHub {
     async fn list_releases(&self, _repo: &RepoRef) -> Result<Vec<ReleaseInfo>, GitHubError> {
         Ok(self.state.lock().unwrap().releases.clone())
     }
+
+    async fn get_file_content(
+        &self,
+        _repo: &RepoRef,
+        path: &str,
+    ) -> Result<Option<String>, GitHubError> {
+        Ok(self.state.lock().unwrap().files.get(path).cloned())
+    }
+
+    async fn list_issues(
+        &self,
+        _repo: &RepoRef,
+        _since: Option<chrono::DateTime<chrono::Utc>>,
+    ) -> Result<Vec<serde_json::Value>, GitHubError> {
+        Ok(self.state.lock().unwrap().issues.clone())
+    }
 }
 
 #[cfg(test)]
@@ -559,5 +738,39 @@ mod tests {
         assert_eq!(super::base64_mini::encode(b"fo"), "Zm8=");
         assert_eq!(super::base64_mini::encode(b"foo"), "Zm9v");
         assert_eq!(super::base64_mini::encode(b"foobar"), "Zm9vYmFy");
+    }
+
+    #[test]
+    fn base64_decode_round_trips_and_tolerates_github_newlines() {
+        for input in [&b""[..], b"f", b"fo", b"foo", b"# MERGE0\nrules"] {
+            let encoded = super::base64_mini::encode(input);
+            assert_eq!(super::base64_mini::decode(&encoded).unwrap(), input);
+        }
+        // GitHub wraps content in newlines.
+        assert_eq!(
+            super::base64_mini::decode("Zm9v\nYmFy\n").unwrap(),
+            b"foobar"
+        );
+        assert!(super::base64_mini::decode("not base64!").is_err());
+    }
+
+    #[tokio::test]
+    async fn fake_serves_files_and_issues() {
+        let fake = FakeGitHub::new();
+        fake.state
+            .lock()
+            .unwrap()
+            .files
+            .insert("MERGE0.md".into(), "# intent".into());
+        let repo = RepoRef::parse("o/r").unwrap();
+        assert_eq!(
+            fake.get_file_content(&repo, "MERGE0.md").await.unwrap(),
+            Some("# intent".into())
+        );
+        assert_eq!(
+            fake.get_file_content(&repo, "missing.md").await.unwrap(),
+            None
+        );
+        assert!(fake.list_issues(&repo, None).await.unwrap().is_empty());
     }
 }

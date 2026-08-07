@@ -18,8 +18,10 @@ jsonwebtoken.workspace = true
 hmac.workspace = true
 sha2.workspace = true
 hex.workspace = true
+tokio.workspace = true
 
 [dev-dependencies]
 tokio.workspace = true
 rsa = { workspace = true, features = ["pem"] }
 rand.workspace = true
+wiremock.workspace = true

@@ -416,6 +416,197 @@ async fn opportunity_reports_hand_off_with_brief() {
 }
 
 #[tokio::test]
+async fn outcomes_are_idempotent_per_report_and_kind() {
+    let (store, tenant, schema) = fresh_tenant().await;
+    let signal = sample_signal("idem-1", ts(1, 0), ts(2, 0));
+    tenant.upsert_signal(&signal).await.unwrap();
+    let report = sample_report(&[&signal], ReportKind::Maintenance);
+    tenant.insert_report(&report).await.unwrap();
+
+    // First delivery records; the redelivery is a no-op.
+    let pr = "https://github.com/chalk/chalk/pull/5";
+    assert!(tenant
+        .record_outcome(
+            report.id,
+            OutcomeKind::Merged,
+            Some(pr),
+            ts(3, 0),
+            None,
+            None
+        )
+        .await
+        .unwrap());
+    assert!(!tenant
+        .record_outcome(
+            report.id,
+            OutcomeKind::Merged,
+            Some(pr),
+            ts(3, 5),
+            None,
+            None
+        )
+        .await
+        .unwrap());
+    assert_eq!(
+        tenant.outcomes_for_report(report.id).await.unwrap().len(),
+        1
+    );
+
+    // A different kind (revert after merge) still records.
+    assert!(tenant
+        .record_outcome(report.id, OutcomeKind::Reverted, None, ts(4, 0), None, None)
+        .await
+        .unwrap());
+
+    store.drop_tenant(&schema).await.unwrap();
+}
+
+#[tokio::test]
+async fn webhook_delivery_ids_dedupe() {
+    let (store, tenant, schema) = fresh_tenant().await;
+    assert!(tenant
+        .record_webhook_delivery("d-123", ts(1, 0))
+        .await
+        .unwrap());
+    assert!(!tenant
+        .record_webhook_delivery("d-123", ts(1, 1))
+        .await
+        .unwrap());
+    assert!(tenant
+        .record_webhook_delivery("d-456", ts(1, 2))
+        .await
+        .unwrap());
+    store.drop_tenant(&schema).await.unwrap();
+}
+
+#[tokio::test]
+async fn fetch_cursors_round_trip() {
+    let (store, tenant, schema) = fresh_tenant().await;
+    assert_eq!(tenant.fetch_cursor("sentry").await.unwrap(), None);
+    tenant
+        .set_fetch_cursor("sentry", Some("cursor-1"), ts(1, 0))
+        .await
+        .unwrap();
+    assert_eq!(
+        tenant.fetch_cursor("sentry").await.unwrap().as_deref(),
+        Some("cursor-1")
+    );
+    tenant
+        .set_fetch_cursor("sentry", Some("cursor-2"), ts(2, 0))
+        .await
+        .unwrap();
+    assert_eq!(
+        tenant.fetch_cursor("sentry").await.unwrap().as_deref(),
+        Some("cursor-2")
+    );
+    store.drop_tenant(&schema).await.unwrap();
+}
+
+#[tokio::test]
+async fn migration_steps_apply_forward_from_recorded_version() {
+    let (store, tenant, schema) = fresh_tenant().await;
+    // Simulate a tenant provisioned before v2: drop the v2 objects and
+    // record version 1.
+    let pool_probe = tenant.fetch_cursor("x").await;
+    assert!(pool_probe.is_ok(), "v2 tables exist after fresh provision");
+
+    let raw = Store::connect(&database_url()).await.unwrap();
+    // Downgrade bookkeeping via direct SQL through a scratch tenant handle.
+    sqlx_downgrade(&schema).await;
+
+    // Re-opening the tenant must apply v2 again.
+    let tenant = raw.tenant(&schema).await.unwrap();
+    tenant
+        .set_fetch_cursor("posthog", Some("c"), ts(1, 0))
+        .await
+        .expect("v2 fetch_state restored by forward migration");
+
+    store.drop_tenant(&schema).await.unwrap();
+}
+
+/// Direct-SQL downgrade helper for the migration test (test-only).
+async fn sqlx_downgrade(schema: &str) {
+    use sqlx::postgres::PgPoolOptions;
+    let pool = PgPoolOptions::new()
+        .max_connections(1)
+        .connect(&database_url())
+        .await
+        .unwrap();
+    for statement in [
+        format!("DROP TABLE IF EXISTS \"{schema}\".fetch_state"),
+        format!("DROP TABLE IF EXISTS \"{schema}\".webhook_deliveries"),
+        format!("DROP INDEX IF EXISTS \"{schema}\".idx_outcomes_report_kind"),
+        format!("UPDATE \"{schema}\".schema_meta SET version = 1"),
+    ] {
+        sqlx::query(&statement).execute(&pool).await.unwrap();
+    }
+}
+
+#[tokio::test]
+async fn transactional_approve_dispatch_and_rollback() {
+    let (store, tenant, schema) = fresh_tenant().await;
+    let signal = sample_signal("txn-1", ts(1, 0), ts(2, 0));
+    tenant.upsert_signal(&signal).await.unwrap();
+    let mut report = sample_report(&[&signal], ReportKind::Maintenance);
+    report.status = ReportStatus::AwaitingReview;
+    tenant.insert_report(&report).await.unwrap();
+
+    let extensions = serde_json::json!({"mcp": ["internal-api"], "skills": ["house-style"]});
+    tenant
+        .approve_for_dispatch(report.id, "claude-code", Some(&extensions), ts(3, 0))
+        .await
+        .unwrap();
+    assert_eq!(
+        tenant.get_report(report.id).await.unwrap().status,
+        ReportStatus::Dispatched
+    );
+    let dispatch = tenant.dispatch(report.id).await.unwrap().unwrap();
+    assert_eq!(dispatch.extensions.unwrap()["mcp"][0], "internal-api");
+
+    // Approving a non-awaiting report fails atomically (no dispatch row).
+    let err = tenant
+        .approve_for_dispatch(report.id, "claude-code", None, ts(3, 1))
+        .await;
+    assert!(matches!(err, Err(StoreError::NotFound(_))));
+
+    // The GitHub dispatch call failed → rollback restores the inbox state.
+    tenant.rollback_dispatch(report.id).await.unwrap();
+    assert_eq!(
+        tenant.get_report(report.id).await.unwrap().status,
+        ReportStatus::AwaitingReview
+    );
+    assert!(tenant.dispatch(report.id).await.unwrap().is_none());
+
+    store.drop_tenant(&schema).await.unwrap();
+}
+
+#[tokio::test]
+async fn raw_retention_redacts_old_payloads_only() {
+    let (store, tenant, schema) = fresh_tenant().await;
+    // ingested_at defaults to now() server-side; a cutoff in the future
+    // redacts this signal, a cutoff in the past does not.
+    let signal = sample_signal("purge-1", ts(1, 0), ts(2, 0));
+    tenant.upsert_signal(&signal).await.unwrap();
+
+    let past_cutoff = ts(1, 0) - Duration::days(365);
+    assert_eq!(tenant.purge_raw_older_than(past_cutoff).await.unwrap(), 0);
+
+    let future_cutoff = chrono::Utc::now() + Duration::days(1);
+    assert_eq!(tenant.purge_raw_older_than(future_cutoff).await.unwrap(), 1);
+    let stored = tenant
+        .signal_by_fingerprint(&signal.fingerprint)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(stored.raw, serde_json::json!({"purged": true}));
+    assert_eq!(stored.title, signal.title, "normalized fields survive");
+    // Idempotent: already-purged rows are not counted again.
+    assert_eq!(tenant.purge_raw_older_than(future_cutoff).await.unwrap(), 0);
+
+    store.drop_tenant(&schema).await.unwrap();
+}
+
+#[tokio::test]
 async fn releases_upsert_and_order() {
     let (store, tenant, schema) = fresh_tenant().await;
 

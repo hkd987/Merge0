@@ -1,5 +1,14 @@
 //! `POST /webhooks/github` — outcome capture (P0-8) and release context
 //! (P0-4). Signature-verified; unverifiable requests are rejected.
+//!
+//! Idempotency (audit C4), two layers: the `x-github-delivery` id is
+//! recorded and duplicates short-circuit; and outcome inserts themselves
+//! are unique per (report, kind), so even a replay with a fresh delivery id
+//! cannot inflate the merge-rate metric.
+//!
+//! When a Merge0 PR merges and hardening is enabled (PRD §5c), the
+//! hardening pass runs asynchronously: candidates → mechanism synthesis →
+//! a separate prevention PR through the same inbox.
 
 use super::ApiError;
 use crate::AppState;
@@ -34,6 +43,24 @@ pub async fn github(
             "bad webhook signature".into(),
         ));
     }
+
+    // Delivery-id dedupe: GitHub delivers at-least-once.
+    if let Some(delivery) = headers
+        .get("x-github-delivery")
+        .and_then(|v| v.to_str().ok())
+    {
+        if !state
+            .tenant
+            .record_webhook_delivery(delivery, Utc::now())
+            .await?
+        {
+            return Ok(Json(serde_json::json!({
+                "actions": [],
+                "duplicate_delivery": delivery,
+            })));
+        }
+    }
+
     let event_name = headers
         .get("x-github-event")
         .and_then(|v| v.to_str().ok())
@@ -60,7 +87,7 @@ pub async fn github(
                     .dispatch(id)
                     .await?
                     .and_then(|d| d.tokens_spent);
-                state
+                let recorded = state
                     .tenant
                     .record_outcome(
                         id,
@@ -71,11 +98,22 @@ pub async fn github(
                         tokens,
                     )
                     .await?;
-                state
-                    .tenant
-                    .set_report_status(id, ReportStatus::Completed)
-                    .await?;
-                actions.push(format!("merged outcome for report {id}"));
+                if recorded {
+                    state
+                        .tenant
+                        .set_report_status(id, ReportStatus::Completed)
+                        .await?;
+                    actions.push(format!("merged outcome for report {id}"));
+                    // PRD §5c: "when a Work Order's PR merges, an
+                    // asynchronous hardening pass evaluates…". Flag-gated:
+                    // ships after the Phase 0 gate is met.
+                    if state.hardening_enabled {
+                        spawn_hardening_pass(state.clone());
+                        actions.push("hardening pass queued".into());
+                    }
+                } else {
+                    actions.push(format!("duplicate merged outcome for report {id} ignored"));
+                }
             }
             // A merged *revert PR* is also a revert of the original.
             if title.starts_with("Revert") {
@@ -86,7 +124,7 @@ pub async fn github(
         }
         WebhookEvent::PrClosed { pr_url, closed_at } => {
             if let Some(id) = state.tenant.report_for_pr(&pr_url).await? {
-                state
+                let recorded = state
                     .tenant
                     .record_outcome(
                         id,
@@ -97,11 +135,13 @@ pub async fn github(
                         None,
                     )
                     .await?;
-                state
-                    .tenant
-                    .set_report_status(id, ReportStatus::Completed)
-                    .await?;
-                actions.push(format!("closed outcome for report {id}"));
+                if recorded {
+                    state
+                        .tenant
+                        .set_report_status(id, ReportStatus::Completed)
+                        .await?;
+                    actions.push(format!("closed outcome for report {id}"));
+                }
             }
         }
         WebhookEvent::Release {
@@ -130,6 +170,67 @@ pub async fn github(
     Ok(Json(serde_json::json!({ "actions": actions })))
 }
 
+/// Run the hardening pass in the background: one prevention proposal per
+/// eligible fingerprint, each landing as a `[hardening]` PR + inbox report.
+/// Errors are logged, never surfaced to the webhook response (GitHub would
+/// just retry).
+fn spawn_hardening_pass(state: AppState) {
+    tokio::spawn(async move {
+        let now = Utc::now();
+        let candidates = match merge0_hardening::find_candidates(&state.tenant).await {
+            Ok(candidates) => candidates,
+            Err(e) => {
+                tracing::error!("hardening: candidate search failed: {e}");
+                return;
+            }
+        };
+        for candidate in candidates {
+            let signal = match state
+                .tenant
+                .signal_by_fingerprint(&candidate.fingerprint)
+                .await
+            {
+                Ok(Some(signal)) => signal,
+                Ok(None) => continue,
+                Err(e) => {
+                    tracing::error!("hardening: signal load failed: {e}");
+                    continue;
+                }
+            };
+            let mechanism = merge0_hardening::synthesize(&candidate, &signal);
+            let intent_doc = state
+                .github
+                .get_file_content(&state.repo, crate::intent::INTENT_DOC_PATH)
+                .await
+                .ok()
+                .flatten();
+            match merge0_hardening::propose(
+                &candidate,
+                &mechanism,
+                state.github.as_ref(),
+                &state.repo,
+                &state.tenant,
+                intent_doc.as_deref(),
+                now,
+            )
+            .await
+            {
+                Ok(proposal) => {
+                    tracing::info!(
+                        "hardening: proposed {} for fingerprint {}",
+                        proposal.pr.url,
+                        candidate.fingerprint
+                    );
+                }
+                Err(e) => tracing::error!(
+                    "hardening: proposal failed for {}: {e}",
+                    candidate.fingerprint
+                ),
+            }
+        }
+    });
+}
+
 /// Map a reverted commit SHA back to the originating Merge0 PR and record
 /// the hard negative (P0-8: within 14 days).
 async fn record_revert(
@@ -156,7 +257,7 @@ async fn record_revert(
             merge0_github::webhook::REVERT_WINDOW_DAYS
         )]);
     }
-    state
+    let recorded = state
         .tenant
         .record_outcome(
             id,
@@ -167,5 +268,9 @@ async fn record_revert(
             None,
         )
         .await?;
-    Ok(vec![format!("revert recorded for report {id}")])
+    Ok(if recorded {
+        vec![format!("revert recorded for report {id}")]
+    } else {
+        vec![format!("duplicate revert for report {id} ignored")]
+    })
 }

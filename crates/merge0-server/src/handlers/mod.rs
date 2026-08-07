@@ -1,13 +1,17 @@
 //! HTTP handlers, one module per concern.
 
+pub mod actions;
+pub mod health;
 pub mod inbox;
 pub mod ingest;
+pub mod onboarding;
 pub mod reports;
 pub mod runner;
 pub mod safety;
 pub mod slack;
 pub mod telemetry;
 pub mod triage;
+pub mod vendor_webhooks;
 pub mod webhooks;
 
 use axum::http::StatusCode;
@@ -60,4 +64,10 @@ impl From<StatusCode> for ApiError {
 
 pub(crate) fn parse_report_id(id: &str) -> Result<ulid::Ulid, ApiError> {
     ulid::Ulid::from_string(id).map_err(|_| ApiError::bad_request(format!("bad report id {id:?}")))
+}
+
+pub(crate) fn auth_header(headers: &axum::http::HeaderMap) -> Option<&str> {
+    headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
 }

@@ -21,3 +21,4 @@ hex.workspace = true
 [dev-dependencies]
 tokio.workspace = true
 ulid.workspace = true
+wiremock.workspace = true

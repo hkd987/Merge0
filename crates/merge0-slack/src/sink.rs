@@ -26,7 +26,11 @@ impl WebhookSink {
     pub fn new(webhook_url: impl Into<String>) -> Self {
         Self {
             url: webhook_url.into(),
-            client: reqwest::Client::new(),
+            client: reqwest::Client::builder()
+                .connect_timeout(std::time::Duration::from_secs(10))
+                .timeout(std::time::Duration::from_secs(30))
+                .build()
+                .expect("reqwest client with static configuration"),
         }
     }
 }

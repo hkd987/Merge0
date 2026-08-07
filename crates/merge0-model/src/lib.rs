@@ -89,7 +89,11 @@ impl std::fmt::Debug for AnthropicModel {
 impl AnthropicModel {
     pub fn new(api_key: String, model_id: String) -> Self {
         AnthropicModel {
-            client: reqwest::Client::new(),
+            client: reqwest::Client::builder()
+                .connect_timeout(std::time::Duration::from_secs(10))
+                .timeout(std::time::Duration::from_secs(30))
+                .build()
+                .expect("reqwest client with static configuration"),
             base_url: "https://api.anthropic.com".to_string(),
             api_key,
             model_id,
@@ -114,9 +118,13 @@ impl AnthropicModel {
     }
 }
 
-#[async_trait]
-impl Model for AnthropicModel {
-    async fn complete(&self, request: &ModelRequest) -> Result<ModelResponse, ModelError> {
+impl AnthropicModel {
+    /// One request/response cycle. The `bool` in the error tuple marks the
+    /// failure as retryable (429, 5xx, or a request timeout).
+    async fn complete_once(
+        &self,
+        request: &ModelRequest,
+    ) -> Result<ModelResponse, (ModelError, bool)> {
         let response = self
             .client
             .post(format!("{}/v1/messages", self.base_url))
@@ -125,25 +133,52 @@ impl Model for AnthropicModel {
             .json(&self.payload(request))
             .send()
             .await
-            .map_err(|e| ModelError::Transport(e.to_string()))?;
+            .map_err(|e| (ModelError::Transport(e.to_string()), e.is_timeout()))?;
         let status = response.status();
+        if !status.is_success() {
+            let retryable = status.as_u16() == 429 || status.is_server_error();
+            let body: serde_json::Value = response.json().await.unwrap_or(serde_json::Value::Null);
+            return Err((
+                ModelError::Transport(format!(
+                    "API returned {status}: {}",
+                    body["error"]["message"].as_str().unwrap_or("unknown")
+                )),
+                retryable,
+            ));
+        }
         let body: serde_json::Value = response
             .json()
             .await
-            .map_err(|e| ModelError::BadResponse(e.to_string()))?;
-        if !status.is_success() {
-            return Err(ModelError::Transport(format!(
-                "API returned {status}: {}",
-                body["error"]["message"].as_str().unwrap_or("unknown")
-            )));
-        }
+            .map_err(|e| (ModelError::BadResponse(e.to_string()), false))?;
         let text = body["content"][0]["text"]
             .as_str()
-            .ok_or_else(|| ModelError::BadResponse("no text content block".into()))?
+            .ok_or_else(|| {
+                (
+                    ModelError::BadResponse("no text content block".into()),
+                    false,
+                )
+            })?
             .to_string();
         let tokens_used = body["usage"]["input_tokens"].as_u64().unwrap_or(0)
             + body["usage"]["output_tokens"].as_u64().unwrap_or(0);
         Ok(ModelResponse { text, tokens_used })
+    }
+}
+
+#[async_trait]
+impl Model for AnthropicModel {
+    /// Retry policy: model calls are expensive, so exactly **one** retry, and
+    /// only on transient failures — HTTP 429, 5xx, or a request timeout —
+    /// after a 2s backoff. Everything else (4xx, malformed responses) fails
+    /// immediately.
+    async fn complete(&self, request: &ModelRequest) -> Result<ModelResponse, ModelError> {
+        match self.complete_once(request).await {
+            Err((_, true)) => {
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                self.complete_once(request).await.map_err(|(e, _)| e)
+            }
+            other => other.map_err(|(e, _)| e),
+        }
     }
 }
 
