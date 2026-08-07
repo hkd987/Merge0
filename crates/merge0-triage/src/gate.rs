@@ -23,21 +23,43 @@ pub struct GateOutcome {
 }
 
 /// What we ask the model to return.
+///
+/// Every text field tolerates a JSON array of strings as well as a plain
+/// string — real models routinely emit `"success_criteria": ["a", "b"]`,
+/// and rejecting that would collapse every work decision to a fail-closed
+/// skip (found by the gate eval, not by any scripted test).
 #[derive(Debug, Deserialize)]
 struct ModelVerdict {
     decision: String,
     #[serde(default)]
-    reason: Option<String>,
+    reason: Option<Text>,
     #[serde(default)]
-    summary: Option<String>,
+    summary: Option<Text>,
     #[serde(default)]
-    repro: Option<String>,
+    repro: Option<Text>,
     #[serde(default)]
-    success_criteria: Option<String>,
+    success_criteria: Option<Text>,
     #[serde(default)]
-    constraints: Option<String>,
+    constraints: Option<Text>,
     #[serde(default)]
-    suspect_change: Option<String>,
+    suspect_change: Option<Text>,
+}
+
+/// A string, or a list of strings joined into one.
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum Text {
+    One(String),
+    Many(Vec<String>),
+}
+
+impl Text {
+    fn into_string(self) -> String {
+        match self {
+            Text::One(text) => text,
+            Text::Many(items) => items.join("; "),
+        }
+    }
 }
 
 pub async fn evaluate(
@@ -117,7 +139,7 @@ fn build_prompt(
          prior attempts (outcome memory):\n{prior}\n\nintent notes (customer-authored):\n{intent}\n\n\
          Respond with a single JSON object: either\n\
          {{\"decision\":\"work\",\"summary\":...,\"repro\":...,\"success_criteria\":...,\"constraints\":...,\"suspect_change\":...}}\n\
-         or {{\"decision\":\"skip\",\"reason\":...}}.",
+         or {{\"decision\":\"skip\",\"reason\":...}}. Every field is a plain string.",
         title = report.title,
         severity = report.severity,
         affected = report
@@ -157,12 +179,16 @@ fn interpret(
         "skip" => GateDecision::Skip {
             reason: verdict
                 .reason
+                .map(Text::into_string)
                 .filter(|r| !r.trim().is_empty())
                 .unwrap_or_else(|| "gate skipped without a reason".into()),
         },
         "work" => {
-            let success_criteria = verdict.success_criteria.unwrap_or_default();
-            let repro = verdict.repro.unwrap_or_default();
+            let success_criteria = verdict
+                .success_criteria
+                .map(Text::into_string)
+                .unwrap_or_default();
+            let repro = verdict.repro.map(Text::into_string).unwrap_or_default();
             if success_criteria.trim().is_empty() {
                 // P0-5: no Work Order without testable success criteria.
                 return GateDecision::Skip {
@@ -182,18 +208,22 @@ fn interpret(
                     repo: repo.to_string(),
                     summary: verdict
                         .summary
+                        .map(Text::into_string)
                         .filter(|s| !s.trim().is_empty())
                         .unwrap_or_else(|| report.title.clone()),
                     evidence: report.evidence.clone(),
                     repro,
-                    suspect_change: verdict.suspect_change.or_else(|| {
+                    suspect_change: verdict.suspect_change.map(Text::into_string).or_else(|| {
                         report
                             .suspect_release
                             .as_ref()
                             .map(|r| format!("regressed in {r}"))
                     }),
                     success_criteria,
-                    constraints: verdict.constraints.unwrap_or_default(),
+                    constraints: verdict
+                        .constraints
+                        .map(Text::into_string)
+                        .unwrap_or_default(),
                     prior_attempts: prior_attempts.to_vec(),
                     diff_budget: config.diff_budget(),
                 },
@@ -333,6 +363,35 @@ mod tests {
             GateDecision::Skip { reason } => assert!(reason.contains("success criteria")),
             other => panic!("expected skip, got {other:?}"),
         }
+    }
+
+    #[tokio::test]
+    async fn list_valued_fields_are_joined_not_rejected() {
+        // Found by the live gate eval: real models emit arrays for the
+        // text fields; that must not collapse a work decision to a skip.
+        let model = ScriptedModel::new([r#"{"decision":"work","summary":"Fix crash",
+                "repro":["open /districts/sync","observe the panic"],
+                "success_criteria":["unassigned schools render","regression test passes"],
+                "constraints":["keep it minimal"]}"#]);
+        let outcome = evaluate(
+            &report(Severity::High, true),
+            "o/r",
+            "",
+            vec![],
+            &config(),
+            &model,
+        )
+        .await
+        .unwrap();
+        let GateDecision::Work { work_order } = outcome.decision else {
+            panic!("expected work");
+        };
+        assert_eq!(work_order.repro, "open /districts/sync; observe the panic");
+        assert_eq!(
+            work_order.success_criteria,
+            "unassigned schools render; regression test passes"
+        );
+        assert_eq!(work_order.constraints, "keep it minimal");
     }
 
     #[tokio::test]

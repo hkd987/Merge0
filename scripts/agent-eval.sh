@@ -16,6 +16,8 @@ FIXTURES=("${@:-districts offby1 conflict}")
 # Word-split the default list when invoked without args.
 if [ $# -eq 0 ]; then FIXTURES=(districts offby1 conflict); fi
 REPAIR_BUDGET=2
+WORKDIRS=()
+trap 'rm -rf "${WORKDIRS[@]}"' EXIT
 export RUSTUP_TOOLCHAIN="$(grep '^channel' rust-toolchain.toml | cut -d'"' -f2)"
 ALLOWED_TOOLS='Edit,Write,Bash(git *),Bash(cargo *)'
 PASS=0; FAIL=0
@@ -32,7 +34,6 @@ for fixture in "${FIXTURES[@]}"; do
   say "fixture $fixture (expected outcome: $expect)"
 
   work=$(mktemp -d "${TMPDIR:-/tmp}/merge0-agent-eval-$fixture-XXXX")
-  trap 'rm -rf "$work"' EXIT
   cp -r "$src/project/." "$work/"
   # Render through the REAL sanitizer — an order with credential markers
   # must refuse here exactly as dispatch would.
@@ -41,6 +42,7 @@ for fixture in "${FIXTURES[@]}"; do
     continue
   fi
 
+  WORKDIRS+=("$work")
   pushd "$work" > /dev/null
   git init -q && git add -A && git commit -qm "fixture base" 2>&1 | tail -0
 
