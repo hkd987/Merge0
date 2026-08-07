@@ -1,0 +1,24 @@
+{
+  "endpoint": "telemetry",
+  "context": { "captured_at": "2026-08-01T00:00:00Z" },
+  "payload": {
+    "counts": {
+      "window_days": 30,
+      "dispatched": 10,
+      "prs_opened": 8,
+      "prs_merged": 8,
+      "prs_closed": 2,
+      "prs_reverted": 0,
+      "runs_discarded": 0,
+      "reports_approved": 9,
+      "dismissals": { "duplicate": 1, "intended_behavior": 1 },
+      "median_time_to_review_secs": 3600,
+      "tokens_on_merged": 800000
+    },
+    "merge_rate": 0.8,
+    "runner_yield": 0.8,
+    "gate_precision": 0.8181818181818182,
+    "tokens_per_merged_pr": 100000.0,
+    "phase0_gate_met": true
+  }
+}

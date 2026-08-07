@@ -1136,7 +1136,29 @@ dependencies = [
 name = "merge0-e2e"
 version = "0.1.0"
 dependencies = [
+ "chrono",
+ "ed25519-dalek",
+ "hex",
+ "merge0-adapter-posthog",
+ "merge0-adapter-sentry",
+ "merge0-adapters",
+ "merge0-broker",
+ "merge0-context",
+ "merge0-github",
+ "merge0-hardening",
+ "merge0-meta",
+ "merge0-model",
+ "merge0-registry",
+ "merge0-runner",
  "merge0-signal",
+ "merge0-store",
+ "merge0-triage",
+ "rand 0.8.7",
+ "serde_json",
+ "sha2",
+ "tokio",
+ "toml",
+ "ulid",
 ]
 
 [[package]]

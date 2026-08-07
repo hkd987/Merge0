@@ -1,0 +1,20 @@
+[package]
+name = "merge0-hardening"
+description = "Hardening pass: post-merge prevention PRs (PRD §5c)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+merge0-signal.workspace = true
+merge0-store.workspace = true
+merge0-context.workspace = true
+merge0-github.workspace = true
+chrono.workspace = true
+ulid.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true
+serde_json.workspace = true

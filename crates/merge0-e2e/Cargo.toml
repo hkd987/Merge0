@@ -1,6 +1,6 @@
 [package]
 name = "merge0-e2e"
-description = "Merge0 component (implementation in progress)"
+description = "Full-pipeline end-to-end tests composing every component"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,3 +8,27 @@ publish.workspace = true
 
 [dependencies]
 merge0-signal.workspace = true
+
+[dev-dependencies]
+merge0-adapters.workspace = true
+merge0-adapter-posthog.workspace = true
+merge0-adapter-sentry.workspace = true
+merge0-store.workspace = true
+merge0-model.workspace = true
+merge0-context.workspace = true
+merge0-triage.workspace = true
+merge0-github.workspace = true
+merge0-runner.workspace = true
+merge0-hardening.workspace = true
+merge0-meta.workspace = true
+merge0-broker.workspace = true
+merge0-registry.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+ulid.workspace = true
+tokio.workspace = true
+toml.workspace = true
+ed25519-dalek.workspace = true
+rand.workspace = true
+sha2.workspace = true
+hex.workspace = true

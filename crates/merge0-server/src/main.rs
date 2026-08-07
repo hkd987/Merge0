@@ -46,22 +46,46 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(|doc| doc.human_text())
         .unwrap_or(intent_text);
 
-    // Model: the customer's own key (BYO), never logged.
-    let model = AnthropicModel::new(
-        required("ANTHROPIC_API_KEY")?,
-        std::env::var("MERGE0_GATE_MODEL").unwrap_or_else(|_| "claude-sonnet-5".into()),
-    );
-
-    // GitHub App auth (P0-11): installation tokens only.
-    let github = RestGitHub::new(InstallationTokenSource {
-        auth: AppAuth::new(
-            required("MERGE0_GITHUB_APP_ID")?,
-            required("MERGE0_GITHUB_APP_PRIVATE_KEY")?,
-        ),
-        client: reqwest_client(),
-        base_url: "https://api.github.com".into(),
-        installation_id: required("MERGE0_GITHUB_INSTALLATION_ID")?.parse()?,
-    });
+    // MERGE0_DEV_FAKES=1 swaps the model and GitHub for in-process fakes so
+    // the complete loop can be driven locally (manual e2e) without a live
+    // model or GitHub App. Loudly not for production.
+    let dev_fakes = std::env::var("MERGE0_DEV_FAKES").as_deref() == Ok("1");
+    let (model, github): (
+        Arc<dyn merge0_model::Model>,
+        Arc<dyn merge0_github::GitHubApi>,
+    ) = if dev_fakes {
+        tracing::warn!("MERGE0_DEV_FAKES=1 — model and GitHub are FAKES (dev only)");
+        let fake_github = merge0_github::FakeGitHub::new().with_protection(
+            merge0_github::api::BranchProtection {
+                protected: true,
+                required_checks: true,
+            },
+        );
+        let fixed = merge0_model::FixedModel {
+            response: r#"{"decision":"work","summary":"Fix the reported defect",
+                "repro":"see evidence links","success_criteria":"regression test passes",
+                "constraints":"stay within the diff budget"}"#
+                .to_string(),
+        };
+        (Arc::new(fixed), Arc::new(fake_github))
+    } else {
+        // Model: the customer's own key (BYO), never logged.
+        let model = AnthropicModel::new(
+            required("ANTHROPIC_API_KEY")?,
+            std::env::var("MERGE0_GATE_MODEL").unwrap_or_else(|_| "claude-sonnet-5".into()),
+        );
+        // GitHub App auth (P0-11): installation tokens only.
+        let github = RestGitHub::new(InstallationTokenSource {
+            auth: AppAuth::new(
+                required("MERGE0_GITHUB_APP_ID")?,
+                required("MERGE0_GITHUB_APP_PRIVATE_KEY")?,
+            ),
+            client: reqwest_client(),
+            base_url: "https://api.github.com".into(),
+            installation_id: required("MERGE0_GITHUB_INSTALLATION_ID")?.parse()?,
+        });
+        (Arc::new(model), Arc::new(github))
+    };
 
     let slack = std::env::var("MERGE0_SLACK_WEBHOOK_URL")
         .ok()
@@ -74,8 +98,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let state = AppState {
         tenant,
-        model: Arc::new(model),
-        github: Arc::new(github),
+        model,
+        github,
         slack,
         scouts: Arc::new(scouts),
         gate: Arc::new(gate),
@@ -92,6 +116,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let bind = std::env::var("MERGE0_BIND").unwrap_or_else(|_| "0.0.0.0:8080".into());
+    // Cron-driven scout runs (PRD: nightly default, configurable).
+    let interval_secs: u64 = std::env::var("MERGE0_TRIAGE_INTERVAL_SECS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(24 * 60 * 60);
+    if interval_secs > 0 {
+        let scheduler_state = state.clone();
+        tokio::spawn(async move {
+            let mut ticker = tokio::time::interval(std::time::Duration::from_secs(interval_secs));
+            ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            ticker.tick().await; // first tick fires immediately; skip it
+            loop {
+                ticker.tick().await;
+                match merge0_triage::pipeline::run_triage(
+                    &scheduler_state.tenant,
+                    scheduler_state.model.as_ref(),
+                    &scheduler_state.scouts,
+                    &scheduler_state.gate,
+                    &scheduler_state.intent_text,
+                    &scheduler_state.repo,
+                    chrono::Utc::now(),
+                )
+                .await
+                {
+                    Ok(run) => tracing::info!(?run, "scheduled triage run complete"),
+                    Err(e) => tracing::error!("scheduled triage run failed: {e}"),
+                }
+            }
+        });
+    }
+
     let listener = tokio::net::TcpListener::bind(&bind).await?;
     tracing::info!("merge0-server listening on {bind}");
     axum::serve(listener, app(state)).await?;

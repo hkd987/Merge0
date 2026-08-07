@@ -1,0 +1,114 @@
+[
+  {
+    "body": "gate_precision = 0.500 (target >= 0.700) over the 30-day window; approved: 4; dismissals by reason: duplicate: 1, intended_behavior: 3",
+    "evidence": [],
+    "fingerprint": "meta:52b16df6a888cefb0afe45b4ec1376df",
+    "first_seen": "2026-08-01T00:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "custom",
+    "last_seen": "2026-08-01T00:00:00Z",
+    "raw": {
+      "counts": {
+        "dismissals": {
+          "duplicate": 1,
+          "intended_behavior": 3
+        },
+        "dispatched": 10,
+        "median_time_to_review_secs": 5400,
+        "prs_closed": 3,
+        "prs_merged": 4,
+        "prs_opened": 6,
+        "prs_reverted": 1,
+        "reports_approved": 4,
+        "runs_discarded": 2,
+        "tokens_on_merged": 400000,
+        "window_days": 30
+      },
+      "gate_precision": 0.5,
+      "merge_rate": 0.5,
+      "phase0_gate_met": false,
+      "runner_yield": 0.6,
+      "tokens_per_merged_pr": 100000.0
+    },
+    "severity": "medium",
+    "source": "meta",
+    "source_ref": "telemetry:2026-08-01T00:00:00+00:00",
+    "title": "Gate precision below target"
+  },
+  {
+    "body": "merge_rate = 0.500 (target >= 0.600) over the 30-day window; merged: 4, closed: 3, reverted: 1",
+    "evidence": [],
+    "fingerprint": "meta:282ea49f924d2fde5779120de429005a",
+    "first_seen": "2026-08-01T00:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "custom",
+    "last_seen": "2026-08-01T00:00:00Z",
+    "raw": {
+      "counts": {
+        "dismissals": {
+          "duplicate": 1,
+          "intended_behavior": 3
+        },
+        "dispatched": 10,
+        "median_time_to_review_secs": 5400,
+        "prs_closed": 3,
+        "prs_merged": 4,
+        "prs_opened": 6,
+        "prs_reverted": 1,
+        "reports_approved": 4,
+        "runs_discarded": 2,
+        "tokens_on_merged": 400000,
+        "window_days": 30
+      },
+      "gate_precision": 0.5,
+      "merge_rate": 0.5,
+      "phase0_gate_met": false,
+      "runner_yield": 0.6,
+      "tokens_per_merged_pr": 100000.0
+    },
+    "severity": "medium",
+    "source": "meta",
+    "source_ref": "telemetry:2026-08-01T00:00:00+00:00",
+    "title": "Merge rate below target"
+  },
+  {
+    "affected_count": 3,
+    "body": "dismissals[\"intended_behavior\"] = 3 (threshold >= 3) over the 30-day window",
+    "evidence": [],
+    "fingerprint": "meta:9fd6ab5765c5d3982cb48fe11c2f9c72",
+    "first_seen": "2026-08-01T00:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "custom",
+    "last_seen": "2026-08-01T00:00:00Z",
+    "raw": {
+      "counts": {
+        "dismissals": {
+          "duplicate": 1,
+          "intended_behavior": 3
+        },
+        "dispatched": 10,
+        "median_time_to_review_secs": 5400,
+        "prs_closed": 3,
+        "prs_merged": 4,
+        "prs_opened": 6,
+        "prs_reverted": 1,
+        "reports_approved": 4,
+        "runs_discarded": 2,
+        "tokens_on_merged": 400000,
+        "window_days": 30
+      },
+      "gate_precision": 0.5,
+      "merge_rate": 0.5,
+      "phase0_gate_met": false,
+      "runner_yield": 0.6,
+      "tokens_per_merged_pr": 100000.0
+    },
+    "severity": "medium",
+    "source": "meta",
+    "source_ref": "telemetry:2026-08-01T00:00:00+00:00",
+    "title": "Intended-behavior dismissals rising"
+  }
+]

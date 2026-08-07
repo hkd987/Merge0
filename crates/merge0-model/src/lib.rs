@@ -147,6 +147,22 @@ impl Model for AnthropicModel {
     }
 }
 
+/// Always returns the same response — the dev-fakes mode of the server
+/// binary uses this so a full loop can run without a live model.
+pub struct FixedModel {
+    pub response: String,
+}
+
+#[async_trait]
+impl Model for FixedModel {
+    async fn complete(&self, _request: &ModelRequest) -> Result<ModelResponse, ModelError> {
+        Ok(ModelResponse {
+            text: self.response.clone(),
+            tokens_used: 1000,
+        })
+    }
+}
+
 // ---- Scripted fake ----
 
 /// Deterministic model for tests: returns queued responses in order and
