@@ -10,10 +10,12 @@
 
 use chrono::{DateTime, TimeZone, Utc};
 use merge0_fetch::config::{
-    DatadogConfig, GithubIssuesConfig, PosthogConfig, SentryConfig, ZendeskConfig,
+    AsanaConfig, DatadogConfig, GithubIssuesConfig, IntercomConfig, JiraConfig, LinearConfig,
+    PosthogConfig, SentryConfig, SlackChannel, SlackChannelsConfig, TrelloConfig, ZendeskConfig,
 };
 use merge0_fetch::pollers::{
-    DatadogPoller, GithubIssuesPoller, PosthogPoller, SentryPoller, ZendeskPoller,
+    AsanaPoller, DatadogPoller, GithubIssuesPoller, IntercomPoller, JiraPoller, LinearPoller,
+    PosthogPoller, SentryPoller, SlackChannelsPoller, TrelloPoller, ZendeskPoller,
 };
 use merge0_fetch::{run_all, run_fetch, FetchError, Fetcher};
 use merge0_github::{FakeGitHub, GitHubApi};
@@ -625,4 +627,320 @@ fn b64(input: &str) -> String {
         });
     }
     out
+}
+
+// ---- Jira ----
+
+const JIRA_ISSUES: &str =
+    include_str!("../../merge0-adapter-jira/tests/fixtures/issues_typical.json");
+
+#[tokio::test]
+async fn jira_poller_ingests_and_bounds_jql_by_cursor() {
+    let server = MockServer::start().await;
+    let (store, tenant, schema) = fresh_tenant().await;
+    set_secret("MERGE0_TEST_JIRA_EMAIL", "bot@example.com");
+    set_secret("MERGE0_TEST_JIRA_TOKEN", "jira-test-token");
+    let poller = JiraPoller::from_config(&JiraConfig {
+        enabled: true,
+        base_url: server.uri(),
+        email_env: "MERGE0_TEST_JIRA_EMAIL".into(),
+        api_token_env: "MERGE0_TEST_JIRA_TOKEN".into(),
+        jql: "statusCategory != Done ORDER BY updated ASC".into(),
+    })
+    .unwrap();
+
+    Mock::given(method("GET"))
+        .and(path("/rest/api/3/search/jql"))
+        .and(query_param(
+            "jql",
+            "statusCategory != Done ORDER BY updated ASC",
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(fixture_payload(JIRA_ISSUES)))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let outcome = run_fetch(&poller, &tenant, now()).await.unwrap();
+    assert!(outcome.inserted > 0, "typical fixture issues land");
+    let cursor = tenant.fetch_cursor("jira").await.unwrap().unwrap();
+    assert_eq!(cursor, "2026-08-07 12:00", "JQL-format minute cursor");
+
+    // Second run: the cursor bound is ANDed into the JQL.
+    server.reset().await;
+    Mock::given(method("GET"))
+        .and(path("/rest/api/3/search/jql"))
+        .and(query_param(
+            "jql",
+            "(statusCategory != Done) AND updated >= \"2026-08-07 12:00\" ORDER BY updated ASC",
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({ "issues": [] })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    run_fetch(&poller, &tenant, now()).await.unwrap();
+
+    store.drop_tenant(&schema).await.unwrap();
+}
+
+// ---- Linear ----
+
+const LINEAR_ISSUES: &str =
+    include_str!("../../merge0-adapter-linear/tests/fixtures/issues_typical.json");
+
+fn linear_poller(server: &MockServer, key_env: &str) -> LinearPoller {
+    set_secret(key_env, "lin_test_key");
+    LinearPoller::from_config(&LinearConfig {
+        enabled: true,
+        api_key_env: key_env.into(),
+        base_url: server.uri(),
+    })
+    .unwrap()
+}
+
+#[tokio::test]
+async fn linear_poller_ingests_graphql_nodes() {
+    let server = MockServer::start().await;
+    let (store, tenant, schema) = fresh_tenant().await;
+    let poller = linear_poller(&server, "MERGE0_TEST_LINEAR_KEY_A");
+
+    Mock::given(method("POST"))
+        .and(path("/graphql"))
+        .and(header("authorization", "lin_test_key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "data": { "issues": fixture_payload(LINEAR_ISSUES) }
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let outcome = run_fetch(&poller, &tenant, now()).await.unwrap();
+    assert!(outcome.inserted > 0);
+    let cursor = tenant.fetch_cursor("linear").await.unwrap().unwrap();
+    assert!(cursor.starts_with("2026-08-07T12:00:00"));
+
+    store.drop_tenant(&schema).await.unwrap();
+}
+
+#[tokio::test]
+async fn linear_graphql_errors_fail_loudly_despite_http_200() {
+    let server = MockServer::start().await;
+    let (store, tenant, schema) = fresh_tenant().await;
+    let poller = linear_poller(&server, "MERGE0_TEST_LINEAR_KEY_B");
+
+    Mock::given(method("POST"))
+        .and(path("/graphql"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "errors": [{ "message": "Authentication required" }]
+        })))
+        .mount(&server)
+        .await;
+
+    let err = run_fetch(&poller, &tenant, now()).await.unwrap_err();
+    match err {
+        FetchError::Api { message, .. } => assert!(message.contains("Authentication"), "{message}"),
+        other => panic!("expected Api error, got {other:?}"),
+    }
+    store.drop_tenant(&schema).await.unwrap();
+}
+
+// ---- Slack channels ----
+
+const SLACK_MESSAGES: &str =
+    include_str!("../../merge0-adapter-slack/tests/fixtures/messages_typical.json");
+
+fn slack_poller(server: &MockServer, token_env: &str) -> SlackChannelsPoller {
+    set_secret(token_env, "xoxb-example-token");
+    SlackChannelsPoller::from_config(&SlackChannelsConfig {
+        enabled: true,
+        bot_token_env: token_env.into(),
+        base_url: server.uri(),
+        team_base_url: "https://acme-example.slack.com".into(),
+        channels: vec![SlackChannel {
+            id: "C0123456789".into(),
+            name: "bugs".into(),
+        }],
+    })
+    .unwrap()
+}
+
+#[tokio::test]
+async fn slack_poller_ingests_and_advances_ts_cursor() {
+    let server = MockServer::start().await;
+    let (store, tenant, schema) = fresh_tenant().await;
+    let poller = slack_poller(&server, "MERGE0_TEST_SLACK_BOT_A");
+
+    let mut payload = fixture_payload(SLACK_MESSAGES);
+    payload["ok"] = serde_json::json!(true);
+    Mock::given(method("GET"))
+        .and(path("/conversations.history"))
+        .and(query_param("channel", "C0123456789"))
+        .and(query_param_is_missing("oldest"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(payload))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let outcome = run_fetch(&poller, &tenant, now()).await.unwrap();
+    assert!(outcome.inserted > 0, "non-bot messages land");
+    let cursor = tenant
+        .fetch_cursor("slack_channels")
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(!cursor.is_empty());
+
+    // Second poll passes the cursor as `oldest`.
+    server.reset().await;
+    Mock::given(method("GET"))
+        .and(path("/conversations.history"))
+        .and(query_param("oldest", cursor.as_str()))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(serde_json::json!({ "ok": true, "messages": [] })),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    run_fetch(&poller, &tenant, now()).await.unwrap();
+
+    store.drop_tenant(&schema).await.unwrap();
+}
+
+#[tokio::test]
+async fn slack_ok_false_fails_loudly_naming_the_channel() {
+    let server = MockServer::start().await;
+    let (store, tenant, schema) = fresh_tenant().await;
+    let poller = slack_poller(&server, "MERGE0_TEST_SLACK_BOT_B");
+
+    Mock::given(method("GET"))
+        .and(path("/conversations.history"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "ok": false, "error": "not_in_channel"
+        })))
+        .mount(&server)
+        .await;
+
+    let err = run_fetch(&poller, &tenant, now()).await.unwrap_err();
+    match err {
+        FetchError::Api { message, .. } => {
+            assert!(message.contains("not_in_channel"), "{message}");
+            assert!(message.contains("bugs"), "{message}");
+        }
+        other => panic!("expected Api error, got {other:?}"),
+    }
+    store.drop_tenant(&schema).await.unwrap();
+}
+
+// ---- Asana ----
+
+const ASANA_TASKS: &str =
+    include_str!("../../merge0-adapter-asana/tests/fixtures/tasks_typical.json");
+
+#[tokio::test]
+async fn asana_poller_ingests_and_sends_modified_since_on_second_run() {
+    let server = MockServer::start().await;
+    let (store, tenant, schema) = fresh_tenant().await;
+    set_secret("MERGE0_TEST_ASANA_PAT", "asana-test-pat");
+    let poller = AsanaPoller::from_config(&AsanaConfig {
+        enabled: true,
+        pat_env: "MERGE0_TEST_ASANA_PAT".into(),
+        base_url: server.uri(),
+        project_gids: vec!["120000000000001".into()],
+    })
+    .unwrap();
+
+    Mock::given(method("GET"))
+        .and(path("/projects/120000000000001/tasks"))
+        .and(query_param_is_missing("modified_since"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(fixture_payload(ASANA_TASKS)))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let outcome = run_fetch(&poller, &tenant, now()).await.unwrap();
+    assert!(outcome.inserted > 0);
+    let cursor = tenant.fetch_cursor("asana").await.unwrap().unwrap();
+
+    server.reset().await;
+    Mock::given(method("GET"))
+        .and(path("/projects/120000000000001/tasks"))
+        .and(query_param("modified_since", cursor.as_str()))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({ "data": [] })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    run_fetch(&poller, &tenant, now()).await.unwrap();
+
+    store.drop_tenant(&schema).await.unwrap();
+}
+
+// ---- Trello ----
+
+const TRELLO_CARDS: &str =
+    include_str!("../../merge0-adapter-trello/tests/fixtures/cards_typical.json");
+
+#[tokio::test]
+async fn trello_poller_ingests_open_cards_with_query_auth() {
+    let server = MockServer::start().await;
+    let (store, tenant, schema) = fresh_tenant().await;
+    set_secret("MERGE0_TEST_TRELLO_KEY", "trello-test-key");
+    set_secret("MERGE0_TEST_TRELLO_TOKEN", "trello-test-token");
+    let poller = TrelloPoller::from_config(&TrelloConfig {
+        enabled: true,
+        key_env: "MERGE0_TEST_TRELLO_KEY".into(),
+        token_env: "MERGE0_TEST_TRELLO_TOKEN".into(),
+        base_url: server.uri(),
+        board_ids: vec!["abc123def456".into()],
+    })
+    .unwrap();
+
+    Mock::given(method("GET"))
+        .and(path("/boards/abc123def456/cards/open"))
+        .and(query_param("key", "trello-test-key"))
+        .and(query_param("token", "trello-test-token"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(fixture_payload(TRELLO_CARDS)))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let outcome = run_fetch(&poller, &tenant, now()).await.unwrap();
+    assert!(outcome.inserted > 0, "open cards land");
+
+    store.drop_tenant(&schema).await.unwrap();
+}
+
+// ---- Intercom ----
+
+const INTERCOM_CONVERSATIONS: &str =
+    include_str!("../../merge0-adapter-intercom/tests/fixtures/conversations_typical.json");
+
+#[tokio::test]
+async fn intercom_poller_ingests_and_cursors_by_unix_seconds() {
+    let server = MockServer::start().await;
+    let (store, tenant, schema) = fresh_tenant().await;
+    set_secret("MERGE0_TEST_INTERCOM_TOKEN", "intercom-test-token");
+    let poller = IntercomPoller::from_config(&IntercomConfig {
+        enabled: true,
+        access_token_env: "MERGE0_TEST_INTERCOM_TOKEN".into(),
+        base_url: server.uri(),
+        app_base_url: "https://app.intercom-example.com/a/inbox/abc123".into(),
+    })
+    .unwrap();
+
+    Mock::given(method("POST"))
+        .and(path("/conversations/search"))
+        .and(header("Intercom-Version", "2.11"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(fixture_payload(INTERCOM_CONVERSATIONS)),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let outcome = run_fetch(&poller, &tenant, now()).await.unwrap();
+    assert!(outcome.inserted > 0);
+    let cursor = tenant.fetch_cursor("intercom").await.unwrap().unwrap();
+    assert_eq!(cursor, now().timestamp().to_string());
+
+    store.drop_tenant(&schema).await.unwrap();
 }

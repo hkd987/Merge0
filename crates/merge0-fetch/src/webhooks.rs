@@ -195,6 +195,97 @@ pub fn datadog_webhook_to_envelope(payload: &Value, app_base_url: &str) -> Optio
     }))
 }
 
+/// Linear `linear-signature`: HMAC-SHA256 of the raw body with the webhook
+/// signing secret, hex-encoded.
+pub fn verify_linear_signature(signing_secret: &str, body: &[u8], signature_hex: &str) -> bool {
+    let expected = hex::encode(hmac_sha256(signing_secret, &[body]));
+    constant_time_eq(
+        expected.as_bytes(),
+        signature_hex.trim().to_ascii_lowercase().as_bytes(),
+    )
+}
+
+/// Slack Events API request signing: `v0=` + HMAC-SHA256 of
+/// `v0:{timestamp}:{body}` with the app's signing secret. (Same scheme the
+/// interactions endpoint verifies via merge0-slack; duplicated here so the
+/// fetch layer stays free of the notification crate.)
+pub fn verify_slack_events_signature(
+    signing_secret: &str,
+    timestamp: &str,
+    body: &[u8],
+    signature: &str,
+) -> bool {
+    let mac = hmac_sha256(signing_secret, &[b"v0:", timestamp.as_bytes(), b":", body]);
+    let expected = format!("v0={}", hex::encode(mac));
+    constant_time_eq(expected.as_bytes(), signature.trim().as_bytes())
+}
+
+/// Jira webhook → adapter envelope. Jira Automation/webhooks POST
+/// `{"webhookEvent": "jira:issue_created|updated", "issue": {...}}`; the
+/// issue slots into the adapter's `issues` page shape. Deleted-issue events
+/// are ignored (nothing to normalize).
+pub fn jira_webhook_to_envelope(payload: &Value, browse_base_url: &str) -> Option<Value> {
+    if payload
+        .get("webhookEvent")
+        .and_then(Value::as_str)
+        .is_some_and(|event| event.ends_with("deleted"))
+    {
+        return None;
+    }
+    let issue = payload.get("issue")?;
+    issue.get("key")?;
+    Some(json!({
+        "endpoint": "issues",
+        "context": { "browse_base_url": browse_base_url },
+        "payload": { "issues": [issue] },
+    }))
+}
+
+/// Linear webhook → adapter envelope. Linear POSTs
+/// `{"type": "Issue", "action": "create|update|remove", "data": {...}}`.
+/// Only Issue create/update carry a normalizable node; `remove` and other
+/// entity types are ignored.
+pub fn linear_webhook_to_envelope(payload: &Value) -> Option<Value> {
+    if payload.get("type").and_then(Value::as_str) != Some("Issue") {
+        return None;
+    }
+    if payload.get("action").and_then(Value::as_str) == Some("remove") {
+        return None;
+    }
+    let node = payload.get("data")?;
+    node.get("identifier")?;
+    Some(json!({
+        "endpoint": "issues",
+        "context": {},
+        "payload": { "nodes": [node] },
+    }))
+}
+
+/// Slack Events API → adapter envelope. An `event_callback` whose inner
+/// event is a channel `message` becomes a one-message `messages` page; the
+/// channel id doubles as the display name when no mapping is configured
+/// (the poller path carries real names). URL-verification handshakes and
+/// non-message events return None — the caller answers those itself.
+pub fn slack_event_to_envelope(payload: &Value, team_base_url: &str) -> Option<Value> {
+    if payload.get("type").and_then(Value::as_str) != Some("event_callback") {
+        return None;
+    }
+    let event = payload.get("event")?;
+    if event.get("type").and_then(Value::as_str) != Some("message") {
+        return None;
+    }
+    let channel = event.get("channel").and_then(Value::as_str)?;
+    Some(json!({
+        "endpoint": "messages",
+        "context": {
+            "team_base_url": team_base_url,
+            "channel_id": channel,
+            "channel_name": channel,
+        },
+        "payload": { "messages": [event] },
+    }))
+}
+
 fn string_or_number(value: &Value) -> Option<String> {
     match value {
         Value::String(s) => Some(s.clone()),
@@ -248,6 +339,137 @@ mod tests {
     }
 
     // ---- signatures ----
+
+    #[test]
+    fn linear_signature_accepts_valid_and_rejects_tampering() {
+        let secret = "example-linear-signing";
+        let body = br#"{"type":"Issue","action":"update"}"#;
+        let valid = hex::encode(hmac_sha256(secret, &[body]));
+        assert!(verify_linear_signature(secret, body, &valid));
+        assert!(verify_linear_signature(secret, body, &valid.to_uppercase()));
+        assert!(!verify_linear_signature(secret, body, "deadbeef"));
+        assert!(!verify_linear_signature("other-secret", body, &valid));
+    }
+
+    #[test]
+    fn slack_events_signature_matches_the_v0_scheme() {
+        let secret = "example-slack-signing";
+        let timestamp = "1723100000";
+        let body = br#"{"type":"event_callback"}"#;
+        let mac = hmac_sha256(
+            secret,
+            &[b"v0:", timestamp.as_bytes(), b":", body.as_slice()],
+        );
+        let valid = format!("v0={}", hex::encode(mac));
+        assert!(verify_slack_events_signature(
+            secret, timestamp, body, &valid
+        ));
+        assert!(!verify_slack_events_signature(
+            secret,
+            "1723100001",
+            body,
+            &valid
+        ));
+        assert!(!verify_slack_events_signature(
+            secret,
+            timestamp,
+            body,
+            "v0=deadbeef"
+        ));
+    }
+
+    // ---- ticket-source webhook envelopes ----
+
+    #[test]
+    fn jira_webhook_wraps_the_issue_and_ignores_deletions() {
+        let payload = serde_json::json!({
+            "webhookEvent": "jira:issue_updated",
+            "issue": {
+                "key": "CHK-42",
+                "fields": {
+                    "summary": "Roster import stalls",
+                    "priority": { "name": "High" },
+                    "status": { "statusCategory": { "key": "indeterminate" } },
+                    "created": "2026-08-05T10:00:00.000+0000",
+                    "updated": "2026-08-06T11:00:00.000+0000"
+                }
+            }
+        });
+        let envelope =
+            jira_webhook_to_envelope(&payload, "https://acme-example.atlassian.net/browse")
+                .expect("issue event maps");
+        let signals = merge0_adapter_jira::JiraAdapter
+            .normalize(&envelope)
+            .unwrap();
+        assert_eq!(signals.len(), 1);
+        assert_eq!(signals[0].source, Source::Jira);
+        assert_eq!(signals[0].kind, SignalKind::Ticket);
+
+        let deleted = serde_json::json!({
+            "webhookEvent": "jira:issue_deleted",
+            "issue": { "key": "CHK-42" }
+        });
+        assert!(jira_webhook_to_envelope(&deleted, "https://x.example.com").is_none());
+        assert!(
+            jira_webhook_to_envelope(&serde_json::json!({}), "https://x.example.com").is_none()
+        );
+    }
+
+    #[test]
+    fn linear_webhook_wraps_issue_nodes_and_ignores_removals_and_other_types() {
+        let payload = serde_json::json!({
+            "type": "Issue",
+            "action": "update",
+            "data": {
+                "identifier": "ENG-123",
+                "title": "Export empty for large classes",
+                "priority": 2,
+                "createdAt": "2026-08-05T10:00:00.000Z",
+                "updatedAt": "2026-08-06T11:00:00.000Z",
+                "url": "https://linear.example.com/acme/issue/ENG-123"
+            }
+        });
+        let envelope = linear_webhook_to_envelope(&payload).expect("issue update maps");
+        let signals = merge0_adapter_linear::LinearAdapter
+            .normalize(&envelope)
+            .unwrap();
+        assert_eq!(signals.len(), 1);
+        assert_eq!(signals[0].source, Source::Linear);
+
+        let removal = serde_json::json!({"type": "Issue", "action": "remove", "data": {"identifier": "ENG-1"}});
+        assert!(linear_webhook_to_envelope(&removal).is_none());
+        let comment = serde_json::json!({"type": "Comment", "action": "create", "data": {}});
+        assert!(linear_webhook_to_envelope(&comment).is_none());
+    }
+
+    #[test]
+    fn slack_event_wraps_channel_messages_and_ignores_handshakes() {
+        let payload = serde_json::json!({
+            "type": "event_callback",
+            "event": {
+                "type": "message",
+                "channel": "C0123456789",
+                "ts": "1723100000.000100",
+                "text": "Gradebook import is failing for big classes",
+                "user": "U0456"
+            }
+        });
+        let envelope = slack_event_to_envelope(&payload, "https://acme-example.slack.com")
+            .expect("message event maps");
+        let signals = merge0_adapter_slack::SlackAdapter
+            .normalize(&envelope)
+            .unwrap();
+        assert_eq!(signals.len(), 1);
+        assert_eq!(signals[0].source, Source::Slack);
+
+        let handshake = serde_json::json!({"type": "url_verification", "challenge": "abc"});
+        assert!(slack_event_to_envelope(&handshake, "https://x.example.com").is_none());
+        let reaction = serde_json::json!({
+            "type": "event_callback",
+            "event": {"type": "reaction_added", "channel": "C1"}
+        });
+        assert!(slack_event_to_envelope(&reaction, "https://x.example.com").is_none());
+    }
 
     #[test]
     fn sentry_signature_accepts_valid_and_rejects_tampering() {

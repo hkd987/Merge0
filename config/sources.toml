@@ -54,3 +54,56 @@ enabled = false
 # owner/name. Auth rides on the Merge0 GitHub App installation — no
 # separate secret here.
 repo = "example-org/example-app"
+
+# ---- Ticket + planning sources (schema v0.3) ----
+
+[jira]
+enabled = false
+# Jira Cloud site base; browse links derive from it ({base_url}/browse/KEY).
+base_url = "https://acme-example.atlassian.net"
+# Jira Cloud API auth is basic auth: account email + API token.
+email_env = "MERGE0_JIRA_EMAIL"
+api_token_env = "MERGE0_JIRA_API_TOKEN"
+# JQL the poller runs (the fetch cursor ANDs an `updated >=` bound onto it).
+jql = "statusCategory != Done ORDER BY updated ASC"
+
+[linear]
+enabled = false
+# Env var holding a Linear API key (read access).
+api_key_env = "MERGE0_LINEAR_API_KEY"
+base_url = "https://api.linear.app"
+
+[slack_channels]
+enabled = false
+# Bot token with channels:history + channels:read scopes for the channels
+# below. This is the INGEST side (reading #bugs-style channels) — separate
+# from the notification webhook (MERGE0_SLACK_WEBHOOK_URL).
+bot_token_env = "MERGE0_SLACK_BOT_TOKEN"
+base_url = "https://slack.com/api"
+# Workspace base for archive permalinks in evidence links.
+team_base_url = "https://acme-example.slack.com"
+# Channels whose messages are treated as tickets by team convention.
+channels = [{ id = "C0123456789", name = "bugs" }]
+
+[asana]
+enabled = false
+# Env var holding a personal access token.
+pat_env = "MERGE0_ASANA_PAT"
+base_url = "https://app.asana.com/api/1.0"
+# Projects whose tasks are polled.
+project_gids = ["120000000000001"]
+
+[trello]
+enabled = false
+key_env = "MERGE0_TRELLO_API_KEY"
+token_env = "MERGE0_TRELLO_TOKEN"
+base_url = "https://api.trello.com/1"
+# Boards whose open cards are polled.
+board_ids = ["abc123def456"]
+
+[intercom]
+enabled = false
+access_token_env = "MERGE0_INTERCOM_ACCESS_TOKEN"
+base_url = "https://api.intercom.io"
+# Inbox base for conversation deep links.
+app_base_url = "https://app.intercom-example.com/a/inbox/abc123"
