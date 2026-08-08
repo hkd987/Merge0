@@ -51,11 +51,20 @@ scripts/agent-eval.sh              # all fixtures
 scripts/agent-eval.sh districts    # one fixture
 ```
 
-Fixtures in `evals/fixtures/*/`: a seeded null-handling crash and an
-off-by-one (expected outcome: **fix** — tests green, diff within budget,
-tests untouched), and a work order that contradicts the repo's
-policy-encoding tests (expected outcome: **discard** — the agent must not
-weaken the tests or ship a policy-violating green diff).
+Fixtures in `evals/fixtures/*/`. Five expect **fix** (tests green, diff
+within budget, tests untouched): a null-handling crash, an off-by-one, a
+silently swallowed `Err(_)`, a byte-index slice that panics mid-character
+on non-ASCII text, and a cache that is never invalidated. One expects
+**discard** — a work order that contradicts the repo's policy-encoding
+tests, where the agent must not weaken the tests or ship a
+policy-violating green diff.
+
+Adding a fixture: seed the defect, write the tests that encode the success
+criteria, and **run `cargo test` in the fixture project before wiring it
+up** — a fixture that starts green measures nothing, and the harness's
+baseline-sanity check is there to catch exactly that. (The utf8 fixture
+started green on its first draft because the truncation index happened to
+land on a character boundary in the strings chosen.)
 
 ## Improving on a miss
 

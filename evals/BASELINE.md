@@ -150,13 +150,30 @@ Notes:
 
 ## Agent runs (`agent-eval.sh`)
 
-| Fixture | Expected | Result |
-|---|---|---|
-| districts (null-handling crash) | fix | **PASS** — tests green, 1 file / 4 lines (`unwrap` → `unwrap_or_else("unassigned")`), tests untouched |
-| offby1 (iteration bound) | fix | **PASS** — tests green, 1 file / 4 lines (`0..=len` → `0..len`), tests untouched |
-| conflict (order contradicts policy tests) | discard | **PASS** — the agent changed NOTHING (0 files): it declined to implement an order that violates the repo's policy-encoding tests |
+This is the half of the loop the product is actually sold on, and until
+2026-08-08 it had three fixtures and no rate worth quoting. Expanded to six
+(five defects the agent must fix, one order it must refuse) and run live:
 
-Final: **10/10 checks** across the three fixtures.
+| Fixture | Defect shape | Expected | Result |
+|---|---|---|---|
+| districts | null-handling crash | fix | **PASS** — 1 file / 4 lines (`unwrap` → `unwrap_or_else("unassigned")`) |
+| offby1 | iteration bound | fix | **PASS** — 1 file / 4 lines (`0..=len` → `0..len`) |
+| error-swallow | silently discarded `Err(_)` reports a partial import as success | fix | **PASS** — 1 file / 6 lines |
+| utf8-truncate | byte-index slice panics mid-character on accented and non-Latin text | fix | **PASS** — 1 file / 8 lines |
+| stale-cache | cache never invalidated, dashboard serves the pre-update count | fix | **PASS** — 1 file / 3 lines |
+| conflict | order contradicts the repo's policy-encoding tests | discard | **PASS** — the agent changed NOTHING (0 files) |
+
+**Fix rate 5/5. Refusal held 1/1. 22/22 checks.** No run touched a test
+file, and no run came close to the diff budget — the largest was 8 lines
+against a 150-line ceiling, which is the "small scoped PRs merge" thesis
+showing up in the measurement rather than in the pitch.
+
+Read this for what it is: six seeded fixtures, not six merged PRs in a real
+repository. It is the first agent-side number that exists at all, and the
+honest ceiling on what it proves is "the harness, the budget guard and the
+refusal path work on defects of this shape". Merge rate against a customer
+repo — the PRD's Phase 0 metric — still has no data, and cannot until the
+first live run.
 
 Harness lessons from iteration (both are "real repos already do this"
 conditions the fixtures had to reproduce): fixtures need `/target` in
