@@ -77,4 +77,6 @@ Rules (mirroring PRD §5c/§5d discipline):
 - [2026-08-07] File-sized build inputs (CA bundles, keys) blow past `--build-arg` argv limits — pass them into `docker build` as BuildKit secret mounts.
 - [2026-08-07] Model-output parsers must tolerate benign shape variance (models emit lists where a string was asked for): strict serde + fail-closed silently zeroes yield — a failure class only live-model evals catch, never scripted-model tests.
 - [2026-08-07] In diff-measuring harnesses, build side-products (Cargo.lock, target/) must be in the base commit or .gitignore, or the measurement blames the agent for them.
+- [2026-08-08] When adding a source, check the adapter's default severity against the shipped gate's min_severity floor — a below-floor default means every signal from that source is silently guard-skipped and never triaged.
+- [2026-08-08] New sources change triage arithmetic: e2e assertions on report/work-order counts must be revisited whenever a scout's source list grows, and report lookups should select by content (title match), never by index.
 <!-- merge0:lessons:end -->

@@ -104,9 +104,14 @@ impl Harness {
                 posthog_shared_token: Some("posthog-token".into()),
                 zendesk_signing_secret: Some("zendesk-secret".into()),
                 datadog_shared_token: Some("datadog-token".into()),
+                jira_shared_token: Some("jira-token".into()),
+                linear_signing_secret: Some("linear-secret".into()),
+                slack_signing_secret: Some("slack-secret".into()),
                 posthog_project_base_url: "https://us.posthog.com/project/1".into(),
                 zendesk_agent_base_url: "https://chalk.zendesk.example.com/agent".into(),
                 datadog_app_base_url: "https://app.datadog.example.com".into(),
+                jira_browse_base_url: "https://chalk-example.atlassian.net/browse".into(),
+                slack_team_base_url: "https://chalk-example.slack.com".into(),
             }),
             rate_limiter: merge0_server::ratelimit::RateLimiter::from_rate(
                 options.rate_limit_per_second,
@@ -934,5 +939,141 @@ async fn metrics_scrape_is_prometheus_text_over_real_counts() {
 
     // Silence the unused-variable pedantry honestly: the report exists.
     assert!(!report_id.is_empty());
+    h.teardown().await;
+}
+
+/// The ticket-source webhooks: Jira (shared token), Linear (HMAC
+/// signature), and Slack Events (v0 signature + URL-verification
+/// handshake) all verify, normalize, and store.
+#[tokio::test]
+async fn ticket_source_webhooks_verify_and_normalize() {
+    let h = Harness::start(HarnessOptions::default()).await;
+
+    // Jira: shared token.
+    let jira = serde_json::json!({
+        "webhookEvent": "jira:issue_created",
+        "issue": {
+            "key": "CHK-77",
+            "fields": {
+                "summary": "Roster import stalls at 200 students",
+                "priority": { "name": "High" },
+                "status": { "statusCategory": { "key": "indeterminate" } },
+                "created": "2026-08-05T10:00:00.000Z",
+                "updated": "2026-08-06T11:00:00.000Z"
+            }
+        }
+    });
+    let res = h
+        .client
+        .post(format!("{}/webhooks/jira", h.base))
+        .header("x-merge0-webhook-token", "jira-token")
+        .json(&jira)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res.status(), 200);
+    let body: serde_json::Value = res.json().await.unwrap();
+    assert_eq!(body["inserted"], 1);
+
+    // Linear: HMAC over the exact body bytes.
+    let linear = serde_json::json!({
+        "type": "Issue",
+        "action": "create",
+        "data": {
+            "identifier": "ENG-500",
+            "title": "Attendance export empty",
+            "priority": 1,
+            "createdAt": "2026-08-06T10:00:00.000Z",
+            "updatedAt": "2026-08-06T10:30:00.000Z",
+            "url": "https://linear.example.com/chalk/issue/ENG-500"
+        }
+    });
+    let linear_bytes = serde_json::to_vec(&linear).unwrap();
+    let mut mac = hmac::Hmac::<sha2::Sha256>::new_from_slice(b"linear-secret").unwrap();
+    mac.update(&linear_bytes);
+    let res = h
+        .client
+        .post(format!("{}/webhooks/linear", h.base))
+        .header("linear-signature", hex::encode(mac.finalize().into_bytes()))
+        .header("content-type", "application/json")
+        .body(linear_bytes)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res.status(), 200);
+    let body: serde_json::Value = res.json().await.unwrap();
+    assert_eq!(body["inserted"], 1);
+
+    // Slack Events: the URL-verification handshake echoes the challenge…
+    let sign_slack = |body: &[u8], ts: &str| {
+        let mut mac = hmac::Hmac::<sha2::Sha256>::new_from_slice(b"slack-secret").unwrap();
+        mac.update(b"v0:");
+        mac.update(ts.as_bytes());
+        mac.update(b":");
+        mac.update(body);
+        format!("v0={}", hex::encode(mac.finalize().into_bytes()))
+    };
+    let handshake = serde_json::to_vec(&serde_json::json!({
+        "type": "url_verification", "challenge": "chalk-challenge-123"
+    }))
+    .unwrap();
+    let res = h
+        .client
+        .post(format!("{}/webhooks/slack", h.base))
+        .header("x-slack-request-timestamp", "1723100000")
+        .header("x-slack-signature", sign_slack(&handshake, "1723100000"))
+        .header("content-type", "application/json")
+        .body(handshake)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res.status(), 200);
+    let body: serde_json::Value = res.json().await.unwrap();
+    assert_eq!(body["challenge"], "chalk-challenge-123");
+
+    // …and a channel message event lands as a signal.
+    let event = serde_json::to_vec(&serde_json::json!({
+        "type": "event_callback",
+        "event": {
+            "type": "message",
+            "channel": "C0123456789",
+            "ts": "1723100001.000200",
+            "text": "Gradebook import failing for classes over 200",
+            "user": "U0456"
+        }
+    }))
+    .unwrap();
+    let res = h
+        .client
+        .post(format!("{}/webhooks/slack", h.base))
+        .header("x-slack-request-timestamp", "1723100001")
+        .header("x-slack-signature", sign_slack(&event, "1723100001"))
+        .header("content-type", "application/json")
+        .body(event)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res.status(), 200);
+    let body: serde_json::Value = res.json().await.unwrap();
+    assert_eq!(body["inserted"], 1);
+
+    // Forged credentials are rejected on all three.
+    for (path, header_name, value) in [
+        ("jira", "x-merge0-webhook-token", "wrong"),
+        ("linear", "linear-signature", "deadbeef"),
+        ("slack", "x-slack-signature", "v0=deadbeef"),
+    ] {
+        let res = h
+            .client
+            .post(format!("{}/webhooks/{path}", h.base))
+            .header(header_name, value)
+            .header("x-slack-request-timestamp", "1723100002")
+            .json(&serde_json::json!({}))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status(), 401, "forged {path} webhook must 401");
+    }
+
     h.teardown().await;
 }

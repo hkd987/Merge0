@@ -96,6 +96,52 @@ pub async fn receive(
                 "datadog",
             )
         }
+        "jira" => {
+            // Jira webhooks carry no vendor signature scheme; a shared
+            // token (same posture as PostHog/Datadog).
+            let token = config.jira_shared_token.as_ref().ok_or_else(unconfigured)?;
+            if !vw::verify_shared_token(token, header("x-merge0-webhook-token")) {
+                return Err(unauthorized());
+            }
+            (
+                vw::jira_webhook_to_envelope(&payload, &config.jira_browse_base_url),
+                "jira",
+            )
+        }
+        "linear" => {
+            let secret = config
+                .linear_signing_secret
+                .as_ref()
+                .ok_or_else(unconfigured)?;
+            if !vw::verify_linear_signature(secret, &body, header("linear-signature")) {
+                return Err(unauthorized());
+            }
+            (vw::linear_webhook_to_envelope(&payload), "linear")
+        }
+        "slack" => {
+            let secret = config
+                .slack_signing_secret
+                .as_ref()
+                .ok_or_else(unconfigured)?;
+            if !vw::verify_slack_events_signature(
+                secret,
+                header("x-slack-request-timestamp"),
+                &body,
+                header("x-slack-signature"),
+            ) {
+                return Err(unauthorized());
+            }
+            // Events API subscription handshake: echo the challenge.
+            if payload.get("type").and_then(|v| v.as_str()) == Some("url_verification") {
+                return Ok(Json(serde_json::json!({
+                    "challenge": payload.get("challenge").cloned().unwrap_or_default(),
+                })));
+            }
+            (
+                vw::slack_event_to_envelope(&payload, &config.slack_team_base_url),
+                "slack",
+            )
+        }
         other => return Err(ApiError::not_found(format!("unknown vendor {other:?}"))),
     };
 

@@ -49,9 +49,12 @@ change. No red PRs, no auto-merge, ever.
 
 ## What's inside
 
-- **Signal sources**: PostHog, Sentry, Zendesk, GitHub Issues, Datadog
-  (pollers + native signature-verified webhooks), LoopForge, OTel logs,
-  and a generic webhook envelope for anything else.
+- **Signal sources**: errors and product signals — PostHog, Sentry,
+  Datadog, LoopForge, OTel logs; everywhere work gets written down —
+  Zendesk, Intercom, GitHub Issues, **Jira, Linear, Asana, Trello, and
+  designated Slack channels** (all schema v0.3 `ticket` signals feeding
+  the ticket-triage scout); plus a generic webhook envelope for anything
+  else. Pollers + native signature-verified webhooks per vendor.
 - **Web app** (React SPA embedded in the single binary, styling contract
   in `docs/style-guide.md`): `/inbox` review queue, `/dashboard`
   acceptance telemetry vs the Phase 0 gate, `/setup` onboarding bundle.
@@ -122,7 +125,7 @@ live in `config/` as reviewed files. Server environment:
 | `MERGE0_TRIAGE_INTERVAL_SECS` | — | Fetch+triage cadence (default nightly; `0` disables) |
 | `MERGE0_INTENT_FALLBACK` | — | Intent text used until `MERGE0.md` exists in the repo |
 | `MERGE0_SLACK_WEBHOOK_URL` / `MERGE0_SLACK_SIGNING_SECRET` | — | Slack digest + interactive approvals |
-| `MERGE0_SENTRY_WEBHOOK_SECRET`, `MERGE0_POSTHOG_WEBHOOK_TOKEN`, `MERGE0_ZENDESK_WEBHOOK_SECRET`, `MERGE0_DATADOG_WEBHOOK_TOKEN` | — | Native vendor webhook verification (per vendor you point at `/webhooks/{vendor}`) |
+| `MERGE0_SENTRY_WEBHOOK_SECRET`, `MERGE0_POSTHOG_WEBHOOK_TOKEN`, `MERGE0_ZENDESK_WEBHOOK_SECRET`, `MERGE0_DATADOG_WEBHOOK_TOKEN`, `MERGE0_JIRA_WEBHOOK_TOKEN`, `MERGE0_LINEAR_WEBHOOK_SECRET` | — | Native vendor webhook verification (per vendor you point at `/webhooks/{vendor}`; Slack Events reuse `MERGE0_SLACK_SIGNING_SECRET`) |
 | `MERGE0_RATE_LIMIT_PER_SECOND` | — | Per-IP limit on open routes (default 10, burst 30; `0` disables) |
 | `MERGE0_HARDENING_ENABLED` | — | `1` enables post-merge prevention PRs (§5c) |
 | `MERGE0_META_ENABLED` | — | `1` enables the weekly meta-loop (§5d) |
@@ -144,7 +147,7 @@ token entered once in the browser) · JSON: `GET /reports`,
 `POST /reports/{id}/approve|dismiss`, `GET /telemetry`, `GET /metrics`
 (Prometheus text), `GET /safety`, `GET /onboarding`, `POST /triage/run`,
 `POST /ingest/{source}` (envelope) · self-authenticated:
-`POST /webhooks/github`, `POST /webhooks/{sentry,posthog,zendesk,datadog}`,
+`POST /webhooks/github`, `POST /webhooks/{sentry,posthog,zendesk,datadog,jira,linear,slack}`,
 `POST /runner/callback`, `POST /slack/interactions` · open: `GET /healthz`
 (DB-backed). All product routes require
 `Authorization: Bearer $MERGE0_API_TOKEN`.

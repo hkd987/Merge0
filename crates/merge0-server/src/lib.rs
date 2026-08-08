@@ -73,7 +73,14 @@ pub struct VendorWebhooks {
     pub posthog_shared_token: Option<String>,
     pub zendesk_signing_secret: Option<String>,
     pub datadog_shared_token: Option<String>,
+    pub jira_shared_token: Option<String>,
+    pub linear_signing_secret: Option<String>,
+    /// Slack Events API requests verify with the same app signing secret
+    /// as `/slack/interactions`.
+    pub slack_signing_secret: Option<String>,
     pub posthog_project_base_url: String,
     pub zendesk_agent_base_url: String,
     pub datadog_app_base_url: String,
+    pub jira_browse_base_url: String,
+    pub slack_team_base_url: String,
 }

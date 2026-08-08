@@ -150,6 +150,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .as_ref()
             .map(|d| d.app_base_url.clone())
             .unwrap_or_else(|| "https://app.datadoghq.com".into()),
+        jira_shared_token: std::env::var("MERGE0_JIRA_WEBHOOK_TOKEN").ok(),
+        linear_signing_secret: std::env::var("MERGE0_LINEAR_WEBHOOK_SECRET").ok(),
+        // Slack Events verify with the app's signing secret (same as
+        // /slack/interactions).
+        slack_signing_secret: std::env::var("MERGE0_SLACK_SIGNING_SECRET").ok(),
+        jira_browse_base_url: sources
+            .jira
+            .as_ref()
+            .map(|j| format!("{}/browse", j.base_url.trim_end_matches('/')))
+            .unwrap_or_else(|| "https://example.atlassian.net/browse".into()),
+        slack_team_base_url: sources
+            .slack_channels
+            .as_ref()
+            .map(|s| s.team_base_url.clone())
+            .unwrap_or_else(|| "https://example.slack.com".into()),
     };
 
     let state = AppState {

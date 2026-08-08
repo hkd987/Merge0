@@ -17,6 +17,7 @@ RUNNER_TOKEN="e2e-runner-token"
 WEBHOOK_SECRET="e2e-hook-secret"
 SLACK_SIGNING="e2e-slack-signing"
 POSTHOG_WEBHOOK_TOKEN="e2e-posthog-token"
+JIRA_WEBHOOK_TOKEN="e2e-jira-token"
 TENANT="e2e_manual_$(date +%s)"
 PASS=0; FAIL=0
 
@@ -38,6 +39,7 @@ MERGE0_RUNNER_TOKEN="$RUNNER_TOKEN" \
 MERGE0_GITHUB_WEBHOOK_SECRET="$WEBHOOK_SECRET" \
 MERGE0_SLACK_SIGNING_SECRET="$SLACK_SIGNING" \
 MERGE0_POSTHOG_WEBHOOK_TOKEN="$POSTHOG_WEBHOOK_TOKEN" \
+MERGE0_JIRA_WEBHOOK_TOKEN="$JIRA_WEBHOOK_TOKEN" \
 MERGE0_TRIAGE_INTERVAL_SECS=0 \
 MERGE0_BIND="127.0.0.1:$PORT" \
 ./target/debug/merge0-server &
@@ -88,12 +90,25 @@ EOF
 )
 check "posthog native webhook inserted=1" "$POSTHOG_RES" '"inserted":1'
 
-say "3. Triage run: cross-source cluster -> gate -> one Work Order"
-TRIAGE_RES=$(auth -X POST "$BASE/triage/run")
-check "one report created" "$TRIAGE_RES" '"reports_created":1'
-check "one work order" "$TRIAGE_RES" '"work_orders":1'
+JIRA_RES=$(curl -sf -X POST "$BASE/webhooks/jira" \
+  -H "x-merge0-webhook-token: $JIRA_WEBHOOK_TOKEN" \
+  -H "content-type: application/json" -d @- <<JIRAEOF
+{"webhookEvent": "jira:issue_created", "issue": {
+  "key": "CHK-901",
+  "fields": {"summary": "Attendance export empty for large districts",
+    "priority": {"name": "High"},
+    "status": {"statusCategory": {"key": "indeterminate"}},
+    "created": "2026-08-07T08:00:00.000Z", "updated": "$NOW"}}}
+JIRAEOF
+)
+check "jira native webhook inserted=1" "$JIRA_RES" '"inserted":1' 
 
-REPORT_ID=$(auth "$BASE/reports?status=awaiting_review" | python3 -c 'import sys,json; print(json.load(sys.stdin)[0]["id"])')
+say "3. Triage run: cross-source cluster + jira ticket -> gate -> two Work Orders"
+TRIAGE_RES=$(auth -X POST "$BASE/triage/run")
+check "two reports created (cluster + ticket)" "$TRIAGE_RES" '"reports_created":2'
+check "two work orders" "$TRIAGE_RES" '"work_orders":2'
+
+REPORT_ID=$(auth "$BASE/reports?status=awaiting_review" | python3 -c 'import sys,json; rs=json.load(sys.stdin); print(next(r["id"] for r in rs if "districtId" in r["title"]))')
 SIGNALS=$(auth "$BASE/reports/$REPORT_ID" | python3 -c 'import sys,json; print(len(json.load(sys.stdin)["report"]["signal_ids"]))')
 check "report references BOTH signals (P0-3)" "$SIGNALS" "2"
 
