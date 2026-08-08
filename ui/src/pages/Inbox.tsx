@@ -96,7 +96,7 @@ export function Inbox({ onUnauthorized }: { onUnauthorized: () => void }) {
       if (e.key === "k") setFocus((f) => Math.max(f - 1, 0));
       const focusedReport = reports[focus];
       if (!focusedReport) return;
-      if (e.key === "o") navigate(`/reports/${focusedReport.id}`);
+      if (e.key === "o") navigate(`/inbox/${focusedReport.id}`);
       if (!isActionable(focusedReport)) return;
       if (e.key === "a") void approve(focusedReport.id);
       if (e.key === "d") setDismissing(focusedReport.id);

@@ -50,6 +50,7 @@ pub fn app(state: AppState) -> Router {
         .route("/healthz", get(handlers::health::healthz))
         .route("/", get(handlers::spa::serve))
         .route("/inbox", get(handlers::spa::serve))
+        .route("/inbox/{id}", get(handlers::spa::serve))
         .route("/dashboard", get(handlers::spa::serve))
         .route("/setup", get(handlers::spa::serve))
         .route("/assets/{*file}", get(handlers::spa::serve))

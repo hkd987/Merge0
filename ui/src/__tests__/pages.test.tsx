@@ -62,10 +62,10 @@ const workOrder = (over: Record<string, unknown>) => ({
 const renderDetail = () =>
   render(
     <ToastProvider>
-      <MemoryRouter initialEntries={["/reports/01ABC"]}>
+      <MemoryRouter initialEntries={["/inbox/01ABC"]}>
         <Routes>
           <Route
-            path="/reports/:id"
+            path="/inbox/:id"
             element={<ReportDetail onUnauthorized={() => {}} />}
           />
         </Routes>
@@ -260,10 +260,10 @@ describe("ReportDetail", () => {
     );
     render(
       <ToastProvider>
-        <MemoryRouter initialEntries={["/reports/01ABC"]}>
+        <MemoryRouter initialEntries={["/inbox/01ABC"]}>
           <Routes>
             <Route
-              path="/reports/:id"
+              path="/inbox/:id"
               element={<ReportDetail onUnauthorized={onUnauthorized} />}
             />
           </Routes>

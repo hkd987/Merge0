@@ -40,7 +40,7 @@ export function ReportCard({ report, focused, busy, onApprove, onDismiss }: Prop
             {report.severity}
           </span>
         )}
-        <Link className="title" title={report.title} to={`/reports/${report.id}`}>
+        <Link className="title" title={report.title} to={`/inbox/${report.id}`}>
           {report.title}
         </Link>
         <span className="mono muted num" style={{ fontSize: "var(--fs-label)" }}>

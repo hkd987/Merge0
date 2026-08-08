@@ -61,7 +61,7 @@ export default function App() {
           <Route path="/" element={<Navigate to="/inbox" replace />} />
           <Route path="/inbox" element={<Inbox onUnauthorized={unauthorized} />} />
           <Route
-            path="/reports/:id"
+            path="/inbox/:id"
             element={<ReportDetail onUnauthorized={unauthorized} />}
           />
           <Route path="/dashboard" element={<Dashboard onUnauthorized={unauthorized} />} />
