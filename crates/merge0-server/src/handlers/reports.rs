@@ -41,6 +41,10 @@ pub async fn detail(
     let dispatch = state.tenant.dispatch(id).await?;
     let outcomes = state.tenant.outcomes_for_report(id).await?;
     let handoff_brief = state.tenant.handoff_brief(id).await?;
+    let fix_efficacy = state
+        .tenant
+        .fix_efficacy(id, state.efficacy_grace_days, chrono::Utc::now())
+        .await?;
     Ok(Json(serde_json::json!({
         "report": report,
         "gate_decision": gate_decision,
@@ -49,6 +53,7 @@ pub async fn detail(
             "runner_kind": d.runner_kind,
             "dispatched_at": d.dispatched_at,
             "status": d.status,
+            "dispatched_by": d.dispatched_by,
             "pr_url": d.pr_url,
             "branch": d.branch,
             "discard_reason": d.discard_reason,
@@ -58,6 +63,7 @@ pub async fn detail(
         })),
         "outcomes": outcomes,
         "handoff_brief": handoff_brief,
+        "fix_efficacy": fix_efficacy,
     })))
 }
 
@@ -66,7 +72,9 @@ pub async fn approve(
     Path(id): Path<String>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let id = parse_report_id(&id)?;
-    actions::approve(&state, id).await.map(Json)
+    actions::approve(&state, id, actions::DispatchedBy::Human)
+        .await
+        .map(Json)
 }
 
 #[derive(Deserialize)]

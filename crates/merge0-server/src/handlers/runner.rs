@@ -67,11 +67,13 @@ pub async fn callback(
                 .tenant
                 .set_report_status(id, ReportStatus::PrOpen)
                 .await?;
-            if let Some(slack) = &state.slack {
-                let full = state.tenant.get_report(id).await?;
-                let message = merge0_slack::pr_ready_message(&full, pr_url);
-                if let Err(e) = slack.post(&message).await {
-                    tracing::warn!("slack notify failed: {e}");
+            if state.notify_pr_ready {
+                if let Some(slack) = &state.slack {
+                    let full = state.tenant.get_report(id).await?;
+                    let message = merge0_slack::pr_ready_message(&full, pr_url);
+                    if let Err(e) = slack.post(&message).await {
+                        tracing::warn!("slack notify failed: {e}");
+                    }
                 }
             }
         }

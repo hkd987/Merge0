@@ -72,7 +72,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let fixed = merge0_model::FixedModel {
             response: r#"{"decision":"work","summary":"Fix the reported defect",
                 "repro":"see evidence links","success_criteria":"regression test passes",
-                "constraints":"stay within the diff budget"}"#
+                "constraints":"stay within the diff budget","confidence":"high"}"#
                 .to_string(),
         };
         (Arc::new(fixed), Arc::new(fake_github))
@@ -198,7 +198,74 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .unwrap_or(10),
         )
         .map(Arc::new),
+        reopen_factor: std::env::var("MERGE0_REOPEN_FACTOR")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(3),
+        efficacy_grace_days: std::env::var("MERGE0_EFFICACY_GRACE_DAYS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(3),
+        notify_reports: slack_notify_enabled("reports"),
+        notify_pr_ready: slack_notify_enabled("pr_ready"),
+        // Credential broker surface (PRD §5a P2): enabled by registering a
+        // per-tenant runner key. Ships with the deterministic preview
+        // minter — production Git credentials remain the runner's own token.
+        broker: std::env::var("MERGE0_BROKER_RUNNER_KEY").ok().map(|key| {
+            let mut broker = merge0_broker::Broker::new(merge0_broker::FakeMinter);
+            broker.add_runner_key(key);
+            Arc::new(tokio::sync::Mutex::new(broker))
+        }),
+        // Registry surface (PRD §5b P2): a local signed-index directory
+        // plus the pinned hex-encoded verifying key.
+        registry: match (
+            std::env::var("MERGE0_REGISTRY_DIR").ok(),
+            std::env::var("MERGE0_REGISTRY_PUBKEY").ok(),
+        ) {
+            (Some(dir), Some(pubkey)) => Some(Arc::new(merge0_server::RegistryHandle {
+                dir: dir.into(),
+                verifying_key: merge0_registry::verifying_key_from_hex(&pubkey)
+                    .map_err(|e| format!("MERGE0_REGISTRY_PUBKEY invalid: {e}"))?,
+            })),
+            (Some(_), None) | (None, Some(_)) => {
+                return Err("registry needs BOTH MERGE0_REGISTRY_DIR and \
+                     MERGE0_REGISTRY_PUBKEY"
+                    .into());
+            }
+            (None, None) => None,
+        },
     };
+
+    // Release-timeline backfill (PRD P0-4): the webhook only sees releases
+    // published AFTER install, so a fresh install has no timeline for
+    // first-bad-release attribution until we seed it from the GitHub
+    // Releases API once. Best-effort: an API failure logs and moves on —
+    // the webhook keeps the timeline current either way.
+    match state.tenant.releases().await {
+        Ok(existing) if existing.is_empty() => {
+            match state.github.list_releases(&state.repo).await {
+                Ok(releases) if !releases.is_empty() => {
+                    let count = releases.len();
+                    for release in releases {
+                        state
+                            .tenant
+                            .upsert_release(
+                                &release.tag,
+                                release.sha.as_deref(),
+                                release.published_at,
+                                release.notes.as_deref(),
+                            )
+                            .await?;
+                    }
+                    tracing::info!("release timeline backfilled: {count} release(s)");
+                }
+                Ok(_) => {}
+                Err(e) => tracing::warn!("release backfill skipped: {e}"),
+            }
+        }
+        Ok(_) => {}
+        Err(e) => tracing::warn!("release backfill check failed: {e}"),
+    }
 
     spawn_schedulers(&state);
 
@@ -295,7 +362,10 @@ fn spawn_schedulers(state: &AppState) {
 async fn run_meta_loop(state: &AppState) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     use merge0_adapters::Adapter;
     let now = chrono::Utc::now();
-    let snapshot = state.tenant.telemetry(30, now).await?;
+    let snapshot = state
+        .tenant
+        .telemetry(30, state.efficacy_grace_days, now)
+        .await?;
 
     let envelope = serde_json::json!({
         "endpoint": "telemetry",
@@ -341,6 +411,16 @@ async fn shutdown_signal() {
 
 fn required(name: &str) -> Result<String, String> {
     std::env::var(name).map_err(|_| format!("missing required env var {name}"))
+}
+
+/// `MERGE0_SLACK_NOTIFY`: comma-separated notification classes to enable
+/// (`reports`, `pr_ready`). Unset = all classes on (the webhook URL itself
+/// is the master switch).
+fn slack_notify_enabled(class: &str) -> bool {
+    match std::env::var("MERGE0_SLACK_NOTIFY") {
+        Ok(list) => list.split(',').any(|c| c.trim() == class),
+        Err(_) => true,
+    }
 }
 
 fn agent_kind_from_env() -> AgentKind {

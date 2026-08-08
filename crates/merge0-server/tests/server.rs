@@ -36,6 +36,8 @@ struct HarnessOptions {
     model_responses: Vec<&'static str>,
     hardening: bool,
     rate_limit_per_second: u32,
+    registry: Option<merge0_server::RegistryHandle>,
+    gate_toml: Option<&'static str>,
 }
 
 impl Default for HarnessOptions {
@@ -45,12 +47,14 @@ impl Default for HarnessOptions {
             model_responses: vec![WORK_JSON],
             hardening: false,
             rate_limit_per_second: 0,
+            registry: None,
+            gate_toml: None,
         }
     }
 }
 
 impl Harness {
-    async fn start(options: HarnessOptions) -> Harness {
+    async fn start(mut options: HarnessOptions) -> Harness {
         let store = Store::connect(&database_url()).await.unwrap();
         let schema = format!("t_{}", Ulid::new().to_string().to_lowercase());
         let tenant = store.tenant(&schema).await.unwrap();
@@ -71,13 +75,13 @@ impl Harness {
             "#,
         )
         .unwrap()];
-        let gate = toml::from_str(
+        let gate = toml::from_str(options.gate_toml.unwrap_or(
             r#"
             prompt = "gate"
             min_severity = "medium"
             max_work_orders_per_run = 5
             "#,
-        )
+        ))
         .unwrap();
 
         let state = AppState {
@@ -117,6 +121,16 @@ impl Harness {
                 options.rate_limit_per_second,
             )
             .map(Arc::new),
+            reopen_factor: 3,
+            efficacy_grace_days: 3,
+            notify_reports: true,
+            notify_pr_ready: true,
+            broker: {
+                let mut broker = merge0_broker::Broker::new(merge0_broker::FakeMinter);
+                broker.add_runner_key("broker-runner-key");
+                Some(Arc::new(tokio::sync::Mutex::new(broker)))
+            },
+            registry: options.registry.take().map(Arc::new),
         };
 
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -1075,5 +1089,362 @@ async fn ticket_source_webhooks_verify_and_normalize() {
         assert_eq!(res.status(), 401, "forged {path} webhook must 401");
     }
 
+    h.teardown().await;
+}
+
+/// The autonomy dial: OFF by default (the shipped trust posture), and when
+/// an operator enables it, only Work Orders at or above the confidence
+/// threshold dispatch — with the actor recorded as `auto`.
+#[tokio::test]
+async fn auto_dispatch_is_off_by_default_and_confidence_gated_when_enabled() {
+    // Default config + a high-confidence verdict: stays in the inbox.
+    let h = Harness::start(HarnessOptions {
+        model_responses: vec![WORK_HIGH_CONFIDENCE_JSON],
+        ..HarnessOptions::default()
+    })
+    .await;
+    let report_id = h.seed_awaiting_report().await;
+    let detail: serde_json::Value = h
+        .get(&format!("/reports/{report_id}"))
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(detail["report"]["status"], "awaiting_review");
+    assert_eq!(detail["work_order"]["confidence"], "high");
+    assert!(detail["dispatch"].is_null(), "no dispatch without a human");
+    h.teardown().await;
+
+    // Autonomy enabled but the verdict carries NO confidence → Low →
+    // fail-conservative: still a human decision.
+    let h = Harness::start(HarnessOptions {
+        gate_toml: Some(AUTONOMY_GATE_TOML),
+        ..HarnessOptions::default()
+    })
+    .await;
+    let report_id = h.seed_awaiting_report().await;
+    let detail: serde_json::Value = h
+        .get(&format!("/reports/{report_id}"))
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(detail["report"]["status"], "awaiting_review");
+    h.teardown().await;
+
+    // Autonomy enabled + high confidence → dispatched with actor "auto".
+    let h = Harness::start(HarnessOptions {
+        gate_toml: Some(AUTONOMY_GATE_TOML),
+        model_responses: vec![WORK_HIGH_CONFIDENCE_JSON],
+        ..HarnessOptions::default()
+    })
+    .await;
+    h.post(
+        "/ingest/sentry",
+        Some("api-secret"),
+        Some(h.sentry_envelope()),
+    )
+    .await;
+    h.post("/triage/run", Some("api-secret"), None).await;
+    let reports: serde_json::Value = h
+        .get("/reports?status=dispatched")
+        .await
+        .json()
+        .await
+        .unwrap();
+    let report_id = reports[0]["id"].as_str().expect("auto-dispatched report");
+    let detail: serde_json::Value = h
+        .get(&format!("/reports/{report_id}"))
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(detail["dispatch"]["dispatched_by"], "auto");
+    let telemetry: serde_json::Value = h.get("/telemetry").await.json().await.unwrap();
+    assert_eq!(telemetry["counts"]["auto_dispatched"], 1);
+    h.teardown().await;
+}
+
+const WORK_HIGH_CONFIDENCE_JSON: &str = r#"{"decision":"work","summary":"Fix the crash",
+    "repro":"open /districts/sync","success_criteria":"regression test passes",
+    "constraints":"stay small","confidence":"high"}"#;
+
+const AUTONOMY_GATE_TOML: &str = r#"
+prompt = "gate"
+min_severity = "medium"
+max_work_orders_per_run = 5
+
+[autonomy]
+auto_dispatch = true
+min_confidence = "high"
+"#;
+
+/// The hard spend ceiling: once gate spend crosses the cap mid-run, the
+/// remaining candidates stay Pending and the run says so loudly.
+#[tokio::test]
+async fn token_budget_halts_the_gate_and_leaves_overflow_pending() {
+    let h = Harness::start(HarnessOptions {
+        gate_toml: Some(
+            r#"
+            prompt = "gate"
+            min_severity = "medium"
+            max_work_orders_per_run = 5
+
+            [budget]
+            max_tokens_per_day = 1
+            "#,
+        ),
+        model_responses: vec![WORK_JSON, WORK_JSON],
+        ..HarnessOptions::default()
+    })
+    .await;
+
+    // Two distinct defects → two clusters → two gate candidates.
+    let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+    h.post(
+        "/ingest/sentry",
+        Some("api-secret"),
+        Some(serde_json::json!({
+            "endpoint": "issues",
+            "payload": [
+                {
+                    "id": "42", "shortId": "CHALK-1",
+                    "title": "TypeError: districtId undefined",
+                    "permalink": "https://sentry.example.com/organizations/chalk/issues/42/",
+                    "level": "error",
+                    "metadata": {"type": "TypeError", "value": "districtId undefined"},
+                    "userCount": 30, "firstSeen": "2026-08-06T00:00:00Z", "lastSeen": now,
+                },
+                {
+                    "id": "43", "shortId": "CHALK-2",
+                    "title": "Panic: report export queue stalled",
+                    "permalink": "https://sentry.example.com/organizations/chalk/issues/43/",
+                    "level": "error",
+                    "metadata": {"type": "Panic", "value": "export queue stalled"},
+                    "userCount": 12, "firstSeen": "2026-08-06T00:00:00Z", "lastSeen": now,
+                },
+            ]
+        })),
+    )
+    .await;
+    let run: serde_json::Value = h
+        .post("/triage/run", Some("api-secret"), None)
+        .await
+        .json()
+        .await
+        .unwrap();
+    // First gate call is allowed (nothing spent yet); its 1000 scripted
+    // tokens cross the 1-token cap, so the second candidate never gates.
+    assert_eq!(run["work_orders"], 1);
+    assert_eq!(run["budget_exhausted"], true);
+    let pending: serde_json::Value = h.get("/reports?status=pending").await.json().await.unwrap();
+    assert_eq!(
+        pending.as_array().unwrap().len(),
+        1,
+        "over-budget candidate stays pending for the next window"
+    );
+    h.teardown().await;
+}
+
+/// Dismissals are not forever: impact growth past the re-open factor pulls
+/// a dismissed report back into the inbox — except `intended_behavior`,
+/// which stays closed (its recurrence path is the Opportunity classifier).
+#[tokio::test]
+async fn dismissed_reports_reopen_when_impact_escalates() {
+    let h = Harness::start(HarnessOptions::default()).await;
+    let report_id = h.seed_awaiting_report().await;
+    h.post(
+        &format!("/reports/{report_id}/dismiss"),
+        Some("api-secret"),
+        Some(serde_json::json!({"reason": "wont_fix"})),
+    )
+    .await;
+
+    // Same fingerprint, affected count 30 → 95 (>= 3x the snapshot).
+    let mut escalated = h.sentry_envelope();
+    escalated["payload"][0]["userCount"] = serde_json::json!(95);
+    h.post("/ingest/sentry", Some("api-secret"), Some(escalated))
+        .await;
+    h.post("/triage/run", Some("api-secret"), None).await;
+
+    let detail: serde_json::Value = h
+        .get(&format!("/reports/{report_id}"))
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(detail["report"]["status"], "awaiting_review");
+    let summary = detail["report"]["summary"].as_str().unwrap();
+    assert!(
+        summary.contains("REOPENED") && summary.contains("wont_fix"),
+        "prior dismissal must be visible: {summary}"
+    );
+
+    // intended_behavior stays closed under identical escalation.
+    h.post(
+        &format!("/reports/{report_id}/dismiss"),
+        Some("api-secret"),
+        Some(serde_json::json!({"reason": "intended_behavior"})),
+    )
+    .await;
+    let mut tripled = h.sentry_envelope();
+    tripled["payload"][0]["userCount"] = serde_json::json!(500);
+    h.post("/ingest/sentry", Some("api-secret"), Some(tripled))
+        .await;
+    h.post("/triage/run", Some("api-secret"), None).await;
+    let detail: serde_json::Value = h
+        .get(&format!("/reports/{report_id}"))
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(
+        detail["report"]["status"], "dismissed",
+        "intended_behavior dismissals never re-open"
+    );
+    h.teardown().await;
+}
+
+/// The broker's HTTP face: runner key + approved Work Order → single-use,
+/// repo-scoped credential; wrong key 401, wrong repo 403, reuse 409.
+#[tokio::test]
+async fn broker_issues_single_use_work_order_scoped_credentials() {
+    let h = Harness::start(HarnessOptions::default()).await;
+    let report_id = h.seed_awaiting_report().await;
+    h.post(
+        &format!("/reports/{report_id}/approve"),
+        Some("api-secret"),
+        None,
+    )
+    .await;
+
+    let request = serde_json::json!({
+        "work_order_id": report_id,
+        "repo": "chalk/chalk",
+    });
+    let forged = h
+        .post(
+            "/broker/credentials",
+            Some("wrong-key"),
+            Some(request.clone()),
+        )
+        .await;
+    assert_eq!(forged.status(), 401);
+
+    let mismatched = h
+        .post(
+            "/broker/credentials",
+            Some("broker-runner-key"),
+            Some(serde_json::json!({
+                "work_order_id": report_id,
+                "repo": "chalk/other-repo",
+            })),
+        )
+        .await;
+    assert_eq!(mismatched.status(), 403);
+
+    let granted = h
+        .post(
+            "/broker/credentials",
+            Some("broker-runner-key"),
+            Some(request.clone()),
+        )
+        .await;
+    assert_eq!(granted.status(), 200);
+    let body: serde_json::Value = granted.json().await.unwrap();
+    assert_eq!(body["token"], "fake-token-chalk-chalk");
+    assert!(body["expires_at"].is_string());
+
+    let reused = h
+        .post(
+            "/broker/credentials",
+            Some("broker-runner-key"),
+            Some(request),
+        )
+        .await;
+    assert_eq!(reused.status(), 409, "grants are single-use");
+    h.teardown().await;
+}
+
+/// The registry's HTTP face: a signature-verified index lists skills, and
+/// install opens the manifest-change PR (never a server-side toggle).
+#[tokio::test]
+async fn registry_lists_signed_index_and_installs_via_manifest_pr() {
+    use merge0_registry::{
+        content_hash, sign_index, AcceptanceTelemetry, RegistryIndex, SigningKey, SkillListing,
+    };
+
+    // A throwaway on-disk registry: one proven skill, index signed with a
+    // fixed test key.
+    let dir = std::env::temp_dir().join(format!("merge0-registry-{}", Ulid::new()));
+    let skill_dir = dir.join("skills").join("db-migrations");
+    std::fs::create_dir_all(&skill_dir).unwrap();
+    let files = vec![(
+        "SKILL.md".to_string(),
+        "# DB migration review checklist\n".to_string(),
+    )];
+    std::fs::write(skill_dir.join("SKILL.md"), &files[0].1).unwrap();
+    let signing = SigningKey::from_bytes(&[7u8; 32]);
+    let index = RegistryIndex {
+        generated_at: chrono::Utc::now(),
+        listings: vec![SkillListing {
+            name: "db-migrations".into(),
+            version: "1.2.0".into(),
+            description: "Schema-change review skill".into(),
+            content_sha256: content_hash(&files),
+            acceptance: Some(AcceptanceTelemetry {
+                runs: 12,
+                merge_rate: 0.8,
+            }),
+        }],
+    };
+    let signed = sign_index(&index, &signing).unwrap();
+    std::fs::write(
+        dir.join("index.json"),
+        serde_json::json!({
+            "index_json": signed.index_json,
+            "signature_hex": signed.signature_hex,
+        })
+        .to_string(),
+    )
+    .unwrap();
+
+    let h = Harness::start(HarnessOptions {
+        registry: Some(merge0_server::RegistryHandle {
+            dir: dir.clone(),
+            verifying_key: signing.verifying_key(),
+        }),
+        ..HarnessOptions::default()
+    })
+    .await;
+
+    let unauthenticated = h.client.get(format!("{}/registry/skills", h.base)).send();
+    assert_eq!(unauthenticated.await.unwrap().status(), 401);
+
+    let listing: serde_json::Value = h.get("/registry/skills").await.json().await.unwrap();
+    assert_eq!(listing["skills"][0]["name"], "db-migrations");
+
+    let installed: serde_json::Value = h
+        .post(
+            "/registry/skills/db-migrations/install",
+            Some("api-secret"),
+            Some(serde_json::json!({})),
+        )
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(installed["installed"], "db-migrations");
+    assert!(installed["pr_url"]
+        .as_str()
+        .unwrap()
+        .starts_with("https://"));
+    {
+        let prs = &h.github.state.lock().unwrap().created_prs;
+        assert_eq!(prs.len(), 1);
+        assert!(prs[0].4.contains("Acceptance telemetry: 12 runs"));
+    }
+
+    std::fs::remove_dir_all(&dir).ok();
     h.teardown().await;
 }

@@ -29,6 +29,11 @@ pub fn app(state: AppState) -> Router {
         .route("/metrics", get(handlers::metrics::scrape))
         .route("/safety", get(handlers::safety::verify))
         .route("/onboarding", get(handlers::onboarding::bundle))
+        .route("/registry/skills", get(handlers::registry::list))
+        .route(
+            "/registry/skills/{name}/install",
+            post(handlers::registry::install),
+        )
         .route("/slack/digest", post(handlers::slack::digest))
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
@@ -49,6 +54,7 @@ pub fn app(state: AppState) -> Router {
         .route("/setup", get(handlers::spa::serve))
         .route("/assets/{*file}", get(handlers::spa::serve))
         .route("/runner/callback", post(handlers::runner::callback))
+        .route("/broker/credentials", post(handlers::broker::credentials))
         .route("/webhooks/github", post(handlers::webhooks::github))
         .route(
             "/webhooks/{vendor}",
