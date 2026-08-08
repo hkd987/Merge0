@@ -3,7 +3,6 @@
 //! are never logged. Fail-fast validation at boot (audit O4): a bad
 //! MERGE0_REPO dies here, not when a reviewer clicks Approve.
 
-use merge0_context::intent::IntentDoc;
 use merge0_github::api::RestGitHub;
 use merge0_github::auth::{AppAuth, InstallationTokenSource};
 use merge0_github::RepoRef;
@@ -46,13 +45,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Fallback intent (the live MERGE0.md is fetched from the customer repo
     // per triage run): a local override path, else the shipped template.
-    let intent_text = match std::env::var("MERGE0_INTENT_FALLBACK") {
+    // Kept whole — the machine fence carries earned constraints, and the
+    // gate's own retrieval decides what fits (see server::intent).
+    let intent_fallback = match std::env::var("MERGE0_INTENT_FALLBACK") {
         Ok(path) => std::fs::read_to_string(path)?,
         Err(_) => merge0_context::intent::MERGE0_TEMPLATE.to_string(),
     };
-    let intent_fallback = IntentDoc::parse(&intent_text)
-        .map(|doc| doc.human_text())
-        .unwrap_or(intent_text);
 
     // MERGE0_DEV_FAKES=1 swaps the model and GitHub for in-process fakes so
     // the complete loop can be driven locally (manual e2e) without a live

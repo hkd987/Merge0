@@ -12,7 +12,7 @@
 //!    emitted Work Order.
 
 use crate::config::GateConfig;
-use crate::{truncate_with_marker, Result};
+use crate::Result;
 use merge0_model::{extract_json_object, Model, ModelRequest};
 use merge0_signal::{GateConfidence, GateDecision, OutcomeRef, Report, WorkOrder};
 use serde::Deserialize;
@@ -124,11 +124,21 @@ fn build_prompt(
             )
         })
         .collect();
+    // Outcome memory without age is a blunt instrument: an eight-month-old
+    // revert should inform, not veto. Wall-clock is read here rather than
+    // threaded through `evaluate` because the marker is day-coarse.
+    let now = chrono::Utc::now();
     let prior: Vec<String> = prior_attempts
         .iter()
         .map(|p| {
+            let age_days = (now - p.occurred_at).num_days().max(0);
+            let staleness = if age_days > config.stale_prior_days as i64 {
+                " — STALE"
+            } else {
+                ""
+            };
             format!(
-                "- {} on {} ({})",
+                "- {} on {} ({age_days} days ago{staleness}) ({})",
                 serde_json::to_string(&p.outcome).unwrap(),
                 p.occurred_at.date_naive(),
                 p.note.as_deref().unwrap_or("no note")
@@ -152,7 +162,11 @@ fn build_prompt(
         summary = report.summary,
         evidence = if evidence.is_empty() { "- none".into() } else { evidence.join("\n") },
         prior = if prior.is_empty() { "- none".into() } else { prior.join("\n") },
-        intent = truncate_with_marker(intent_excerpt, config.max_section_chars),
+        intent = merge0_context::intent::relevant_intent(
+            intent_excerpt,
+            &format!("{} {}", report.title, report.summary),
+            config.max_section_chars,
+        ),
     )
 }
 
@@ -517,5 +531,84 @@ mod tests {
         assert_eq!(work_order.prior_attempts, prior);
         // The prompt surfaced the revert to the model.
         assert!(model.requests()[1].prompt.contains("broke admin view"));
+    }
+
+    /// Memory without decay over-vetoes. A revert from last week is a real
+    /// signal about today's codebase; one from three years ago is a signal
+    /// about a codebase that no longer exists, and the gate is told which
+    /// it is looking at rather than treating both as equally damning.
+    #[tokio::test]
+    async fn prior_attempts_are_rendered_with_age_and_a_stale_marker() {
+        let model = ScriptedModel::new(vec![
+            r#"{"decision":"skip","reason":"no"}"#.to_string(),
+            r#"{"decision":"skip","reason":"no"}"#.to_string(),
+        ]);
+        let now = Utc::now();
+        let recent = vec![OutcomeRef {
+            work_order_id: Ulid::new(),
+            outcome: merge0_signal::OutcomeKind::Reverted,
+            occurred_at: now - chrono::Duration::days(3),
+            note: Some("recent revert".into()),
+        }];
+        let ancient = vec![OutcomeRef {
+            work_order_id: Ulid::new(),
+            outcome: merge0_signal::OutcomeKind::Reverted,
+            occurred_at: now - chrono::Duration::days(400),
+            note: Some("ancient revert".into()),
+        }];
+        for prior in [recent, ancient] {
+            evaluate(
+                &report(Severity::High, true),
+                "o/r",
+                "",
+                prior,
+                &config(),
+                &model,
+            )
+            .await
+            .unwrap();
+        }
+        let fresh = &model.requests()[0].prompt;
+        assert!(fresh.contains("3 days ago"), "{fresh}");
+        assert!(
+            !fresh.contains("STALE"),
+            "recent memory is not stale: {fresh}"
+        );
+        let old = &model.requests()[1].prompt;
+        assert!(old.contains("400 days ago"), "{old}");
+        assert!(old.contains("STALE"), "aged memory is marked: {old}");
+    }
+
+    /// The disconnection this retrieval layer exists to fix: `merge0-hardening`
+    /// writes earned constraints into MERGE0.md's machine fence, and the gate
+    /// used to see neither the fence (stripped) nor the tail of a long doc
+    /// (blind-truncated). Both paths are asserted here, at the seam that
+    /// actually builds the prompt.
+    #[tokio::test]
+    async fn intent_reaching_the_model_keeps_the_machine_fence_and_discloses_drops() {
+        let model = ScriptedModel::new(vec![r#"{"decision":"skip","reason":"no"}"#.to_string()]);
+        let filler = "Unrelated onboarding prose. ".repeat(120);
+        let intent = format!(
+            "# MERGE0.md\n\n## Onboarding\n{filler}\n\n## Invariants\n             - Schools may exist without a district.\n\n             <!-- merge0:managed:start -->\n             - do not retry the district backfill job\n             <!-- merge0:managed:end -->\n"
+        );
+        evaluate(
+            &report(Severity::High, true),
+            "o/r",
+            &intent,
+            vec![],
+            &config(),
+            &model,
+        )
+        .await
+        .unwrap();
+        let prompt = &model.requests()[0].prompt;
+        assert!(
+            prompt.contains("district backfill job"),
+            "hardening amendments must reach the gate: {prompt}"
+        );
+        assert!(
+            prompt.contains("[NOTE:") && prompt.contains("\"Onboarding\""),
+            "dropped intent is disclosed, never silent: {prompt}"
+        );
     }
 }

@@ -260,3 +260,90 @@ fn adapters_reference_the_origin_label_constant_not_the_literal() {
         offenders.join("\n")
     );
 }
+
+/// Returns the part of a source file before the first `#[cfg(test)]` —
+/// production code, which is where silent rot actually happens. Tests
+/// legitimately write down the patterns their subject forbids.
+fn production_of(text: &str) -> &str {
+    match text.find("#[cfg(test)]") {
+        Some(at) => &text[..at],
+        None => text,
+    }
+}
+
+/// **Incident.** The gate's prompt builder cut the customer's intent doc to
+/// `max_section_chars` with a head truncation. The shipped `MERGE0.md`
+/// template ends with *Constraints for generated fixes* and then the machine
+/// fence, so on any real-sized doc the first content dropped was the
+/// constraints and the amendments Merge0 earned from past incidents —
+/// the exact content that prevents a bad Work Order. Nothing failed; the
+/// gate just quietly decided with less.
+///
+/// Intent must therefore be *selected* (`merge0_context::intent::
+/// relevant_intent`), which keeps sections whole and discloses what it
+/// dropped, never head-truncated. Evidence text may still be truncated —
+/// that is a size budget on quoted vendor noise, not on the rules.
+#[test]
+fn intent_is_never_blind_truncated() {
+    let mut offenders = Vec::new();
+    for file in rust_sources() {
+        let text = std::fs::read_to_string(&file).expect("source readable");
+        for (i, line) in production_of(&text).lines().enumerate() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("//") || trimmed.starts_with("///") {
+                continue;
+            }
+            let truncating =
+                trimmed.contains("truncate_with_marker(") || trimmed.contains("truncate_to(");
+            if truncating && trimmed.to_ascii_lowercase().contains("intent") {
+                offenders.push(format!("{}:{}: {}", rel(&file), i + 1, trimmed));
+            }
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "intent must be selected with merge0_context::intent::relevant_intent \
+         (whole sections + disclosure of omissions), never head-truncated — \
+         truncation silently drops the constraints that sit at the end of a \
+         real MERGE0.md:\n{}",
+        offenders.join("\n")
+    );
+}
+
+/// **Incident.** `IntentDoc::human_text()` returns the doc *without* the
+/// machine-managed fence. The server used it to build the text handed to
+/// the gate, so every `IntentAmendment` the hardening pass had ever written
+/// — mechanism 3 of the LintRule > RegressionTest > IntentAmendment
+/// hierarchy — was written to a location nothing read. A whole prevention
+/// mechanism was inert, and no test noticed because the writes succeeded.
+///
+/// Fence-aware handling belongs in `merge0-context`, which labels the
+/// managed section and passes it on. Everywhere else, carry the doc whole.
+#[test]
+fn the_machine_fence_is_stripped_only_inside_merge0_context() {
+    let mut offenders = Vec::new();
+    for file in rust_sources() {
+        let path = rel(&file);
+        if path.starts_with("crates/merge0-context/") {
+            continue;
+        }
+        let text = std::fs::read_to_string(&file).expect("source readable");
+        for (i, line) in production_of(&text).lines().enumerate() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("//") {
+                continue;
+            }
+            if trimmed.contains("human_text()") {
+                offenders.push(format!("{path}:{}: {}", i + 1, trimmed));
+            }
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "human_text() drops the machine-managed fence, which is where \
+         merge0-hardening writes constraints earned from real incidents. \
+         Pass the intent doc whole and let merge0-context decide what the \
+         gate sees:\n{}",
+        offenders.join("\n")
+    );
+}

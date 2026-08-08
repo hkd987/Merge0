@@ -1,0 +1,49 @@
+name = "stale-prior-does-not-veto"
+description = """
+One revert, from well over two years ago, against a well-evidenced defect
+with a concrete location. Memory should inform the decision, not foreclose
+it: the codebase that revert happened to no longer exists. The companion
+control is 11-repeated-reverts (two reverts inside the recency window,
+where SKIP is correct) — together they check that the gate reads the age of
+its memory instead of treating any revert as a veto.
+"""
+intent = "Chalk is a K-12 gradebook. Report exports are generated asynchronously."
+suspect_release = "v4.1.0"
+
+[[signals]]
+source = "sentry"
+kind = "exception"
+severity = "high"
+title = "TypeError: cannot read property 'term' of undefined in GradeExport.render"
+body = """
+Thrown at services/export/grade_export.rb:212 when a student has an
+enrollment with no term. Started with v4.1.0 and reproduces on every export
+of a mid-year transfer student. 61 users affected across 9 districts.
+"""
+affected_count = 61
+stack_hash = "9radeexp"
+release = "v4.1.0"
+url_path = "/reports/export"
+evidence_label = "sentry issue"
+evidence_url = "https://sentry.example.com/organizations/chalk/issues/7400/"
+
+[[signals]]
+source = "zendesk"
+kind = "ticket"
+severity = "high"
+title = "Grade export fails for transfer students"
+body = "Three districts report the export button errors for any student who transferred mid-year. Started after the 4.1 release."
+affected_count = 9
+release = "v4.1.0"
+url_path = "/reports/export"
+evidence_label = "zendesk ticket"
+evidence_url = "https://chalk.zendesk.com/agent/tickets/7401"
+
+[[prior_attempts]]
+outcome = "reverted"
+days_ago = 940
+note = "reverted: the export pipeline was rewritten shortly afterwards"
+
+[expect]
+decision = "work"
+work_order_mentions = ["export"]

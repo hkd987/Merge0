@@ -53,6 +53,11 @@ pub struct GateConfig {
     /// Cap on prior attempts assembled from outcome memory.
     #[serde(default = "default_prior_attempts_cap")]
     pub prior_attempts_cap: usize,
+    /// Age past which a prior attempt is rendered to the gate as STALE.
+    /// Memory without recency is memory that over-vetoes: a fix that failed
+    /// once two years ago should inform the decision, not forbid it.
+    #[serde(default = "default_stale_prior_days")]
+    pub stale_prior_days: u32,
     /// The autonomy dial (off by default): auto-dispatch of high-confidence
     /// Work Orders without a human click.
     #[serde(default)]
@@ -130,6 +135,10 @@ fn default_max_total_lines() -> u32 {
 
 fn default_prior_attempts_cap() -> usize {
     5
+}
+
+fn default_stale_prior_days() -> u32 {
+    90
 }
 
 #[derive(Debug, thiserror::Error)]

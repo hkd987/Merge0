@@ -146,6 +146,11 @@ Scout output: candidate findings.
 
 > Is this a low-risk, well-specified maintenance fix with a clear repro and clear success criterion? Output a **Work Order** or **SKIP** with reason.
 
+Two properties of that context are load-bearing, and both are enforced in code rather than left to budget arithmetic:
+
+- **Intent is retrieved, not truncated.** The gate's character budget selects *whole* MERGE0.md sections by relevance to the Report — machine-managed amendments first (§5c mechanism 3 writes there, so a constraint earned from a real incident always reaches the decision), then sections sharing vocabulary with the Report, with a boost for rule-shaped headings. Whatever does not fit is **named** in the prompt, and the gate is instructed to SKIP rather than guess when an unseen section plausibly governs the Report. Deciding on partial intent is acceptable; not knowing that intent is partial is not.
+- **Outcome memory decays.** Prior attempts are rendered with their age, and those older than `stale_prior_days` are marked STALE: they inform the decision but do not veto it. Memory without recency permanently forecloses retrying anything that once failed against a codebase that no longer exists.
+
 ```
 WorkOrder {
   report_id:      ULID
