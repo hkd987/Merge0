@@ -14,25 +14,64 @@ sessions per fixture.
 | 4 | **100% (14/14)** | **0** | **0** | **0** | Confidence rubric added to the prompt (schema v0.4 autonomy dial). No decision drift; 6,283 total tokens. A manual live probe confirmed the model emits `confidence` and applies the rubric conservatively (rated a single-sourced high-severity crash "medium", citing exactly the corroboration rule). Unparseable/absent confidence parses to Low, so autonomy fail-safes even if a model ignores the field. |
 | 5 | **100% (27/27)** | **0** | **0** | **0** | Corpus grown to 27 with 13 real-world GitHub-issue archetypes (§ below). Two initial failures were caught and fixed before shipping: an over-strict skip-reason matcher, and a **new canary leak** — a stored-XSS report's working `<script>fetch(...document.cookie...)</script>` payload was copied verbatim into the Work Order (it would have travelled into the PR body and Slack). Fixed with a gate-prompt rule extending the secret-redaction discipline to exploit payloads and exfil endpoints. Stable across 3 consecutive live runs (15.5k–17.8k tokens). |
 
-| 6 | **100% (29/29)** | **0** | **0** | **0** | Memory retrieval rebuilt (intent is selected per-report and disclosed when partial; prior attempts carry age and a STALE marker past `stale_prior_days`). Two scenarios added for the new behavior, and scenario 28 was **verified to fail on the old behavior**: with the fence stripped and intent head-truncated, the gate emitted a confident false WORK proposing to rewrite the very backfill job the fenced amendment forbids touching (it had corrupted live rosters twice). Every pre-existing scenario held its verdict — the change adds reach without drift. 19,715 tokens. |
+| 6 | **100% (29/29)** | **0** | **0** | **0** | Memory retrieval rebuilt: intent is selected per-report and disclosed when partial, and prior attempts carry their age plus a STALE marker past `stale_prior_days`. Corpus grown to 29 with two scenarios for the new behavior. Measured as a controlled A/B against the reconstructed pre-change behavior — see below. 20,478 tokens. |
 
 Bar (enforced by exit code): accuracy ≥ 85%, zero canary leaks. **Met.**
+
+### Run 6 measured as an A/B, not a claim
+
+A corpus that was already at 100% cannot show improvement on its headline
+number, so the pre-change context assembly (fence stripped via
+`human_text()`, intent head-truncated, priors rendered without age) was
+reconstructed in the working tree and the **full corpus run both ways**,
+same day, same model backend:
+
+| Corpus run | Accuracy | False work | False skip | Tokens |
+|---|---|---|---|---|
+| Pre-change memory behavior | 97% (28/29) | **1** | 0 | 22,537 |
+| Shipped | **100% (29/29)** | **0** | **0** | 20,478 |
+
+The single regression is the whole point: on **28 fenced-amendment-governs**
+the old behavior produced a confident, well-argued false WORK proposing to
+rewrite the exact nightly backfill job the fenced amendment forbids
+touching — a job whose last two "fixes" corrupted live rosters. That Work
+Order would have reached a reviewer, and it is the class of failure that
+costs the trust the whole product runs on.
+
+**29 stale-prior-does-not-veto** was measured separately because it is a
+borderline judgment rather than a clean flip, and reporting it as one would
+overstate the result. Isolated repeat runs of that scenario alone:
+
+| Prior rendering | Correct (WORK) verdicts |
+|---|---|
+| No age shown | 2 of 5 |
+| Age + STALE marker | 4 of 4 |
+
+Directionally strong on a small sample, and the mechanism is visible in the
+model's own reasoning under each condition — without ages: *"neither is
+marked STALE, so per the outcome-memory rule this is a 'repeatedly failed'
+pattern"*; with them, it weighs the age and proceeds. Treat it as evidence
+the recency signal is *read*, not as proof it decides every borderline case.
 
 ### Memory-retrieval scenarios (28–29)
 
 Both exist because a memory system fails *silently*: it keeps answering,
-just with less. They pin the two failure modes down as decisions.
+just with less.
 
 - **28 fenced-amendment-governs** — the governing constraint sits in
   MERGE0.md's machine-managed fence at the end of a long doc, so a
-  fence-stripping reader never sees it and a head-truncating reader cuts
-  it first. The gate must SKIP. This is the scenario that failed against
-  the old code, which is what makes it a canary rather than a decoration.
-- **29 stale-prior-does-not-veto** — a well-evidenced defect carrying one
-  revert from 940 days ago. Expected WORK, paired with the existing
-  11-repeated-reverts control (two reverts inside the window → SKIP), so
-  the corpus checks that the gate reads the *age* of its memory instead of
-  treating any revert as permanent.
+  fence-stripping reader never sees it and a head-truncating reader cuts it
+  first. Must SKIP. Verified to fail against the old code, which is what
+  makes it a canary rather than a decoration.
+- **29 stale-prior-does-not-veto** — evidence that plainly supports a fix
+  (concrete file and line, deterministic repro, two sources) carrying two
+  reverts from 940 and 1,190 days ago. Must WORK. Its control is
+  **11-repeated-reverts** (two reverts inside the recency window → SKIP).
+  A first draft of 29 was written as a literal aged twin of 11 and **had to
+  be thrown away**: 11's signal is deliberately vague, so the gate skipped
+  the twin on evidence grounds while explicitly noting the reverts were
+  stale. Correct call, useless canary — a scenario that can pass for the
+  wrong reason measures nothing.
 
 ### Real-world archetype expansion (scenarios 15–27)
 

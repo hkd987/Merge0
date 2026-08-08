@@ -27,8 +27,8 @@ canary, "works on my machine" noise, rewrite demands, support questions,
 by-design closures, encoding corruption, and a user-bisected regression.
 Scenarios 28–29 cover memory retrieval: a constraint that lives only in the
 machine-managed fence at the end of a long intent doc (must SKIP), and a
-solid defect carrying a 940-day-old revert (must still WORK — aged memory
-informs, it does not veto). Scoring is deterministic:
+solid defect carrying two reverts from over two years ago (must still WORK
+— aged memory informs, it does not veto). Scoring is deterministic:
 decision correctness, zero-token proof for guard cases, content mentions,
 canary absence. Results land in `evals/results/` (gitignored); the first
 measured run is recorded in `BASELINE.md`.
@@ -67,3 +67,23 @@ Adding a scenario: copy any file in `evals/scenarios/`, keep expectations
 checkable (`decision`, `work_order_mentions`, `forbidden`), and run
 `cargo test -p merge0-evals` — the corpus is loaded and validated by unit
 tests, so a malformed scenario fails CI deterministically.
+
+## Proving a change improved something
+
+"29/29 after" is not evidence when the corpus was already at 100% before.
+When a change alters what the gate *sees* (context assembly, memory,
+prompt), measure it as an A/B: reconstruct the old behavior in the working
+tree, run the full corpus both ways on the same day and backend, and record
+both numbers — run 6 in `BASELINE.md` is the worked example.
+
+Two habits that keep the result honest:
+
+- **A new scenario is only a canary once it fails against the old
+  behavior.** One that passes both ways measures nothing, however good the
+  prose in its `description` is. Check before trusting it, exactly as
+  `crates/merge0-e2e/tests/repo_hygiene.rs` requires of a new lint rule.
+- **Repeat borderline scenarios and report the rate, not one run.** Model
+  judgment is not deterministic; a single flip can be noise. Where a
+  scenario is a judgment call rather than a clean flip, say so and give
+  the sample size — overstating a result here quietly rots the corpus into
+  decoration.

@@ -1,11 +1,16 @@
 name = "stale-prior-does-not-veto"
 description = """
-One revert, from well over two years ago, against a well-evidenced defect
-with a concrete location. Memory should inform the decision, not foreclose
-it: the codebase that revert happened to no longer exists. The companion
-control is 11-repeated-reverts (two reverts inside the recency window,
-where SKIP is correct) — together they check that the gate reads the age of
-its memory instead of treating any revert as a veto.
+A defect whose evidence plainly supports a fix — concrete file and line,
+deterministic repro, corroborated across two sources — carrying two reverts
+from over two and a half years ago.
+
+The pair to hold in mind is 11-repeated-reverts: there, two reverts inside
+the recency window must SKIP. Here the reverts are aged out, so the only
+thing that could still block the fix is memory treated as permanent. A gate
+that reads the existence of a revert skips this forever; a gate that reads
+its age weighs it and proceeds. (11's own signal is deliberately vague, so
+it is a control for the memory rule, not an aged twin — swapping its dates
+would still be a correct SKIP on evidence grounds alone.)
 """
 intent = "Chalk is a K-12 gradebook. Report exports are generated asynchronously."
 suspect_release = "v4.1.0"
@@ -41,8 +46,13 @@ evidence_url = "https://chalk.zendesk.com/agent/tickets/7401"
 
 [[prior_attempts]]
 outcome = "reverted"
+days_ago = 1190
+note = "fix reverted: caused a regression in the 3.x export pipeline"
+
+[[prior_attempts]]
+outcome = "reverted"
 days_ago = 940
-note = "reverted: the export pipeline was rewritten shortly afterwards"
+note = "second attempt reverted: same 3.x export pipeline regression"
 
 [expect]
 decision = "work"
