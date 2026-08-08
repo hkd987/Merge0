@@ -14,7 +14,7 @@
 use crate::config::GateConfig;
 use crate::{truncate_with_marker, Result};
 use merge0_model::{extract_json_object, Model, ModelRequest};
-use merge0_signal::{GateDecision, OutcomeRef, Report, WorkOrder};
+use merge0_signal::{GateConfidence, GateDecision, OutcomeRef, Report, WorkOrder};
 use serde::Deserialize;
 
 pub struct GateOutcome {
@@ -43,6 +43,8 @@ struct ModelVerdict {
     constraints: Option<Text>,
     #[serde(default)]
     suspect_change: Option<Text>,
+    #[serde(default)]
+    confidence: Option<Text>,
 }
 
 /// A string, or a list of strings joined into one.
@@ -138,7 +140,7 @@ fn build_prompt(
          suspect_release: {release}\n\nsummary:\n{summary}\n\nevidence:\n{evidence}\n\n\
          prior attempts (outcome memory):\n{prior}\n\nintent notes (customer-authored):\n{intent}\n\n\
          Respond with a single JSON object: either\n\
-         {{\"decision\":\"work\",\"summary\":...,\"repro\":...,\"success_criteria\":...,\"constraints\":...,\"suspect_change\":...}}\n\
+         {{\"decision\":\"work\",\"summary\":...,\"repro\":...,\"success_criteria\":...,\"constraints\":...,\"suspect_change\":...,\"confidence\":\"high|medium|low\"}}\n\
          or {{\"decision\":\"skip\",\"reason\":...}}. Every field is a plain string.",
         title = report.title,
         severity = report.severity,
@@ -226,6 +228,13 @@ fn interpret(
                         .unwrap_or_default(),
                     prior_attempts: prior_attempts.to_vec(),
                     diff_budget: config.diff_budget(),
+                    // Absent or garbage confidence parses to Low — a model
+                    // that can't state its confidence never auto-dispatches.
+                    confidence: verdict
+                        .confidence
+                        .map(Text::into_string)
+                        .map(|c| GateConfidence::parse_lenient(&c))
+                        .unwrap_or_default(),
                 },
             }
         }
@@ -320,7 +329,8 @@ mod tests {
     async fn work_decision_builds_a_complete_work_order() {
         let model = ScriptedModel::new([r#"Decision follows.
             {"decision":"work","summary":"Fix null district","repro":"open /districts/sync",
-             "success_criteria":"regression test passes","constraints":"don't touch scheduler"}"#]);
+             "success_criteria":"regression test passes","constraints":"don't touch scheduler",
+             "confidence":"high"}"#]);
         let r = report(Severity::High, true);
         let outcome = evaluate(&r, "chalk/chalk", "intent text", vec![], &config(), &model)
             .await
@@ -336,6 +346,7 @@ mod tests {
             Some("regressed in v2.3.0")
         );
         assert_eq!(work_order.diff_budget, config().diff_budget());
+        assert_eq!(work_order.confidence, GateConfidence::High);
         assert_eq!(outcome.tokens_used, 1000);
         // Prompt carried the report bundle.
         let prompt = &model.requests()[0].prompt;
@@ -392,6 +403,50 @@ mod tests {
             "unassigned schools render; regression test passes"
         );
         assert_eq!(work_order.constraints, "keep it minimal");
+    }
+
+    #[tokio::test]
+    async fn confidence_parses_leniently_and_defaults_low() {
+        // (scripted verdict, expected confidence): absence, garbage, and
+        // list-shaped values must all land on Low — never on High by accident.
+        for (verdict, expected) in [
+            (
+                r#"{"decision":"work","summary":"s","repro":"r","success_criteria":"c"}"#,
+                GateConfidence::Low,
+            ),
+            (
+                r#"{"decision":"work","summary":"s","repro":"r","success_criteria":"c","confidence":"HIGH"}"#,
+                GateConfidence::High,
+            ),
+            (
+                r#"{"decision":"work","summary":"s","repro":"r","success_criteria":"c","confidence":" Medium "}"#,
+                GateConfidence::Medium,
+            ),
+            (
+                r#"{"decision":"work","summary":"s","repro":"r","success_criteria":"c","confidence":"absolutely"}"#,
+                GateConfidence::Low,
+            ),
+            (
+                r#"{"decision":"work","summary":"s","repro":"r","success_criteria":"c","confidence":["high","medium"]}"#,
+                GateConfidence::Low,
+            ),
+        ] {
+            let model = ScriptedModel::new([verdict]);
+            let outcome = evaluate(
+                &report(Severity::High, true),
+                "o/r",
+                "",
+                vec![],
+                &config(),
+                &model,
+            )
+            .await
+            .unwrap();
+            let GateDecision::Work { work_order } = outcome.decision else {
+                panic!("expected work for {verdict}");
+            };
+            assert_eq!(work_order.confidence, expected, "for {verdict}");
+        }
     }
 
     #[tokio::test]

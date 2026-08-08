@@ -20,7 +20,8 @@ pub struct LinearPoller {
 
 const ISSUES_QUERY: &str = "query Issues($since: DateTimeOrDuration) {\
  issues(filter: { updatedAt: { gte: $since } }, first: 100) {\
- nodes { identifier title description priority createdAt updatedAt url state { type } } } }";
+ nodes { identifier title description priority createdAt updatedAt url state { type }\
+ labels { nodes { name } } } } }";
 
 impl LinearPoller {
     pub fn from_config(config: &LinearConfig) -> Result<Self, FetchError> {

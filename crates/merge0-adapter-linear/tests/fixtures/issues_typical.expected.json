@@ -43,6 +43,7 @@
   },
   {
     "body": "CSV export returns a 500 for large workspaces. Suspect the in-memory buffer in the export worker.",
+    "delegated": true,
     "evidence": [
       {
         "kind": "ticket",
@@ -61,6 +62,16 @@
       "description": "CSV export returns a 500 for large workspaces. Suspect the in-memory buffer in the export worker.",
       "id": "b1c2d3e4-0000-4000-8000-000000000123",
       "identifier": "ENG-123",
+      "labels": {
+        "nodes": [
+          {
+            "name": "exports"
+          },
+          {
+            "name": "Merge0"
+          }
+        ]
+      },
       "priority": 3,
       "state": {
         "id": "st-backlog",
@@ -71,7 +82,7 @@
       "updatedAt": "2026-08-05T09:15:00Z",
       "url": "https://linear.example.com/acme/issue/ENG-123/report-export-fails"
     },
-    "severity": "medium",
+    "severity": "high",
     "source": "linear",
     "source_ref": "ENG-123",
     "title": "Report export fails for workspaces with >10k rows"

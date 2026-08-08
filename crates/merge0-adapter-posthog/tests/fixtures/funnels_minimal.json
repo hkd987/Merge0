@@ -1,0 +1,16 @@
+{
+  "endpoint": "funnels",
+  "context": { "project_base_url": "https://us.posthog.com/project/1/" },
+  "payload": {
+    "results": [
+      {
+        "id": 7,
+        "last_refresh": "2026-08-04T00:00:00Z",
+        "result": [
+          { "name": "$pageview", "count": 50 },
+          { "name": "invite_sent", "count": 20 }
+        ]
+      }
+    ]
+  }
+}

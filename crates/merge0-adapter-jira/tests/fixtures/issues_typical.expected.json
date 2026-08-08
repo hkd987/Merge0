@@ -89,6 +89,7 @@
   },
   {
     "body": "Emails arrive from \"noreply@example.com\" with the sender name of the staging brand instead of the store name.",
+    "delegated": true,
     "evidence": [
       {
         "kind": "ticket",
@@ -106,6 +107,10 @@
       "fields": {
         "created": "2026-08-05T09:00:00Z",
         "description": "Emails arrive from \"noreply@example.com\" with the sender name of the staging brand instead of the store name.",
+        "labels": [
+          "email",
+          "Merge0"
+        ],
         "priority": {
           "id": "3",
           "name": "Medium"
@@ -130,7 +135,7 @@
       "key": "CHK-57",
       "self": "https://acme-example.atlassian.net/rest/api/3/issue/10057"
     },
-    "severity": "medium",
+    "severity": "high",
     "source": "jira",
     "source_ref": "CHK-57",
     "title": "Order confirmation email uses wrong sender name"

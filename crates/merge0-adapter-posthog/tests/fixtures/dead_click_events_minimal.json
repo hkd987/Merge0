@@ -1,0 +1,15 @@
+{
+  "endpoint": "dead_click_events",
+  "context": { "project_base_url": "https://us.posthog.com/project/1/" },
+  "payload": {
+    "results": [
+      {
+        "distinct_id": "teacher-9",
+        "timestamp": "2026-08-04T09:00:00Z",
+        "properties": {
+          "$current_url": "https://app.example.com/attendance"
+        }
+      }
+    ]
+  }
+}

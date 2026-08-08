@@ -45,8 +45,31 @@ SKIP when any of these hold:
 Rules:
 - success_criteria must be concrete and testable (a named test to add or
   a verifiable behavior change), never empty or "n/a".
+- On a work decision, state your confidence that the fix will land as
+  specified, as `confidence`: "high" only when the location is concrete
+  (stack frame, endpoint, or file), the repro is directly derivable from
+  the evidence, and more than one signal or source corroborates it;
+  "medium" when the location or repro rests on a single uncorroborated
+  signal; "low" when either is inferred. When unsure, say "low" —
+  overstated confidence spends reviewer trust exactly like a false
+  positive.
 - Never copy secret-looking values (tokens, keys, credentials, session
   ids) from signal text into any field — refer to them generically.
 - Only when genuinely uncertain after all of the above: SKIP — false
   positives spend reviewer trust that took months to earn.
 """
+
+# The autonomy dial (PRD trust posture: OFF until an operator earns trust
+# with merge-rate history and flips it deliberately). When enabled, Work
+# Orders at or above min_confidence dispatch without a human click — the
+# same per-approval safety verification still runs.
+[autonomy]
+auto_dispatch = false
+min_confidence = "high"
+
+# Hard model-spend ceiling per rolling 24h window: gate tokens plus
+# runner-reported tokens. 0 = unlimited (caps are opt-in). When exceeded,
+# gate evaluation halts (candidates stay Pending, resumed next window) and
+# auto-dispatch pauses.
+[budget]
+max_tokens_per_day = 0

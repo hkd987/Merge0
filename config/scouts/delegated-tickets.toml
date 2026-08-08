@@ -1,0 +1,23 @@
+# Scout: tickets a human explicitly handed to Merge0 by putting a `merge0`
+# label on them in the tracker (Jira/Linear). Delegation earns priority and a
+# fast lane, not a free pass — the gate still applies its normal quality bar.
+# query_template is EXECUTED as a deterministic Signal filter — grammar
+# documented in new-exception-clusters.toml; typos fail the triage run loudly.
+
+name = "delegated-tickets"
+description = "Tracker tickets explicitly delegated to Merge0 via the merge0 label?"
+schedule = "hourly"
+sources = ["jira", "linear"]
+query_template = "delegated = true AND last_seen >= {{period_start}} ORDER BY severity DESC"
+prompt = """
+You are reviewing Signals a human EXPLICITLY delegated to Merge0 by labeling
+the source ticket `merge0` in the tracker. Someone has already decided this
+work belongs here, so do not second-guess whether it is worth attention —
+surface each delegated ticket promptly and summarize what was asked: what is
+broken or wanted, where, and any acceptance criteria stated in the ticket.
+Group tickets that describe the same underlying change. Delegation is a
+priority statement, not a quality waiver: the gate still applies its normal
+bar, so flag tickets that are too vague to act on (no reproduction, no
+location, no observable outcome) as needing clarification rather than
+inventing scope on their behalf.
+"""

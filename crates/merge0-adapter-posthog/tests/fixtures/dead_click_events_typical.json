@@ -1,0 +1,40 @@
+{
+  "endpoint": "dead_click_events",
+  "context": { "project_base_url": "https://us.posthog.com/project/1" },
+  "payload": {
+    "results": [
+      {
+        "id": "d1",
+        "event": "$dead_click",
+        "distinct_id": "teacher-104",
+        "timestamp": "2026-08-05T14:30:00Z",
+        "properties": {
+          "$pathname": "/gradebook/import",
+          "$current_url": "https://app.example.com/gradebook/import",
+          "$session_id": "sess-ddd"
+        }
+      },
+      {
+        "id": "d2",
+        "event": "$dead_click",
+        "distinct_id": "teacher-233",
+        "timestamp": "2026-08-05T15:45:00Z",
+        "properties": {
+          "$pathname": "/gradebook/import",
+          "$current_url": "https://app.example.com/gradebook/import",
+          "$session_id": "sess-eee"
+        }
+      },
+      {
+        "id": "d3",
+        "event": "$dead_click",
+        "distinct_id": "admin-7",
+        "timestamp": "2026-08-05T17:00:00Z",
+        "properties": {
+          "$current_url": "https://app.example.com/settings/roster?tab=staff",
+          "$session_id": "sess-fff"
+        }
+      }
+    ]
+  }
+}

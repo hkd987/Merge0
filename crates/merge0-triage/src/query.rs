@@ -7,6 +7,7 @@
 //! kind = 'exception' AND first_seen >= {{period_start}} ORDER BY affected_count DESC
 //! join_keys.stack_hash IS NOT NULL OR join_keys.url_path IS NOT NULL
 //! severity >= 'high' AND affected_count >= 10
+//! delegated = true AND last_seen >= {{period_start}}
 //! ```
 //!
 //! An empty template (or `*`) matches everything. Parsing is strict: an
@@ -50,6 +51,7 @@ enum Condition {
     SeverityIs(Severity),
     MinSeverity(Severity),
     MinAffectedCount(u64),
+    DelegatedIs(bool),
     IsNotNull(NullableField),
     SincePeriodStart(TimeField),
 }
@@ -224,6 +226,11 @@ impl Parser {
             ("affected_count", Token::Ge, Some(Token::Num(n))) => {
                 Ok(Condition::MinAffectedCount(n))
             }
+            // Booleans are bare keywords (`true`/`false`), not quoted
+            // strings — mirroring TOML/SQL literals.
+            ("delegated", Token::Eq, Some(Token::Ident(v))) if v == "true" || v == "false" => {
+                Ok(Condition::DelegatedIs(v == "true"))
+            }
             ("first_seen", Token::Ge, Some(Token::Ident(v))) if v == "{{period_start}}" => {
                 Ok(Condition::SincePeriodStart(TimeField::FirstSeen))
             }
@@ -329,6 +336,7 @@ impl Query {
                 Condition::SeverityIs(severity) => signal.severity == *severity,
                 Condition::MinSeverity(severity) => signal.severity >= *severity,
                 Condition::MinAffectedCount(n) => signal.affected_count.unwrap_or(0) >= *n,
+                Condition::DelegatedIs(value) => signal.delegated == *value,
                 Condition::IsNotNull(field) => match field {
                     NullableField::StackHash => signal.join_keys.stack_hash.is_some(),
                     NullableField::UrlPath => signal.join_keys.url_path.is_some(),
@@ -386,6 +394,7 @@ mod tests {
             fingerprint: "f".into(),
             join_keys: JoinKeys::default(),
             affected_count: Some(12),
+            delegated: false,
             first_seen: at,
             last_seen: at,
             raw: serde_json::Value::Null,
@@ -462,6 +471,20 @@ mod tests {
     }
 
     #[test]
+    fn delegated_boolean_field_filters() {
+        let query = Query::parse("delegated = true").unwrap();
+        let plain = signal(SignalKind::Ticket, Severity::High);
+        assert!(!query.matches(&plain, period_start()));
+        let mut handed_over = plain.clone();
+        handed_over.delegated = true;
+        assert!(query.matches(&handed_over, period_start()));
+
+        let inverse = Query::parse("delegated = false").unwrap();
+        assert!(inverse.matches(&plain, period_start()));
+        assert!(!inverse.matches(&handed_over, period_start()));
+    }
+
+    #[test]
     fn period_start_resolves_against_the_window() {
         let query = Query::parse("first_seen >= {{period_start}}").unwrap();
         let fresh = signal(SignalKind::Exception, Severity::High);
@@ -493,6 +516,9 @@ mod tests {
             "kind = 'exception' ORDER BY x", // unknown order field
             "kind = 'exception' garbage",    // trailing tokens
             "title IS NOT NULL",             // non-nullable field
+            "delegated = 'true'",            // booleans are bare, not quoted
+            "delegated >= true",             // no ordering on booleans
+            "delegated = maybe",             // not a boolean
         ] {
             assert!(Query::parse(bad).is_err(), "{bad:?} should be rejected");
         }
@@ -504,6 +530,8 @@ mod tests {
             "join_keys.stack_hash IS NOT NULL OR join_keys.url_path IS NOT NULL",
             "kind = 'exception' AND first_seen >= {{period_start}} ORDER BY affected_count DESC",
             "kind = 'exception' AND join_keys.release IS NOT NULL AND first_seen >= {{period_start}}",
+            "kind = 'ux_friction' AND source = 'posthog' AND affected_count >= 10 AND last_seen >= {{period_start}} ORDER BY affected_count DESC",
+            "delegated = true AND last_seen >= {{period_start}} ORDER BY severity DESC",
         ] {
             Query::parse(template).unwrap_or_else(|e| panic!("{template:?}: {e}"));
         }

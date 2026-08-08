@@ -1,0 +1,91 @@
+{
+  "endpoint": "funnels",
+  "context": { "project_base_url": "https://us.posthog.com/project/1" },
+  "payload": {
+    "results": [
+      {
+        "id": 301,
+        "short_id": "AbCd1234",
+        "name": "Teacher onboarding",
+        "last_refresh": "2026-08-05T06:00:00Z",
+        "result": [
+          {
+            "action_id": "$pageview",
+            "name": "$pageview",
+            "custom_name": "Visit signup",
+            "order": 0,
+            "count": 1200,
+            "url": "https://app.example.com/signup"
+          },
+          {
+            "action_id": "signup_submitted",
+            "name": "signup_submitted",
+            "custom_name": "Submit signup",
+            "order": 1,
+            "count": 940
+          },
+          {
+            "action_id": "$pageview",
+            "name": "$pageview",
+            "custom_name": "Confirm email",
+            "order": 2,
+            "count": 310,
+            "url": "https://app.example.com/signup/confirm?src=email"
+          },
+          {
+            "action_id": "onboarding_completed",
+            "name": "onboarding_completed",
+            "order": 3,
+            "count": 280
+          }
+        ]
+      },
+      {
+        "id": 302,
+        "short_id": "EfGh5678",
+        "name": "District sync setup",
+        "last_refresh": "2026-08-05T06:00:00Z",
+        "result": [
+          {
+            "action_id": "sync_wizard_opened",
+            "name": "sync_wizard_opened",
+            "order": 0,
+            "count": 500
+          },
+          {
+            "action_id": "credentials_entered",
+            "name": "credentials_entered",
+            "order": 1,
+            "count": 480
+          },
+          {
+            "action_id": "sync_completed",
+            "name": "sync_completed",
+            "order": 2,
+            "count": 460
+          }
+        ]
+      },
+      {
+        "id": 303,
+        "short_id": "IjKl9012",
+        "name": "Report export",
+        "last_refresh": "2026-08-05T06:00:00Z",
+        "result": [
+          {
+            "action_id": "report_opened",
+            "name": "report_opened",
+            "order": 0,
+            "count": 200
+          },
+          {
+            "action_id": "export_downloaded",
+            "name": "export_downloaded",
+            "order": 1,
+            "count": 140
+          }
+        ]
+      }
+    ]
+  }
+}

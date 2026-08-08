@@ -244,6 +244,7 @@ mod tests {
                 ..Default::default()
             },
             affected_count: Some(10),
+            delegated: false,
             first_seen: ts(1),
             last_seen: ts(2),
             raw: serde_json::Value::Null,

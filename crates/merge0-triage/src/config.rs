@@ -3,7 +3,7 @@
 //! Config drift breaks CI, not runtime: tests in this module load the actual
 //! files under `config/` at the repo root.
 
-use merge0_signal::{Severity, Source};
+use merge0_signal::{GateConfidence, Severity, Source};
 use serde::Deserialize;
 use std::path::Path;
 
@@ -53,6 +53,50 @@ pub struct GateConfig {
     /// Cap on prior attempts assembled from outcome memory.
     #[serde(default = "default_prior_attempts_cap")]
     pub prior_attempts_cap: usize,
+    /// The autonomy dial (off by default): auto-dispatch of high-confidence
+    /// Work Orders without a human click.
+    #[serde(default)]
+    pub autonomy: AutonomyConfig,
+    /// Hard model-spend ceiling (0 = unlimited).
+    #[serde(default)]
+    pub budget: BudgetConfig,
+}
+
+/// Auto-dispatch settings. The trust posture of the whole product hangs on
+/// the default here: **off** until an operator explicitly enables it.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AutonomyConfig {
+    /// When true, Work Orders at or above `min_confidence` dispatch without
+    /// a human click (the same safety verification still runs).
+    #[serde(default)]
+    pub auto_dispatch: bool,
+    #[serde(default = "default_min_confidence")]
+    pub min_confidence: GateConfidence,
+}
+
+impl Default for AutonomyConfig {
+    fn default() -> Self {
+        AutonomyConfig {
+            auto_dispatch: false,
+            min_confidence: GateConfidence::High,
+        }
+    }
+}
+
+/// Token-spend budget: gate calls plus runner-reported spend, per rolling
+/// 24h window. Exceeding it halts gate evaluation (candidates stay Pending)
+/// and pauses auto-dispatch until the window rolls.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BudgetConfig {
+    /// 0 = unlimited (the shipped default; caps are opt-in).
+    #[serde(default)]
+    pub max_tokens_per_day: u64,
+}
+
+fn default_min_confidence() -> GateConfidence {
+    GateConfidence::High
 }
 
 impl GateConfig {
@@ -160,6 +204,13 @@ mod tests {
             // template must parse, or triage runs fail at runtime.
             crate::scouts::parse_query(scout).expect("shipped query_template must parse");
         }
+        // The PRD's fourth standing question ships as config (PRD §4).
+        let funnel = scouts
+            .iter()
+            .find(|s| s.name == "funnel-dropoff")
+            .expect("funnel-dropoff scout must ship");
+        assert_eq!(funnel.schedule, "weekly");
+        assert_eq!(funnel.sources, vec![Source::Posthog]);
     }
 
     #[test]
@@ -167,6 +218,26 @@ mod tests {
         let gate = load_gate(&repo_config().join("gate.toml")).expect("gate config must parse");
         assert!(!gate.prompt.trim().is_empty());
         assert!(gate.max_work_orders_per_run > 0);
+        // The trust posture: the SHIPPED config must never enable autonomy
+        // or a spend cap surprise.
+        assert!(!gate.autonomy.auto_dispatch, "auto-dispatch must ship off");
+        assert_eq!(gate.autonomy.min_confidence, GateConfidence::High);
+        assert_eq!(gate.budget.max_tokens_per_day, 0, "caps are opt-in");
+    }
+
+    #[test]
+    fn autonomy_and_budget_default_off_when_absent() {
+        let gate: GateConfig = toml::from_str(
+            r#"
+            prompt = "p"
+            min_severity = "medium"
+            max_work_orders_per_run = 3
+            "#,
+        )
+        .unwrap();
+        assert!(!gate.autonomy.auto_dispatch);
+        assert_eq!(gate.autonomy.min_confidence, GateConfidence::High);
+        assert_eq!(gate.budget.max_tokens_per_day, 0);
     }
 
     #[test]

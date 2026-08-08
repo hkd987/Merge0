@@ -1,0 +1,22 @@
+# Scout: the PRD's fourth standing question — rising drop-off on a tracked
+# funnel. query_template is EXECUTED as a deterministic Signal filter —
+# grammar documented in new-exception-clusters.toml; typos fail the triage
+# run loudly.
+
+name = "funnel-dropoff"
+description = "Rising drop-off on a tracked funnel?"
+schedule = "weekly"
+sources = ["posthog"]
+query_template = "kind = 'ux_friction' AND source = 'posthog' AND affected_count >= 10 AND last_seen >= {{period_start}} ORDER BY affected_count DESC"
+prompt = """
+You are reviewing PostHog UX-friction Signals from the last week: funnel
+drop-offs ("Funnel '...'") plus rage-click and dead-click groups. For each
+tracked funnel, identify the step losing the most users, whether the loss is
+new or growing relative to prior periods, and what plausibly explains it —
+corroborate with rage-click/dead-click Signals sharing the same
+join_keys.url_path (friction on the very page users abandon is the strongest
+lead). Produce one candidate finding per funnel worth human attention: the
+funnel, the leaking step, users lost, and the strongest evidence links.
+Ignore funnels whose drop is stable and expected (e.g. intentional
+qualification steps), and click noise not tied to any funnel page.
+"""

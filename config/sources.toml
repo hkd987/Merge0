@@ -18,6 +18,9 @@ api_key_env = "MERGE0_POSTHOG_API_KEY"
 base_url = "https://us.posthog.com"
 # Project UI base used for deep links (issue pages, session replays).
 project_base_url = "https://us.posthog.com/project/12345"
+# Funnel insights (numeric ids or short ids) polled for drop-off analysis,
+# e.g. ["301", "AbCd1234"]. Empty = funnels are skipped.
+funnel_insight_ids = []
 
 [sentry]
 enabled = false

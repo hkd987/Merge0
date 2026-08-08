@@ -1,0 +1,37 @@
+[
+  {
+    "affected_count": 30,
+    "body": "30 of 50 users lost at step 2/2 'invite_sent' (60% drop)",
+    "evidence": [
+      {
+        "kind": "other",
+        "label": "PostHog insight insight 7",
+        "url": "https://us.posthog.com/project/1/insights/7"
+      }
+    ],
+    "fingerprint": "posthog:62b75dd0eca0c213029d036a57595253",
+    "first_seen": "2026-08-04T00:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "ux_friction",
+    "last_seen": "2026-08-04T00:00:00Z",
+    "raw": {
+      "id": 7,
+      "last_refresh": "2026-08-04T00:00:00Z",
+      "result": [
+        {
+          "count": 50,
+          "name": "$pageview"
+        },
+        {
+          "count": 20,
+          "name": "invite_sent"
+        }
+      ]
+    },
+    "severity": "high",
+    "source": "posthog",
+    "source_ref": "funnel:7",
+    "title": "Funnel 'insight 7': 60% drop at step 'invite_sent'"
+  }
+]

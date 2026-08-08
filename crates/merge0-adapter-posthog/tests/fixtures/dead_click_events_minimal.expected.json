@@ -1,0 +1,29 @@
+[
+  {
+    "affected_count": 1,
+    "body": "1 dead-click event(s) from 1 distinct user(s) on /attendance",
+    "evidence": [],
+    "fingerprint": "posthog:f9c2b45aa76a88e6bdb70055379f91db",
+    "first_seen": "2026-08-04T09:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {
+      "account_id": "teacher-9",
+      "url_path": "/attendance"
+    },
+    "kind": "ux_friction",
+    "last_seen": "2026-08-04T09:00:00Z",
+    "raw": [
+      {
+        "distinct_id": "teacher-9",
+        "properties": {
+          "$current_url": "https://app.example.com/attendance"
+        },
+        "timestamp": "2026-08-04T09:00:00Z"
+      }
+    ],
+    "severity": "low",
+    "source": "posthog",
+    "source_ref": "dead_click:/attendance",
+    "title": "Dead clicks on /attendance"
+  }
+]

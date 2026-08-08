@@ -60,8 +60,16 @@ const POSTHOG_ISSUES: &str =
     include_str!("../../merge0-adapter-posthog/tests/fixtures/error_tracking_issues_typical.json");
 const POSTHOG_RAGECLICKS: &str =
     include_str!("../../merge0-adapter-posthog/tests/fixtures/rageclick_events.json");
+const POSTHOG_DEAD_CLICKS: &str =
+    include_str!("../../merge0-adapter-posthog/tests/fixtures/dead_click_events_typical.json");
+const POSTHOG_FUNNELS: &str =
+    include_str!("../../merge0-adapter-posthog/tests/fixtures/funnels_typical.json");
 
-fn posthog_poller(server: &MockServer, key_env: &str) -> PosthogPoller {
+fn posthog_poller_with_funnels(
+    server: &MockServer,
+    key_env: &str,
+    funnel_insight_ids: Vec<String>,
+) -> PosthogPoller {
     set_secret(key_env, "phx_test_key");
     PosthogPoller::from_config(&PosthogConfig {
         enabled: true,
@@ -69,8 +77,13 @@ fn posthog_poller(server: &MockServer, key_env: &str) -> PosthogPoller {
         api_key_env: key_env.into(),
         base_url: server.uri(),
         project_base_url: "https://us.posthog.com/project/1".into(),
+        funnel_insight_ids,
     })
     .unwrap()
+}
+
+fn posthog_poller(server: &MockServer, key_env: &str) -> PosthogPoller {
+    posthog_poller_with_funnels(server, key_env, vec![])
 }
 
 #[tokio::test]
@@ -97,10 +110,22 @@ async fn posthog_poller_ingests_and_sends_cursor_on_second_run() {
         .expect(1)
         .mount(&server)
         .await;
+    Mock::given(method("GET"))
+        .and(path("/api/projects/1/events"))
+        .and(query_param("event", "$dead_click"))
+        .and(query_param_is_missing("after"))
+        .and(header("authorization", "Bearer phx_test_key"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(serde_json::json!({ "results": [] })),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
 
     let outcome = run_fetch(&poller, &tenant, now()).await.unwrap();
     assert_eq!(outcome.source, "posthog");
-    assert_eq!(outcome.envelopes, 2);
+    // No funnel ids configured → issues + rageclicks + dead clicks only.
+    assert_eq!(outcome.envelopes, 3);
     // 2 error-tracking issues + 2 rage-click path groups (golden fixtures).
     assert_eq!((outcome.inserted, outcome.updated), (4, 0));
     // Signals actually landed, findable by adapter fingerprints.
@@ -131,6 +156,16 @@ async fn posthog_poller_ingests_and_sends_cursor_on_second_run() {
         .expect(1)
         .mount(&server)
         .await;
+    Mock::given(method("GET"))
+        .and(path("/api/projects/1/events"))
+        .and(query_param("event", "$dead_click"))
+        .and(query_param("after", "2026-08-05T16:00:00Z"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(serde_json::json!({ "results": [] })),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
 
     let outcome = run_fetch(&poller, &tenant, now()).await.unwrap();
     // Same issues re-fetched → updates, no new inserts; empty events round
@@ -139,6 +174,86 @@ async fn posthog_poller_ingests_and_sends_cursor_on_second_run() {
     assert_eq!(
         tenant.fetch_cursor("posthog").await.unwrap().as_deref(),
         Some("2026-08-05T16:00:00Z")
+    );
+    server.verify().await;
+    store.drop_tenant(&schema).await.unwrap();
+}
+
+#[tokio::test]
+async fn posthog_poller_fetches_funnels_and_dead_clicks() {
+    let server = MockServer::start().await;
+    let poller = posthog_poller_with_funnels(
+        &server,
+        "MERGE0_TEST_PH_KEY_FUNNELS",
+        vec!["301".into(), "302".into(), "303".into()],
+    );
+    let (store, tenant, schema) = fresh_tenant().await;
+
+    Mock::given(method("GET"))
+        .and(path("/api/projects/1/error_tracking/issues"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(fixture_payload(POSTHOG_ISSUES)))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/api/projects/1/events"))
+        .and(query_param("event", "$rageclick"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(serde_json::json!({ "results": [] })),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    // Dead clicks ride the same events endpoint with the $dead_click name.
+    Mock::given(method("GET"))
+        .and(path("/api/projects/1/events"))
+        .and(query_param("event", "$dead_click"))
+        .and(query_param_is_missing("after"))
+        .and(header("authorization", "Bearer phx_test_key"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(fixture_payload(POSTHOG_DEAD_CLICKS)),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    // One insight GET per configured funnel id; the golden fixture's
+    // payload entries are what each request returns from the wire.
+    let funnels = fixture_payload(POSTHOG_FUNNELS);
+    for (index, insight_id) in ["301", "302", "303"].iter().enumerate() {
+        Mock::given(method("GET"))
+            .and(path(format!("/api/projects/1/insights/{insight_id}")))
+            .and(header("authorization", "Bearer phx_test_key"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(funnels["results"][index].clone()),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+    }
+
+    let outcome = run_fetch(&poller, &tenant, now()).await.unwrap();
+    assert_eq!(outcome.envelopes, 4);
+    // 2 issues + 0 rageclick groups + 2 dead-click path groups + 2 funnel
+    // Signals (the healthy funnel in the fixture yields none).
+    assert_eq!((outcome.inserted, outcome.updated), (6, 0));
+    let signals = tenant
+        .signals_since(Utc.with_ymd_and_hms(2020, 1, 1, 0, 0, 0).unwrap())
+        .await
+        .unwrap();
+    let dead_clicks: Vec<_> = signals
+        .iter()
+        .filter(|s| s.source_ref.starts_with("dead_click:"))
+        .collect();
+    assert_eq!(dead_clicks.len(), 2);
+    let funnel_signals: Vec<_> = signals
+        .iter()
+        .filter(|s| s.source_ref.starts_with("funnel:"))
+        .collect();
+    assert_eq!(funnel_signals.len(), 2);
+    // Cursor = latest dead-click event timestamp (later than any rageclick).
+    assert_eq!(
+        tenant.fetch_cursor("posthog").await.unwrap().as_deref(),
+        Some("2026-08-05T17:00:00Z")
     );
     server.verify().await;
     store.drop_tenant(&schema).await.unwrap();

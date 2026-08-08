@@ -23,6 +23,7 @@
         "priority": 3,
         "url": "https://linear.example.com/acme/issue/ENG-123/report-export-fails",
         "state": { "id": "st-backlog", "name": "Backlog", "type": "backlog" },
+        "labels": { "nodes": [{ "name": "exports" }, { "name": "Merge0" }] },
         "createdAt": "2026-08-05T09:15:00Z",
         "updatedAt": "2026-08-05T09:15:00Z"
       },

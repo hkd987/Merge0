@@ -53,6 +53,10 @@ pub struct PosthogConfig {
     pub base_url: String,
     /// Project UI base for deep links (envelope context `project_base_url`).
     pub project_base_url: String,
+    /// Funnel insights (numeric ids or short ids) polled for drop-off
+    /// analysis. Empty (the default) skips the funnels endpoint entirely.
+    #[serde(default)]
+    pub funnel_insight_ids: Vec<String>,
 }
 
 impl PosthogConfig {

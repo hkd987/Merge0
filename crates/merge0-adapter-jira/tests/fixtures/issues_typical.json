@@ -56,6 +56,7 @@
             "statusCategory": { "id": 2, "key": "new", "name": "To Do" }
           },
           "project": { "id": "10000", "key": "CHK", "name": "Checkout" },
+          "labels": ["email", "Merge0"],
           "created": "2026-08-05T09:00:00Z",
           "updated": "2026-08-05T09:00:00Z"
         }
