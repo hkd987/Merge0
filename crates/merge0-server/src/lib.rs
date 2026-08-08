@@ -80,6 +80,12 @@ pub struct AppState {
     /// Curated skill registry surface (PRD §5b, P2): a local signed-index
     /// directory + the pinned verifying key. None = routes 503.
     pub registry: Option<Arc<RegistryHandle>>,
+    /// What approval delivers: a PR (default), a tracker story, or both.
+    pub delivery_mode: handlers::actions::DeliveryMode,
+    /// Files stories for the story-bearing delivery modes. None = story
+    /// modes cannot deliver (approval fails loudly rather than silently
+    /// doing nothing).
+    pub tracker: Option<Arc<dyn merge0_tracker::Tracker>>,
 }
 
 /// The registry surface's configuration: where the signed index and skill

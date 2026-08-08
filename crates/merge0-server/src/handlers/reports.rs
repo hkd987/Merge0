@@ -45,6 +45,7 @@ pub async fn detail(
         .tenant
         .fix_efficacy(id, state.efficacy_grace_days, chrono::Utc::now())
         .await?;
+    let story = state.tenant.report_story(id).await?;
     Ok(Json(serde_json::json!({
         "report": report,
         "gate_decision": gate_decision,
@@ -64,6 +65,8 @@ pub async fn detail(
         "outcomes": outcomes,
         "handoff_brief": handoff_brief,
         "fix_efficacy": fix_efficacy,
+        "story_key": story.as_ref().map(|(key, _)| key),
+        "story_url": story.as_ref().map(|(_, url)| url),
     })))
 }
 

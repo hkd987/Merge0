@@ -152,6 +152,21 @@ pub struct Signal {
     pub raw: serde_json::Value,
 }
 
+/// Marks an artifact Merge0 itself created in an external tool (today: a
+/// tracker story emitted by the delivery layer).
+///
+/// This is a cross-component contract, not a schema field: the delivery
+/// side stamps it, and every adapter that ingests the same tool MUST skip
+/// items carrying it. Without that pairing Merge0 re-ingests its own
+/// output and triages itself in a loop. Adapter isolation means the writer
+/// and the reader cannot depend on each other, so the constant lives here,
+/// in the crate both already share.
+///
+/// It is deliberately distinct from the `merge0` delegation label, which
+/// adapters match exactly — `merge0-generated` never means "a human handed
+/// this to Merge0".
+pub const ORIGIN_LABEL: &str = "merge0-generated";
+
 /// Compute a stable dedupe fingerprint: `<source>:<16-byte-sha256-hex>`.
 ///
 /// The same underlying defect must map to the same `parts` across payload

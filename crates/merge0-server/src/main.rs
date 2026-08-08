@@ -102,6 +102,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .ok()
         .map(|url| Arc::new(WebhookSink::new(url)) as Arc<dyn merge0_slack::SlackSink>);
 
+    // Tracker (story delivery). Jira reuses the ingestion credentials, so a
+    // team already polling Jira only adds a project key. Under dev fakes the
+    // recording tracker stands in, so the story path is drivable in e2e
+    // without a live Jira.
+    let tracker: Option<Arc<dyn merge0_tracker::Tracker>> = if dev_fakes {
+        Some(Arc::new(merge0_tracker::RecordingTracker::new()))
+    } else {
+        match std::env::var("MERGE0_JIRA_PROJECT") {
+            Ok(project) => {
+                let base_url = required("MERGE0_JIRA_BASE_URL")?;
+                let email = required("MERGE0_JIRA_EMAIL")?;
+                let token = required("MERGE0_JIRA_API_TOKEN")?;
+                let issue_type =
+                    std::env::var("MERGE0_JIRA_ISSUE_TYPE").unwrap_or_else(|_| "Task".into());
+                Some(Arc::new(
+                    merge0_tracker::JiraTracker::new(base_url, email, token, project, issue_type)
+                        .map_err(|e| format!("jira tracker init: {e}"))?,
+                ))
+            }
+            Err(_) => None,
+        }
+    };
+
     let api_token = std::env::var("MERGE0_API_TOKEN").ok();
     if api_token.is_none() {
         tracing::warn!("MERGE0_API_TOKEN unset — the API is OPEN (dev only)");
@@ -167,74 +190,85 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .unwrap_or_else(|| "https://example.slack.com".into()),
     };
 
-    let state = AppState {
-        tenant,
-        model,
-        github,
-        slack,
-        scouts: Arc::new(scouts),
-        gate: Arc::new(gate),
-        repo,
-        intent_fallback: Arc::new(intent_fallback),
-        agent: agent_kind_from_env(),
-        pr_body_template: Arc::new(pr_body_template),
-        callback_url: std::env::var("MERGE0_CALLBACK_URL")
-            .unwrap_or_else(|_| "http://localhost:8080/runner/callback".into()),
-        inbox_url: std::env::var("MERGE0_PUBLIC_URL")
-            .unwrap_or_else(|_| "http://localhost:8080".into()),
-        api_token,
-        runner_token: std::env::var("MERGE0_RUNNER_TOKEN").ok(),
-        webhook_secret: std::env::var("MERGE0_GITHUB_WEBHOOK_SECRET").ok(),
-        slack_signing_secret: std::env::var("MERGE0_SLACK_SIGNING_SECRET").ok(),
-        hardening_enabled: std::env::var("MERGE0_HARDENING_ENABLED").as_deref() == Ok("1"),
-        fetchers: Arc::new(fetchers),
-        vendor_webhooks: Arc::new(vendor_webhooks),
-        // Open-route flood control: default 10 req/s per IP (burst 30);
-        // MERGE0_RATE_LIMIT_PER_SECOND=0 disables.
-        rate_limiter: merge0_server::ratelimit::RateLimiter::from_rate(
-            std::env::var("MERGE0_RATE_LIMIT_PER_SECOND")
+    let state =
+        AppState {
+            tenant,
+            model,
+            github,
+            slack,
+            scouts: Arc::new(scouts),
+            gate: Arc::new(gate),
+            repo,
+            intent_fallback: Arc::new(intent_fallback),
+            agent: agent_kind_from_env(),
+            pr_body_template: Arc::new(pr_body_template),
+            callback_url: std::env::var("MERGE0_CALLBACK_URL")
+                .unwrap_or_else(|_| "http://localhost:8080/runner/callback".into()),
+            inbox_url: std::env::var("MERGE0_PUBLIC_URL")
+                .unwrap_or_else(|_| "http://localhost:8080".into()),
+            api_token,
+            runner_token: std::env::var("MERGE0_RUNNER_TOKEN").ok(),
+            webhook_secret: std::env::var("MERGE0_GITHUB_WEBHOOK_SECRET").ok(),
+            slack_signing_secret: std::env::var("MERGE0_SLACK_SIGNING_SECRET").ok(),
+            hardening_enabled: std::env::var("MERGE0_HARDENING_ENABLED").as_deref() == Ok("1"),
+            fetchers: Arc::new(fetchers),
+            vendor_webhooks: Arc::new(vendor_webhooks),
+            // Open-route flood control: default 10 req/s per IP (burst 30);
+            // MERGE0_RATE_LIMIT_PER_SECOND=0 disables.
+            rate_limiter: merge0_server::ratelimit::RateLimiter::from_rate(
+                std::env::var("MERGE0_RATE_LIMIT_PER_SECOND")
+                    .ok()
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(10),
+            )
+            .map(Arc::new),
+            reopen_factor: std::env::var("MERGE0_REOPEN_FACTOR")
                 .ok()
                 .and_then(|v| v.parse().ok())
-                .unwrap_or(10),
-        )
-        .map(Arc::new),
-        reopen_factor: std::env::var("MERGE0_REOPEN_FACTOR")
-            .ok()
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(3),
-        efficacy_grace_days: std::env::var("MERGE0_EFFICACY_GRACE_DAYS")
-            .ok()
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(3),
-        notify_reports: slack_notify_enabled("reports"),
-        notify_pr_ready: slack_notify_enabled("pr_ready"),
-        // Credential broker surface (PRD §5a P2): enabled by registering a
-        // per-tenant runner key. Ships with the deterministic preview
-        // minter — production Git credentials remain the runner's own token.
-        broker: std::env::var("MERGE0_BROKER_RUNNER_KEY").ok().map(|key| {
-            let mut broker = merge0_broker::Broker::new(merge0_broker::FakeMinter);
-            broker.add_runner_key(key);
-            Arc::new(tokio::sync::Mutex::new(broker))
-        }),
-        // Registry surface (PRD §5b P2): a local signed-index directory
-        // plus the pinned hex-encoded verifying key.
-        registry: match (
-            std::env::var("MERGE0_REGISTRY_DIR").ok(),
-            std::env::var("MERGE0_REGISTRY_PUBKEY").ok(),
-        ) {
-            (Some(dir), Some(pubkey)) => Some(Arc::new(merge0_server::RegistryHandle {
-                dir: dir.into(),
-                verifying_key: merge0_registry::verifying_key_from_hex(&pubkey)
-                    .map_err(|e| format!("MERGE0_REGISTRY_PUBKEY invalid: {e}"))?,
-            })),
-            (Some(_), None) | (None, Some(_)) => {
-                return Err("registry needs BOTH MERGE0_REGISTRY_DIR and \
+                .unwrap_or(3),
+            efficacy_grace_days: std::env::var("MERGE0_EFFICACY_GRACE_DAYS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(3),
+            notify_reports: slack_notify_enabled("reports"),
+            notify_pr_ready: slack_notify_enabled("pr_ready"),
+            // Credential broker surface (PRD §5a P2): enabled by registering a
+            // per-tenant runner key. Ships with the deterministic preview
+            // minter — production Git credentials remain the runner's own token.
+            broker: std::env::var("MERGE0_BROKER_RUNNER_KEY").ok().map(|key| {
+                let mut broker = merge0_broker::Broker::new(merge0_broker::FakeMinter);
+                broker.add_runner_key(key);
+                Arc::new(tokio::sync::Mutex::new(broker))
+            }),
+            // Registry surface (PRD §5b P2): a local signed-index directory
+            // plus the pinned hex-encoded verifying key.
+            registry: match (
+                std::env::var("MERGE0_REGISTRY_DIR").ok(),
+                std::env::var("MERGE0_REGISTRY_PUBKEY").ok(),
+            ) {
+                (Some(dir), Some(pubkey)) => Some(Arc::new(merge0_server::RegistryHandle {
+                    dir: dir.into(),
+                    verifying_key: merge0_registry::verifying_key_from_hex(&pubkey)
+                        .map_err(|e| format!("MERGE0_REGISTRY_PUBKEY invalid: {e}"))?,
+                })),
+                (Some(_), None) | (None, Some(_)) => {
+                    return Err("registry needs BOTH MERGE0_REGISTRY_DIR and \
                      MERGE0_REGISTRY_PUBKEY"
-                    .into());
-            }
-            (None, None) => None,
-        },
-    };
+                        .into());
+                }
+                (None, None) => None,
+            },
+            // Delivery mode (PRD: a story is the on-ramp for teams not yet
+            // ready for autonomous PRs). Default `pr` keeps every existing
+            // install behaving identically.
+            delivery_mode: match std::env::var("MERGE0_DELIVERY_MODE") {
+                Ok(raw) => merge0_server::handlers::actions::DeliveryMode::parse(&raw).ok_or_else(
+                    || format!("MERGE0_DELIVERY_MODE invalid: {raw:?} (pr|story|story_and_pr)"),
+                )?,
+                Err(_) => merge0_server::handlers::actions::DeliveryMode::default(),
+            },
+            tracker,
+        };
 
     // Release-timeline backfill (PRD P0-4): the webhook only sees releases
     // published AFTER install, so a fresh install has no timeline for

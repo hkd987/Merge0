@@ -44,6 +44,21 @@ const detailResponse = (over: Record<string, unknown>) => ({
   outcomes: [],
   handoff_brief: null,
   fix_efficacy: null,
+  story_key: null,
+  story_url: null,
+  ...over,
+});
+
+const dispatch = (over: Record<string, unknown> = {}) => ({
+  runner_kind: "github_actions",
+  dispatched_at: "2026-08-08T02:00:00Z",
+  status: "pr_open",
+  dispatched_by: "auto",
+  pr_url: "https://github.com/example/app/pull/7",
+  branch: "merge0/fix",
+  discard_reason: null,
+  diagnosis: null,
+  tokens_spent: 95000,
   ...over,
 });
 
@@ -196,21 +211,7 @@ describe("ReportDetail", () => {
   it("shows gate confidence next to the decision and the dispatch trail", async () => {
     setToken("t");
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse(
-        detailResponse({
-          dispatch: {
-            runner_kind: "github_actions",
-            dispatched_at: "2026-08-08T02:00:00Z",
-            status: "pr_open",
-            dispatched_by: "auto",
-            pr_url: "https://github.com/example/app/pull/7",
-            branch: "merge0/fix",
-            discard_reason: null,
-            diagnosis: null,
-            tokens_spent: 95000,
-          },
-        }),
-      ),
+      jsonResponse(detailResponse({ dispatch: dispatch() })),
     );
     renderDetail();
     await waitFor(() =>
@@ -219,6 +220,81 @@ describe("ReportDetail", () => {
     expect(screen.getByText("Work order")).toBeInTheDocument();
     expect(screen.getByText("dispatched by autonomy dial")).toBeInTheDocument();
     expect(screen.getByText(/pull request/)).toBeInTheDocument();
+  });
+
+  it("shows the tracker story with no dispatch in story-only mode", async () => {
+    setToken("t");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse(
+        detailResponse({
+          report: report({ status: "handed_off" }),
+          dispatch: null,
+          story_key: "ENG-1421",
+          story_url: "https://acme.atlassian.net/browse/ENG-1421",
+        }),
+      ),
+    );
+    renderDetail();
+    await waitFor(() =>
+      expect(screen.getByText("Tracker story")).toBeInTheDocument(),
+    );
+    const link = screen.getByRole("link", { name: /ENG-1421/ });
+    expect(link).toHaveAttribute(
+      "href",
+      "https://acme.atlassian.net/browse/ENG-1421",
+    );
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link.getAttribute("rel")).toContain("noreferrer");
+    expect(screen.queryByText("Dispatch")).not.toBeInTheDocument();
+    expect(screen.queryByText(/pull request/)).not.toBeInTheDocument();
+  });
+
+  it("shows the tracker story alongside the dispatch in accompany mode", async () => {
+    setToken("t");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse(
+        detailResponse({
+          dispatch: dispatch(),
+          story_key: "ENG-1421",
+          story_url: "https://acme.atlassian.net/browse/ENG-1421",
+        }),
+      ),
+    );
+    renderDetail();
+    await waitFor(() =>
+      expect(screen.getByText("Tracker story")).toBeInTheDocument(),
+    );
+    expect(
+      screen.getByRole("link", { name: /ENG-1421/ }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Dispatch")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /pull request/ })).toHaveAttribute(
+      "href",
+      "https://github.com/example/app/pull/7",
+    );
+  });
+
+  it("renders no tracker section when the report has no story", async () => {
+    setToken("t");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse(detailResponse({ dispatch: dispatch() })),
+    );
+    renderDetail();
+    await waitFor(() => expect(screen.getByText("Dispatch")).toBeInTheDocument());
+    expect(screen.queryByText("Tracker story")).not.toBeInTheDocument();
+  });
+
+  it("renders no tracker section when the story fields are absent entirely", async () => {
+    setToken("t");
+    const detail = detailResponse({});
+    delete (detail as Record<string, unknown>).story_key;
+    delete (detail as Record<string, unknown>).story_url;
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse(detail));
+    renderDetail();
+    await waitFor(() =>
+      expect(screen.getByText("Gate decision")).toBeInTheDocument(),
+    );
+    expect(screen.queryByText("Tracker story")).not.toBeInTheDocument();
   });
 
   it("treats a missing confidence as low", async () => {

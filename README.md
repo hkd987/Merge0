@@ -60,6 +60,12 @@ change. No red PRs, no auto-merge, ever.
   and it fast-tracks — flagged `delegated` (schema v0.4), severity
   floored at High, picked up by an hourly scout, and first in line at
   the gate. Safety checks are never bypassed.
+- **Story or PR delivery**: approval can file an evidence-backed **Jira
+  story** instead of opening a PR (`MERGE0_DELIVERY_MODE=story`) — the same
+  gated Work Order, delivered where planning already happens, for teams not
+  yet ready for autonomous code. `story_and_pr` files the story *and*
+  dispatches. Stories are stamped `merge0-generated` so ingesting the same
+  Jira never re-triages Merge0's own output.
 - **Confidence-scored gate + autonomy dial**: every Work Order carries
   the gate's self-assessed confidence (`low`/`medium`/`high`,
   fail-conservative parsing). Auto-dispatch of high-confidence orders

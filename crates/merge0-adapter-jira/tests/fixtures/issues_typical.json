@@ -4,7 +4,7 @@
   "payload": {
     "startAt": 0,
     "maxResults": 50,
-    "total": 4,
+    "total": 5,
     "issues": [
       {
         "id": "10042",
@@ -91,6 +91,24 @@
           "project": { "id": "10000", "key": "CHK", "name": "Checkout" },
           "created": "2026-08-06T08:15:00Z",
           "updated": "2026-08-07T12:00:00Z"
+        }
+      },
+      {
+        "id": "10088",
+        "key": "CHK-88",
+        "self": "https://acme-example.atlassian.net/rest/api/3/issue/10088",
+        "fields": {
+          "summary": "Coupon apply times out for carts with more than 40 line items",
+          "description": "Coupon apply times out for carts with more than 40 line items, blocking checkout for bulk buyers.\n\n## Evidence\n- Sentry: https://sentry.example.com/organizations/acme/issues/44821\n- Jira CHK-42: https://acme-example.atlassian.net/browse/CHK-42\n\n---\nFiled by Merge0 from evidence. merge0:report 01K1YB8H4NQ2R7VZ0J6M3TAXWD\n",
+          "priority": { "id": "2", "name": "High" },
+          "status": {
+            "name": "To Do",
+            "statusCategory": { "id": 2, "key": "new", "name": "To Do" }
+          },
+          "project": { "id": "10000", "key": "CHK", "name": "Checkout" },
+          "labels": ["merge0-generated"],
+          "created": "2026-08-07T06:05:00Z",
+          "updated": "2026-08-07T06:05:00Z"
         }
       }
     ]

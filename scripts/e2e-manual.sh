@@ -305,5 +305,50 @@ STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/webhooks/github" 
   -H "x-github-event: push" -H "x-hub-signature-256: sha256=deadbeef" -d '{}')
 check "forged webhook rejected" "$STATUS" "401"
 
+say "11. Story delivery mode: a tracker story INSTEAD of a PR"
+# Delivery mode is process-level, so this runs a second server (fresh
+# tenant, dev-fake tracker) to prove the story-only path end to end.
+STORY_PORT=18081
+STORY_BASE="http://127.0.0.1:$STORY_PORT"
+STORY_TENANT="${TENANT}_story"
+MERGE0_DATABASE_URL="$DB_URL" \
+MERGE0_TENANT="$STORY_TENANT" \
+MERGE0_REPO="chalk/chalk" \
+MERGE0_DEV_FAKES=1 \
+MERGE0_DELIVERY_MODE=story \
+MERGE0_API_TOKEN="$API_TOKEN" \
+MERGE0_RUNNER_TOKEN="$RUNNER_TOKEN" \
+MERGE0_TRIAGE_INTERVAL_SECS=0 \
+MERGE0_BIND="127.0.0.1:$STORY_PORT" \
+./target/debug/merge0-server > /tmp/merge0-e2e-story.log 2>&1 &
+STORY_PID=$!
+trap 'kill $SERVER_PID $STORY_PID 2>/dev/null || true' EXIT
+for _ in $(seq 1 50); do
+  curl -sf "$STORY_BASE/healthz" >/dev/null 2>&1 && break
+  sleep 0.2
+done
+sauth() { curl -sf -H "authorization: Bearer $API_TOKEN" "$@"; }
+
+sauth -X POST "$STORY_BASE/ingest/sentry" -H "content-type: application/json" -d @- <<EOF >/dev/null
+{"endpoint": "issues", "payload": [{
+  "id": "7001", "shortId": "CHALK-7",
+  "title": "TypeError: roster export drops the last student",
+  "permalink": "https://sentry.example.com/organizations/chalk/issues/7001/",
+  "level": "error",
+  "metadata": {"type": "TypeError", "value": "off-by-one in export"},
+  "userCount": 26, "firstSeen": "2026-08-06T04:00:00Z", "lastSeen": "$NOW"
+}]}
+EOF
+sauth -X POST "$STORY_BASE/triage/run" >/dev/null
+STORY_REPORT=$(sauth "$STORY_BASE/reports?status=awaiting_review" | python3 -c 'import sys,json; print(json.load(sys.stdin)[0]["id"])')
+APPROVE_STORY=$(sauth -X POST "$STORY_BASE/reports/$STORY_REPORT/approve")
+check "approval delivers a story" "$APPROVE_STORY" '"delivered_as":"story"'
+check "story key returned" "$APPROVE_STORY" '"story_key":"FAKE-1"'
+
+STORY_DETAIL=$(sauth "$STORY_BASE/reports/$STORY_REPORT")
+check "story recorded on the report" "$STORY_DETAIL" '"story_key":"FAKE-1"'
+check "report is terminally handed off" "$STORY_DETAIL" '"status":"handed_off"'
+check "no PR was dispatched in story mode" "$STORY_DETAIL" '"dispatch":null'
+
 say "Result: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

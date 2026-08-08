@@ -19,6 +19,11 @@
 //!   `fields.status.statusCategory.key` is `"done"` produces no Signal:
 //!   resolved work is not a signal, and re-ingesting a backlog must not
 //!   resurrect closed issues. Absent status → not skipped.
+//! - **Anti-loop.** Merge0 files stories into Jira as well as reading from
+//!   it, so an issue labelled `merge0_signal::ORIGIN_LABEL` is Merge0's own
+//!   output and produces no Signal. Without that, the loop re-ingests
+//!   itself forever. The check runs *before* delegation, so a story we
+//!   wrote can never delegate work back to us whatever else it is labelled.
 //! - **`body`** comes from `fields.description`, which Jira serves in two
 //!   shapes: a plain string (API v2) is used verbatim; an Atlassian Document
 //!   Format object (API v3) is flattened by concatenating every `"text"`
@@ -39,6 +44,7 @@ use chrono::{DateTime, Utc};
 use merge0_adapters::{Adapter, AdapterError, Envelope};
 use merge0_signal::{
     fingerprint, EvidenceKind, EvidenceLink, JoinKeys, Severity, Signal, SignalKind, Source,
+    ORIGIN_LABEL,
 };
 use serde::Deserialize;
 use ulid::Ulid;
@@ -145,6 +151,20 @@ fn normalize_issue(
         .and_then(|s| s.status_category.as_ref())
         .and_then(|c| c.key.as_deref());
     if status_category == Some("done") {
+        return Ok(None);
+    }
+
+    // Anti-loop: Merge0 both files stories into Jira and ingests from it.
+    // Without this, every story it writes comes straight back as a signal
+    // and the system triages its own output forever. Checked BEFORE
+    // delegation so the skip is structural — our own story can never
+    // delegate work to us, whatever labels it also carries.
+    if issue
+        .fields
+        .labels
+        .iter()
+        .any(|label| label.eq_ignore_ascii_case(ORIGIN_LABEL))
+    {
         return Ok(None);
     }
 
@@ -436,5 +456,61 @@ mod tests {
             Err(AdapterError::UnsupportedEndpoint(name)) => assert_eq!(name, "projects"),
             other => panic!("expected UnsupportedEndpoint, got {other:?}"),
         }
+    }
+}
+
+#[cfg(test)]
+mod origin_label_tests {
+    use super::*;
+
+    fn envelope(issues: serde_json::Value) -> serde_json::Value {
+        serde_json::json!({
+            "endpoint": "issues",
+            "context": { "browse_base_url": "https://acme-example.atlassian.net/browse" },
+            "payload": { "issues": issues },
+        })
+    }
+
+    fn issue(key: &str, labels: serde_json::Value) -> serde_json::Value {
+        serde_json::json!({
+            "key": key,
+            "fields": {
+                "summary": "Something is broken",
+                "priority": { "name": "High" },
+                "labels": labels,
+                "status": { "statusCategory": { "key": "indeterminate" } },
+                "created": "2026-08-07T08:00:00.000Z",
+                "updated": "2026-08-07T09:00:00.000Z",
+            }
+        })
+    }
+
+    /// A story Merge0 filed must never come back as a signal — case
+    /// insensitively — while its ordinary neighbours still do.
+    #[test]
+    fn merge0_generated_issues_are_skipped_entirely() {
+        for label in ["merge0-generated", "Merge0-Generated"] {
+            let signals = JiraAdapter
+                .normalize(&envelope(serde_json::json!([
+                    issue("CHK-1", serde_json::json!([label])),
+                    issue("CHK-2", serde_json::json!(["backend"])),
+                ])))
+                .unwrap();
+            let keys: Vec<&str> = signals.iter().map(|s| s.source_ref.as_str()).collect();
+            assert_eq!(keys, vec!["CHK-2"], "{label} must be skipped");
+        }
+    }
+
+    /// Our own story carrying the delegation label too is still ours: the
+    /// skip must win, or a story we wrote could delegate work back to us.
+    #[test]
+    fn the_origin_skip_beats_the_delegation_label() {
+        let signals = JiraAdapter
+            .normalize(&envelope(serde_json::json!([issue(
+                "CHK-3",
+                serde_json::json!(["merge0", "merge0-generated"])
+            )])))
+            .unwrap();
+        assert!(signals.is_empty(), "origin skip must beat delegation");
     }
 }

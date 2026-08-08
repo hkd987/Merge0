@@ -174,6 +174,44 @@ impl TenantStore {
             .await
     }
 
+    /// Record the tracker story a Report was filed as (story delivery).
+    ///
+    /// Written before the terminal status so a crash in between leaves a
+    /// findable story rather than an orphan: re-approving sees the story
+    /// already exists and does not file a duplicate.
+    pub async fn set_report_story(&self, id: Ulid, key: &str, url: &str) -> Result<()> {
+        let sql = format!(
+            "UPDATE {t} SET story_key = $2, story_url = $3 WHERE id = $1",
+            t = self.table("reports")
+        );
+        let updated = sqlx::query(&sql)
+            .bind(id.to_string())
+            .bind(key)
+            .bind(url)
+            .execute(self.pool())
+            .await?;
+        if updated.rows_affected() == 0 {
+            return Err(StoreError::NotFound(format!("report {id}")));
+        }
+        Ok(())
+    }
+
+    /// The tracker story already filed for this Report, if any.
+    pub async fn report_story(&self, id: Ulid) -> Result<Option<(String, String)>> {
+        let sql = format!(
+            "SELECT story_key, story_url FROM {t} WHERE id = $1",
+            t = self.table("reports")
+        );
+        let row = sqlx::query(&sql)
+            .bind(id.to_string())
+            .fetch_optional(self.pool())
+            .await?
+            .ok_or_else(|| StoreError::NotFound(format!("report {id}")))?;
+        let key: Option<String> = row.get("story_key");
+        let url: Option<String> = row.get("story_url");
+        Ok(key.zip(url))
+    }
+
     /// Terminal handoff for an Opportunity Report: stores the evidence brief.
     pub async fn hand_off_report(&self, id: Ulid, brief: &str, now: DateTime<Utc>) -> Result<()> {
         let sql = format!(

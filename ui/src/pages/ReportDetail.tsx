@@ -45,6 +45,11 @@ export function ReportDetail({ onUnauthorized }: { onUnauthorized: () => void })
   const confidence =
     detail?.work_order == null ? null : workOrderConfidence(detail.work_order);
 
+  // Tracker delivery: present in story-only mode (no dispatch, report
+  // handed off) and in accompany mode (story + dispatch). Absent — not
+  // just null — on reports that predate tracker delivery, hence `?? null`.
+  const storyUrl = detail?.story_url ?? null;
+
   return (
     <>
       <div className="pagehead">
@@ -195,6 +200,31 @@ export function ReportDetail({ onUnauthorized }: { onUnauthorized: () => void })
                     Discarded: {detail.dispatch.discard_reason}
                   </p>
                 )}
+              </div>
+            </div>
+          )}
+
+          {storyUrl !== null && (
+            <div className="section">
+              <h2>Tracker story</h2>
+              <div className="card">
+                <div className="meta" style={{ marginTop: 0 }}>
+                  <span>
+                    {detail.dispatch === null
+                      ? "Filed to the tracker — handed off, no PR."
+                      : "Filed to the tracker alongside the dispatched PR."}
+                  </span>
+                </div>
+                <div className="chips">
+                  <a
+                    className="chip"
+                    href={storyUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {detail.story_key ?? "tracker story"} ↗
+                  </a>
+                </div>
               </div>
             </div>
           )}

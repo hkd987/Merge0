@@ -38,6 +38,8 @@ struct HarnessOptions {
     rate_limit_per_second: u32,
     registry: Option<merge0_server::RegistryHandle>,
     gate_toml: Option<&'static str>,
+    delivery_mode: merge0_server::handlers::actions::DeliveryMode,
+    tracker: Option<Arc<dyn merge0_tracker::Tracker>>,
 }
 
 impl Default for HarnessOptions {
@@ -49,6 +51,8 @@ impl Default for HarnessOptions {
             rate_limit_per_second: 0,
             registry: None,
             gate_toml: None,
+            delivery_mode: merge0_server::handlers::actions::DeliveryMode::Pr,
+            tracker: None,
         }
     }
 }
@@ -131,6 +135,8 @@ impl Harness {
                 Some(Arc::new(tokio::sync::Mutex::new(broker)))
             },
             registry: options.registry.take().map(Arc::new),
+            delivery_mode: options.delivery_mode,
+            tracker: options.tracker.take(),
         };
 
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -1446,5 +1452,200 @@ async fn registry_lists_signed_index_and_installs_via_manifest_pr() {
     }
 
     std::fs::remove_dir_all(&dir).ok();
+    h.teardown().await;
+}
+
+/// Story-only delivery: the story IS the artifact. No safety dispatch, no
+/// runner, no PR — the report is terminally handed off with the story
+/// recorded on it.
+#[tokio::test]
+async fn story_mode_delivers_a_story_and_never_dispatches() {
+    let tracker = Arc::new(merge0_tracker::RecordingTracker::new());
+    let h = Harness::start(HarnessOptions {
+        delivery_mode: merge0_server::handlers::actions::DeliveryMode::Story,
+        tracker: Some(tracker.clone()),
+        ..HarnessOptions::default()
+    })
+    .await;
+    let report_id = h.seed_awaiting_report().await;
+
+    let body: serde_json::Value = h
+        .post(
+            &format!("/reports/{report_id}/approve"),
+            Some("api-secret"),
+            None,
+        )
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(body["delivered_as"], "story");
+    assert_eq!(body["story_key"], "FAKE-1");
+
+    // Exactly one story, carrying the Work Order's evidence and the
+    // anti-loop stamp.
+    let stories = tracker.stories();
+    assert_eq!(stories.len(), 1);
+    assert!(stories[0].description.contains("districts/sync"));
+    assert!(stories[0]
+        .labels
+        .contains(&merge0_signal::ORIGIN_LABEL.to_string()));
+
+    // Terminal handoff, and NOT dispatched: no runner was triggered.
+    let detail: serde_json::Value = h
+        .get(&format!("/reports/{report_id}"))
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(detail["report"]["status"], "handed_off");
+    assert!(detail["dispatch"].is_null(), "story mode must not dispatch");
+    assert_eq!(detail["story_key"], "FAKE-1");
+    assert!(detail["story_url"].as_str().unwrap().contains("FAKE-1"));
+    assert!(
+        h.github.state.lock().unwrap().dispatches.is_empty(),
+        "no repository_dispatch in story mode"
+    );
+
+    h.teardown().await;
+}
+
+/// Accompany mode: the board reflects work the agent is already doing —
+/// story AND dispatch, both recorded.
+#[tokio::test]
+async fn story_and_pr_mode_files_the_story_and_still_dispatches() {
+    let tracker = Arc::new(merge0_tracker::RecordingTracker::new());
+    let h = Harness::start(HarnessOptions {
+        delivery_mode: merge0_server::handlers::actions::DeliveryMode::StoryAndPr,
+        tracker: Some(tracker.clone()),
+        ..HarnessOptions::default()
+    })
+    .await;
+    let report_id = h.seed_awaiting_report().await;
+
+    let body: serde_json::Value = h
+        .post(
+            &format!("/reports/{report_id}/approve"),
+            Some("api-secret"),
+            None,
+        )
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(body["delivered_as"], "story_and_pr");
+    assert_eq!(body["dispatched_to"], "chalk/chalk");
+
+    assert_eq!(tracker.stories().len(), 1);
+    let detail: serde_json::Value = h
+        .get(&format!("/reports/{report_id}"))
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(detail["report"]["status"], "dispatched");
+    assert_eq!(detail["dispatch"]["status"], "dispatched");
+    assert_eq!(detail["story_key"], "FAKE-1");
+    h.teardown().await;
+}
+
+/// The two modes deliberately disagree about what a tracker outage means.
+#[tokio::test]
+async fn tracker_failure_blocks_story_only_delivery_but_never_the_pr() {
+    // story-only: the story was the whole delivery, so claiming success
+    // would be a lie. Fail, and leave the report reviewable.
+    let h = Harness::start(HarnessOptions {
+        delivery_mode: merge0_server::handlers::actions::DeliveryMode::Story,
+        tracker: Some(Arc::new(merge0_tracker::RecordingTracker::failing(
+            "jira is down",
+        ))),
+        ..HarnessOptions::default()
+    })
+    .await;
+    let report_id = h.seed_awaiting_report().await;
+    let response = h
+        .post(
+            &format!("/reports/{report_id}/approve"),
+            Some("api-secret"),
+            None,
+        )
+        .await;
+    assert_eq!(response.status(), 500);
+
+    let detail: serde_json::Value = h
+        .get(&format!("/reports/{report_id}"))
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(
+        detail["report"]["status"], "awaiting_review",
+        "a failed story delivery must leave the report retryable"
+    );
+    assert!(detail["story_key"].is_null());
+    h.teardown().await;
+
+    // accompany mode: the PR is the artifact; a board outage must not
+    // block the fix.
+    let h = Harness::start(HarnessOptions {
+        delivery_mode: merge0_server::handlers::actions::DeliveryMode::StoryAndPr,
+        tracker: Some(Arc::new(merge0_tracker::RecordingTracker::failing(
+            "jira is down",
+        ))),
+        ..HarnessOptions::default()
+    })
+    .await;
+    let report_id = h.seed_awaiting_report().await;
+    let body: serde_json::Value = h
+        .post(
+            &format!("/reports/{report_id}/approve"),
+            Some("api-secret"),
+            None,
+        )
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(body["dispatched_to"], "chalk/chalk");
+    assert_eq!(body["delivered_as"], "pr", "no story was filed");
+    assert!(body["story_key"].is_null());
+    h.teardown().await;
+}
+
+/// A story already filed for a report is never filed twice, so a retry
+/// after a partial failure cannot litter the board with duplicates.
+#[tokio::test]
+async fn an_existing_story_is_reused_rather_than_duplicated() {
+    let tracker = Arc::new(merge0_tracker::RecordingTracker::new());
+    let h = Harness::start(HarnessOptions {
+        delivery_mode: merge0_server::handlers::actions::DeliveryMode::StoryAndPr,
+        tracker: Some(tracker.clone()),
+        ..HarnessOptions::default()
+    })
+    .await;
+    let report_id = h.seed_awaiting_report().await;
+
+    // Simulate the crash window: the story landed, the approval did not.
+    let id = report_id.parse::<Ulid>().unwrap();
+    h.tenant
+        .set_report_story(id, "ENG-7", "https://tracker.example.com/browse/ENG-7")
+        .await
+        .unwrap();
+
+    let body: serde_json::Value = h
+        .post(
+            &format!("/reports/{report_id}/approve"),
+            Some("api-secret"),
+            None,
+        )
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(body["story_key"], "ENG-7", "the existing story is reused");
+    assert!(
+        tracker.stories().is_empty(),
+        "no second story may be filed for the same report"
+    );
     h.teardown().await;
 }

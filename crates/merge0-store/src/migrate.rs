@@ -16,6 +16,7 @@ fn steps(schema: &str) -> Vec<(i32, Vec<String>)> {
         (1, ddl_v1(schema)),
         (2, ddl_v2(schema)),
         (3, ddl_v3(schema)),
+        (4, ddl_v4(schema)),
     ]
 }
 
@@ -61,6 +62,17 @@ pub(crate) async fn provision(pool: &PgPool, schema: &str) -> Result<()> {
         .await?;
     }
     Ok(())
+}
+
+/// v4 — tracker-story delivery: the story a Report was filed as, for teams
+/// whose terminal action is a story rather than (or alongside) a PR.
+/// Nullable because most reports have none.
+fn ddl_v4(schema: &str) -> Vec<String> {
+    let s = schema;
+    vec![
+        format!("ALTER TABLE \"{s}\".reports ADD COLUMN IF NOT EXISTS story_key TEXT"),
+        format!("ALTER TABLE \"{s}\".reports ADD COLUMN IF NOT EXISTS story_url TEXT"),
+    ]
 }
 
 /// v3 — the market-gap pass (schema v0.4 + autonomy/escalation audit):

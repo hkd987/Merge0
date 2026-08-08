@@ -210,3 +210,53 @@ fn rank(severity: &str) -> u8 {
         other => panic!("unknown severity {other:?}"),
     }
 }
+
+/// **Incident class (designed-out, kept out).** Merge0 both writes stories
+/// to trackers and ingests from them, so an adapter that fails to skip
+/// Merge0's own output re-ingests it and triages the system forever.
+///
+/// The guard is `merge0_signal::ORIGIN_LABEL`, referenced by the writer
+/// (delivery) and every reader (adapters). An adapter that inlines the
+/// string instead keeps working *today* and silently stops guarding the
+/// day the constant changes — the loop returns with no failing test. So
+/// adapter sources must name the constant, never the literal.
+///
+/// Three things legitimately contain the literal and are excluded: vendor
+/// JSON fixtures (it is what the tracker actually stores), comments
+/// (documenting *why* the label is skipped is the behavior we want), and
+/// `#[cfg(test)]` code — you cannot test "skip issues carrying this label"
+/// without writing the label down. Only production code is constrained,
+/// which is where the silent rot would actually happen. Flagging the other
+/// three would be exactly the false-positive noise that teaches people to
+/// ignore this file.
+#[test]
+fn adapters_reference_the_origin_label_constant_not_the_literal() {
+    let root = repo_root();
+    let mut offenders = Vec::new();
+    for file in rust_sources() {
+        let path = rel(&file);
+        let is_adapter_src = path.starts_with("crates/merge0-adapter-") && path.contains("/src/");
+        if !is_adapter_src {
+            continue;
+        }
+        let text = std::fs::read_to_string(&file).expect("source readable");
+        // Everything from the first `#[cfg(test)]` on is test code.
+        let production = match text.find("#[cfg(test)]") {
+            Some(at) => &text[..at],
+            None => &text[..],
+        };
+        for (i, line) in production.lines().enumerate() {
+            let is_comment = line.trim_start().starts_with("//");
+            if !is_comment && line.contains(merge0_signal::ORIGIN_LABEL) {
+                offenders.push(format!("{path}:{}: {}", i + 1, line.trim()));
+            }
+        }
+    }
+    let _ = root;
+    assert!(
+        offenders.is_empty(),
+        "adapters must skip Merge0's own artifacts via merge0_signal::ORIGIN_LABEL, \
+         not a hardcoded copy that silently rots when the constant changes:\n{}",
+        offenders.join("\n")
+    );
+}

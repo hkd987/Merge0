@@ -138,6 +138,14 @@ export interface ReportDetail {
   outcomes: OutcomeRef[];
   handoff_brief: string | null;
   fix_efficacy: FixEfficacy | null;
+  /**
+   * Tracker story filed on approval (delivery modes "story" and
+   * "story + PR"). Null/absent on reports predating tracker delivery and
+   * on PR-only deliveries. In story-only mode there is no `dispatch` and
+   * the report's status is `handed_off`.
+   */
+  story_key: string | null;
+  story_url: string | null;
 }
 
 export interface TelemetryCounts {
