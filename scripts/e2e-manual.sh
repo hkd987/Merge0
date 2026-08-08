@@ -100,6 +100,7 @@ JIRA_RES=$(curl -sf -X POST "$BASE/webhooks/jira" \
   "key": "CHK-901",
   "fields": {"summary": "Attendance export empty for large districts",
     "priority": {"name": "High"},
+    "labels": ["exports", "Merge0"],
     "status": {"statusCategory": {"key": "indeterminate"}},
     "created": "2026-08-07T08:00:00.000Z", "updated": "$NOW"}}}
 JIRAEOF
@@ -186,8 +187,24 @@ check "seven reports created (cluster + 6 tickets)" "$TRIAGE_RES" '"reports_crea
 check "work orders capped by max_work_orders_per_run" "$TRIAGE_RES" '"work_orders":3'
 
 REPORT_ID=$(auth "$BASE/reports?status=awaiting_review" | python3 -c 'import sys,json; rs=json.load(sys.stdin); print(next(r["id"] for r in rs if "districtId" in r["title"]))')
-SIGNALS=$(auth "$BASE/reports/$REPORT_ID" | python3 -c 'import sys,json; print(len(json.load(sys.stdin)["report"]["signal_ids"]))')
+DETAIL=$(auth "$BASE/reports/$REPORT_ID")
+SIGNALS=$(python3 -c 'import sys,json; print(len(json.load(sys.stdin)["report"]["signal_ids"]))' <<<"$DETAIL")
 check "report references BOTH signals (P0-3)" "$SIGNALS" "2"
+check "gate confidence rides on the work order" "$DETAIL" '"confidence":"high"'
+
+# Autonomy ships OFF: despite high confidence, every gated report waits for
+# a human (the 3 the per-run cap admitted; nothing dispatched itself).
+AWAITING=$(auth "$BASE/reports?status=awaiting_review" | python3 -c 'import sys,json; print(len(json.load(sys.stdin)))')
+check "auto-dispatch off by default (gated reports await review)" "$AWAITING" "3"
+DISPATCHED=$(auth "$BASE/reports?status=dispatched" | python3 -c 'import sys,json; print(len(json.load(sys.stdin)))')
+check "nothing auto-dispatched" "$DISPATCHED" "0"
+
+# The delegated jira ticket (merge0 label) is flagged on its signal.
+JIRA_DELEGATED=$(auth "$BASE/reports?status=awaiting_review" | python3 -c '
+import sys,json
+rs=json.load(sys.stdin)
+print(next(("yes" for r in rs if "Attendance export" in r["title"]), "missing"))')
+check "delegated jira ticket became a report" "$JIRA_DELEGATED" "yes"
 
 say "4. Surfaces: SPA shell, onboarding bundle, safety"
 check "SPA shell serves (auth happens client-side)" "$(curl -sf "$BASE/inbox")" '<div id="root">'
@@ -212,6 +229,7 @@ APPROVE_RES=$(curl -sf -X POST "$BASE/slack/interactions" \
   -H "x-slack-request-timestamp: $TS" -H "x-slack-signature: $SIG" \
   --data "$SLACK_BODY")
 check "slack Approve dispatched" "$APPROVE_RES" '"dispatched_to":"chalk/chalk"'
+check "dispatch actor recorded (autonomy audit trail)" "$APPROVE_RES" '"dispatched_by":"slack"'
 
 say "6. Runner callback: test-passing PR within diff budget; retry is a no-op"
 CALLBACK_BODY=$(cat <<EOF
@@ -261,6 +279,8 @@ check "1 dispatched" "$TELEMETRY" '"dispatched":1'
 check "1 merged" "$TELEMETRY" '"prs_merged":1'
 check "merge rate 100%" "$TELEMETRY" '"merge_rate":1.0'
 check "cost accounting" "$TELEMETRY" '"tokens_per_merged_pr":110000.0'
+check "fix efficacy: fresh merge is pending (inside grace)" "$TELEMETRY" '"fixes_pending":1'
+check "spend ledger counts gate + runner tokens" "$TELEMETRY" '"tokens_spent_24h":'
 METRICS=$(auth "$BASE/metrics")
 check "prometheus metrics render" "$METRICS" "# TYPE merge0_prs_merged gauge"
 check "prometheus merge count" "$METRICS" "merge0_prs_merged 1"

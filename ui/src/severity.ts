@@ -1,7 +1,12 @@
 // Severity + status presentation mappings. Colors resolve to the semantic
 // tokens defined in theme.css — never to literals (style-lint enforced).
 
-import type { Report } from "./api";
+import type {
+  DispatchedBy,
+  FixEfficacy,
+  GateConfidence,
+  Report,
+} from "./api";
 
 export type Severity = Report["severity"];
 
@@ -15,6 +20,67 @@ export function severityToken(severity: Severity): string {
       return "var(--sev-medium)";
     case "low":
       return "var(--sev-low)";
+  }
+}
+
+/** Gate confidence with the fail-conservative default: absent → "low". */
+export function workOrderConfidence(
+  order: { confidence?: GateConfidence | null } | null | undefined,
+): GateConfidence {
+  return order?.confidence ?? "low";
+}
+
+/**
+ * Confidence badge tone. Positive states use `--ok`, never the accent —
+ * the accent is interaction/identity only (style guide).
+ */
+export function confidenceToken(confidence: GateConfidence): string {
+  switch (confidence) {
+    case "high":
+      return "var(--ok)";
+    case "medium":
+      return "var(--ink)";
+    case "low":
+      return "var(--ink-2)";
+  }
+}
+
+export function confidenceLabel(confidence: GateConfidence): string {
+  return `${confidence} confidence`;
+}
+
+export function efficacyLabel(efficacy: FixEfficacy): string {
+  switch (efficacy) {
+    case "confirmed":
+      return "Fix confirmed (signals quiet)";
+    case "recurred":
+      return "Signals recurred after merge";
+    case "pending":
+      return "Pending (grace period)";
+  }
+}
+
+export function efficacyToken(efficacy: FixEfficacy): string {
+  switch (efficacy) {
+    case "confirmed":
+      return "var(--ok)";
+    case "recurred":
+      return "var(--danger)";
+    case "pending":
+      return "var(--ink-2)";
+  }
+}
+
+export function dispatchedByLabel(by: DispatchedBy | string): string {
+  switch (by) {
+    case "auto":
+      return "dispatched by autonomy dial";
+    case "slack":
+      return "dispatched via Slack";
+    case "human":
+      return "dispatched by human";
+    default:
+      return `dispatched by ${by}`;
   }
 }
 

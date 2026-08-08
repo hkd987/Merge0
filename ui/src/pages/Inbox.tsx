@@ -3,6 +3,7 @@
 // median time-to-review is a regression.
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { ApiError, approveReport, dismissReport, fetchReports, type Report } from "../api";
 import { DismissDialog } from "../components/DismissDialog";
 import { ReportCard } from "../components/ReportCard";
@@ -19,6 +20,7 @@ export function Inbox({ onUnauthorized }: { onUnauthorized: () => void }) {
   const [busy, setBusy] = useState(false);
   const [dismissing, setDismissing] = useState<string | null>(null);
   const { toast, toastError } = useToasts();
+  const navigate = useNavigate();
   const dismissingRef = useRef(dismissing);
   dismissingRef.current = dismissing;
 
@@ -84,8 +86,8 @@ export function Inbox({ onUnauthorized }: { onUnauthorized: () => void }) {
     [load, onUnauthorized, toast, toastError],
   );
 
-  // Keyboard flow: j/k move, a approve, d opens the reason dialog (which
-  // itself handles 1–4/Escape).
+  // Keyboard flow: j/k move, o opens detail, a approve, d opens the reason
+  // dialog (which itself handles 1–4/Escape).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (dismissingRef.current !== null) return; // dialog owns the keyboard
@@ -93,13 +95,15 @@ export function Inbox({ onUnauthorized }: { onUnauthorized: () => void }) {
       if (e.key === "j") setFocus((f) => Math.min(f + 1, reports.length - 1));
       if (e.key === "k") setFocus((f) => Math.max(f - 1, 0));
       const focusedReport = reports[focus];
-      if (!focusedReport || !isActionable(focusedReport)) return;
+      if (!focusedReport) return;
+      if (e.key === "o") navigate(`/reports/${focusedReport.id}`);
+      if (!isActionable(focusedReport)) return;
       if (e.key === "a") void approve(focusedReport.id);
       if (e.key === "d") setDismissing(focusedReport.id);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [approve, focus, reports]);
+  }, [approve, focus, navigate, reports]);
 
   useEffect(() => {
     document
@@ -158,6 +162,9 @@ export function Inbox({ onUnauthorized }: { onUnauthorized: () => void }) {
       <div className="kbdbar" aria-hidden="true">
         <span>
           <kbd>j</kbd>/<kbd>k</kbd> move
+        </span>
+        <span>
+          <kbd>o</kbd> open
         </span>
         <span>
           <kbd>a</kbd> approve

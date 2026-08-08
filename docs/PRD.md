@@ -394,6 +394,39 @@ No hard external deadlines. Sequencing dependency: scouts before breadth (scouts
 | Reviewer abandonment (the empirically #1 killer of agent PRs) | Only test-passing, diff-budgeted, single-concern PRs reach the inbox; Slack nudges + weekly digest keep pending PRs visible; time-to-review is a tracked leading metric; stale-PR aging surfaces in the digest so nothing rots silently |
 | Chalk telemetry vs. K-12 privacy posture | Chalk-side concern but adjacent: hosted Chalk telemetry always-on and DPA-disclosed; self-hosted opt-in; replay masking on any student-PII surface (tracked in Chalk's own docs, referenced here for the design-partner integration) |
 
+## Roadmap (post-Phase-0 candidates, design-sketched)
+
+Two market asks are acknowledged and deliberately deferred; both are
+architecturally large enough to be their own projects, so they are named
+here with a design direction rather than half-built.
+
+### GitLab support (forge abstraction)
+
+Today the forge surface is `merge0-github`: App-token auth, dispatch,
+branch-protection safety checks, PR lifecycle webhooks, release timeline.
+The design direction is a `Forge` trait extracted from the current
+`GitHubApi` (dispatch, default_branch, branch_protection,
+create_branch_with_files, create_pull_request/MR, get_file_content,
+list_releases, webhook verification) with `GithubForge` as the first impl
+and `GitlabForge` as the second (Merge Requests, pipeline status, project
+access tokens or CI job tokens for the runner path, `X-Gitlab-Token`
+webhook verification). The runner's `repository_dispatch` becomes a
+forge-specific job trigger (GitLab: pipeline trigger tokens). Everything
+above `merge0-github` — triage, store, server, UI — already speaks in
+forge-neutral types (`RepoRef`, `PrInfo`, Work Orders), so the trait
+extraction is the bulk of the work, not a rewrite.
+
+### SSO / SAML (ee)
+
+The MIT core stays single-token by design (one operator, one bearer). The
+hosted control plane (`ee/merge0-hosted`) is where identity lands:
+OIDC-first (SAML via bridge), login exchanging the IdP assertion for a
+short-lived session bound to a tenant + RBAC role (the existing
+`ee/merge0-ee/src/rbac.rs` matrix), group-claim → role mapping, and the
+audit log gaining actor identity from the session rather than the
+`x-merge0-actor` header. No identity tables in the MIT store; enterprise
+identity is an `/ee` concern end to end.
+
 ## Open Questions
 
 | Question | Owner | Blocking? |

@@ -108,6 +108,12 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.card .cardhead a.title {
+  color: var(--ink);
+}
+.card .cardhead a.title:hover {
+  color: var(--accent);
+}
 .card .meta {
   display: flex;
   flex-wrap: wrap;

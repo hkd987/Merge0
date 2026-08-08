@@ -1,6 +1,7 @@
 // A report card: one-screen decision (PRD §6) — severity stripe, title,
 // meta, summary, evidence chips above the fold, actions below.
 
+import { Link } from "react-router-dom";
 import type { Report } from "../api";
 import {
   formatCount,
@@ -39,9 +40,9 @@ export function ReportCard({ report, focused, busy, onApprove, onDismiss }: Prop
             {report.severity}
           </span>
         )}
-        <span className="title" title={report.title}>
+        <Link className="title" title={report.title} to={`/reports/${report.id}`}>
           {report.title}
-        </span>
+        </Link>
         <span className="mono muted num" style={{ fontSize: "var(--fs-label)" }}>
           {formatTimestamp(report.created_at)}
         </span>

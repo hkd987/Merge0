@@ -8,6 +8,7 @@ import { ToastProvider } from "./components/Toasts";
 import { TokenGate } from "./components/TokenGate";
 import { Dashboard } from "./pages/Dashboard";
 import { Inbox } from "./pages/Inbox";
+import { ReportDetail } from "./pages/ReportDetail";
 import { Setup } from "./pages/Setup";
 
 export default function App() {
@@ -59,6 +60,10 @@ export default function App() {
         <Routes key={reloadKey}>
           <Route path="/" element={<Navigate to="/inbox" replace />} />
           <Route path="/inbox" element={<Inbox onUnauthorized={unauthorized} />} />
+          <Route
+            path="/reports/:id"
+            element={<ReportDetail onUnauthorized={unauthorized} />}
+          />
           <Route path="/dashboard" element={<Dashboard onUnauthorized={unauthorized} />} />
           <Route path="/setup" element={<Setup onUnauthorized={unauthorized} />} />
           <Route path="*" element={<Navigate to="/inbox" replace />} />

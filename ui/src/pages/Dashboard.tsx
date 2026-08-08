@@ -121,6 +121,21 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
               value={formatDuration(data.counts.median_time_to_review_secs)}
               sub="target < 10m"
             />
+            <Stat
+              label="Fix efficacy"
+              value={formatPercent(data.fix_efficacy_rate)}
+              sub={`confirmed ${data.counts.fixes_confirmed} / recurred ${data.counts.fixes_recurred} / pending ${data.counts.fixes_pending}`}
+            />
+            <Stat
+              label="Auto-dispatched"
+              value={formatCount(data.counts.auto_dispatched)}
+              sub="autonomy dial"
+            />
+            <Stat
+              label="Tokens (24h)"
+              value={formatCount(data.counts.tokens_spent_24h)}
+              sub="gate + runner spend"
+            />
           </div>
 
           <div className="section">

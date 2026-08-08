@@ -80,4 +80,7 @@ Rules (mirroring PRD §5c/§5d discipline):
 - [2026-08-08] When adding a source, check the adapter's default severity against the shipped gate's min_severity floor — a below-floor default means every signal from that source is silently guard-skipped and never triaged.
 - [2026-08-08] New sources change triage arithmetic: e2e assertions on report/work-order counts must be revisited whenever a scout's source list grows, and report lookups should select by content (title match), never by index.
 - [2026-08-08] E2e payloads need generated now-relative timestamps, not values copied from fixtures — scouts filter on `last_seen >= period_start`, so a stale epoch silently drops the signal from triage; and work-order expectations must respect the shipped gate's max_work_orders_per_run cap.
+- [2026-08-08] The working tree may carry another session's in-flight change (e.g. a new required Signal field): write new code against the tree's current structs, not the last commit or stale reads, and attribute workspace-wide build breaks to the right diff before "fixing" them.
+- [2026-08-08] Postgres `SUM()` over BIGINT returns NUMERIC — cast `::BIGINT` before `query_scalar::<i64>` or sqlx fails with ColumnDecode at runtime, invisible to compile checks.
+- [2026-08-08] The server's `auth_header` helper returns the raw Authorization value INCLUDING the "Bearer " scheme prefix — strip the prefix before comparing tokens directly (require_bearer does it internally; manual comparisons must too).
 <!-- merge0:lessons:end -->

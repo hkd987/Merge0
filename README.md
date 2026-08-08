@@ -49,16 +49,44 @@ change. No red PRs, no auto-merge, ever.
 
 ## What's inside
 
-- **Signal sources**: errors and product signals — PostHog, Sentry,
-  Datadog, LoopForge, OTel logs; everywhere work gets written down —
+- **Signal sources**: errors and product signals — PostHog (error
+  tracking, rage/dead clicks, funnel drop-offs), Sentry, Datadog,
+  LoopForge, OTel logs; everywhere work gets written down —
   Zendesk, Intercom, GitHub Issues, **Jira, Linear, Asana, Trello, and
-  designated Slack channels** (all schema v0.3 `ticket` signals feeding
-  the ticket-triage scout); plus a generic webhook envelope for anything
+  designated Slack channels** (all `ticket` signals feeding the
+  ticket-triage scout); plus a generic webhook envelope for anything
   else. Pollers + native signature-verified webhooks per vendor.
+- **Ticket delegation**: put a `merge0` label on a Jira or Linear issue
+  and it fast-tracks — flagged `delegated` (schema v0.4), severity
+  floored at High, picked up by an hourly scout, and first in line at
+  the gate. Safety checks are never bypassed.
+- **Confidence-scored gate + autonomy dial**: every Work Order carries
+  the gate's self-assessed confidence (`low`/`medium`/`high`,
+  fail-conservative parsing). Auto-dispatch of high-confidence orders
+  exists but **ships off** (`[autonomy]` in `config/gate.toml`); every
+  dispatch records its actor (`human`/`slack`/`auto`) for audit.
+- **Close-the-loop telemetry**: after a PR merges, Merge0 watches
+  whether the originating signals actually stop — fixes are
+  `pending`/`confirmed`/`recurred` and the fix-efficacy rate rides the
+  dashboard, `/telemetry`, and `/metrics`.
+- **Cost caps**: an optional hard token budget per rolling 24h
+  (`[budget]` in `config/gate.toml`); exceeded → the gate pauses,
+  candidates stay pending, a Slack warning fires once per window.
+- **Escalation re-open**: dismissed reports return to the inbox when
+  their impact multiplies past `MERGE0_REOPEN_FACTOR` (default 3×) or a
+  member ticket gets delegated — with the prior dismissal noted.
+  `intended_behavior` dismissals stay closed.
 - **Web app** (React SPA embedded in the single binary, styling contract
-  in `docs/style-guide.md`): `/inbox` review queue, `/dashboard`
+  in `docs/style-guide.md`): `/inbox` review queue, `/reports/{id}`
+  detail (confidence, dispatch actor, fix efficacy), `/dashboard`
   acceptance telemetry vs the Phase 0 gate, `/setup` onboarding bundle.
-- **Slack**: weekly digest + interactive Approve/Dismiss buttons.
+- **Slack**: new-report and PR-ready notifications (killable per class
+  via `MERGE0_SLACK_NOTIFY`), weekly digest, interactive Approve/Dismiss
+  buttons.
+- **Extension surfaces** (P2 previews): `POST /broker/credentials` —
+  single-use, repo-scoped, Work-Order-gated runner credentials; `GET
+  /registry/skills` + install — a signature-verified curated skill
+  registry whose installs land as reviewable manifest-change PRs.
 - **Security posture**: GitHub App installation tokens only (no PATs),
   bearer auth on every product route, per-IP rate limiting on open
   endpoints, webhook signature verification (GitHub HMAC, Sentry,
@@ -146,9 +174,11 @@ Tests: `MERGE0_TEST_DATABASE_URL`. Evals: `MERGE0_EVAL_CLI`,
 token entered once in the browser) · JSON: `GET /reports`,
 `POST /reports/{id}/approve|dismiss`, `GET /telemetry`, `GET /metrics`
 (Prometheus text), `GET /safety`, `GET /onboarding`, `POST /triage/run`,
-`POST /ingest/{source}` (envelope) · self-authenticated:
+`POST /ingest/{source}` (envelope), `GET /registry/skills`,
+`POST /registry/skills/{name}/install` · self-authenticated:
 `POST /webhooks/github`, `POST /webhooks/{sentry,posthog,zendesk,datadog,jira,linear,slack}`,
-`POST /runner/callback`, `POST /slack/interactions` · open: `GET /healthz`
+`POST /runner/callback`, `POST /broker/credentials`,
+`POST /slack/interactions` · open: `GET /healthz`
 (DB-backed). All product routes require
 `Authorization: Bearer $MERGE0_API_TOKEN`.
 

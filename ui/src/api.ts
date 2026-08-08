@@ -84,6 +84,62 @@ export interface Report {
   created_at: string;
 }
 
+/** The gate's self-assessed fix confidence. Absent on old data → "low". */
+export type GateConfidence = "low" | "medium" | "high";
+
+/** Post-merge verdict on one fix. null until the PR merges. */
+export type FixEfficacy = "pending" | "confirmed" | "recurred";
+
+/** Who pulled the dispatch trigger (the autonomy dial's audit trail). */
+export type DispatchedBy = "human" | "slack" | "auto";
+
+export interface WorkOrder {
+  report_id: string;
+  repo: string;
+  summary: string;
+  evidence: EvidenceLink[];
+  repro: string;
+  suspect_change?: string | null;
+  success_criteria: string;
+  constraints: string;
+  /** May be absent on Work Orders stored before the field existed. */
+  confidence?: GateConfidence;
+}
+
+export type GateDecision =
+  | { decision: "work"; work_order: WorkOrder }
+  | { decision: "skip"; reason: string };
+
+export interface Dispatch {
+  runner_kind: string;
+  dispatched_at: string;
+  status: string;
+  dispatched_by: DispatchedBy;
+  pr_url: string | null;
+  branch: string | null;
+  discard_reason: string | null;
+  diagnosis: string | null;
+  tokens_spent: number | null;
+}
+
+export interface OutcomeRef {
+  work_order_id: string;
+  outcome: "merged" | "closed" | "reverted" | "discarded";
+  occurred_at: string;
+  note?: string | null;
+}
+
+/** GET /reports/{id} — the report plus everything the loop knows about it. */
+export interface ReportDetail {
+  report: Report;
+  gate_decision: GateDecision | null;
+  work_order: WorkOrder | null;
+  dispatch: Dispatch | null;
+  outcomes: OutcomeRef[];
+  handoff_brief: string | null;
+  fix_efficacy: FixEfficacy | null;
+}
+
 export interface TelemetryCounts {
   window_days: number;
   dispatched: number;
@@ -96,6 +152,11 @@ export interface TelemetryCounts {
   dismissals: Record<string, number>;
   median_time_to_review_secs: number | null;
   tokens_on_merged: number | null;
+  fixes_confirmed: number;
+  fixes_recurred: number;
+  fixes_pending: number;
+  auto_dispatched: number;
+  tokens_spent_24h: number;
 }
 
 export interface Telemetry {
@@ -104,6 +165,8 @@ export interface Telemetry {
   runner_yield: number | null;
   gate_precision: number | null;
   tokens_per_merged_pr: number | null;
+  /** confirmed / (confirmed + recurred); null until a fix leaves grace. */
+  fix_efficacy_rate: number | null;
   phase0_gate_met: boolean;
 }
 
@@ -124,6 +187,9 @@ export const DISMISS_REASONS = [
 
 export const fetchReports = (status: string) =>
   api<Report[]>(`/reports?status=${status}`);
+
+export const fetchReportDetail = (id: string) =>
+  api<ReportDetail>(`/reports/${id}`);
 
 export const approveReport = (id: string) =>
   api<{ approved: string; dispatched_to: string }>(`/reports/${id}/approve`, {

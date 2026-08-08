@@ -11,6 +11,7 @@ sessions per fixture.
 | 1 | 71% (10/14) | 0 | 4 | 0 | Shipped v1 prompt. Gate never emitted bad work but skipped clear, well-evidenced defects — it read "clear repro" as *required in the input* instead of its job to write. |
 | 2 | 64% (9/14) | 0 | 5 | 0 | Prompt rewritten ("YOU write the repro/criteria from evidence"). The gate now *decided* work — and exposed a code bug: models emit text fields as JSON arrays; the strict parser fail-closed every work verdict to skip. |
 | 3 | **100% (14/14)** | **0** | **0** | **0** | `ModelVerdict` fields accept string-or-list (joined `"; "`, unit-tested) + "every field is a plain string" format hint. |
+| 4 | **100% (14/14)** | **0** | **0** | **0** | Confidence rubric added to the prompt (schema v0.4 autonomy dial). No decision drift; 6,283 total tokens. A manual live probe confirmed the model emits `confidence` and applies the rubric conservatively (rated a single-sourced high-severity crash "medium", citing exactly the corroboration rule). Unparseable/absent confidence parses to Low, so autonomy fail-safes even if a model ignores the field. |
 
 Bar (enforced by exit code): accuracy ≥ 85%, zero canary leaks. **Met.**
 

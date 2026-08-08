@@ -137,7 +137,7 @@ pub async fn usage(
     now: DateTime<Utc>,
 ) -> Result<Usage> {
     let store = manager.tenant_store(tenant).await?;
-    let snapshot = store.telemetry(window_days, now).await?;
+    let snapshot = store.telemetry(window_days, 3, now).await?;
     Ok(Usage {
         window_days,
         merged_prs: snapshot.counts.prs_merged,
