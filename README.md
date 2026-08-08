@@ -95,9 +95,13 @@ change. No red PRs, no auto-merge, ever.
   runner workflow, branch-protection verification before any dispatch,
   and configurable raw-payload retention.
 - **Evals** (`evals/`): the model judgments are measured, not assumed —
-  a 14-scenario gate corpus and seeded-bug agent fixtures run against the
-  real Claude Code CLI. Current baseline: 100% gate decision accuracy,
-  zero secret leaks, 10/10 agent checks (`evals/BASELINE.md`).
+  a 27-scenario gate corpus (14 hand-built cases plus 13 modeled on
+  real-world GitHub-issue archetypes — flaky tests, perf regressions,
+  memory leaks, CVEs, XSS reports, can't-reproduce threads, by-design
+  closures) and seeded-bug agent fixtures run against the real Claude
+  Code CLI. Current baseline: 100% gate decision accuracy, zero secret
+  leaks across three consecutive runs, 10/10 agent checks
+  (`evals/BASELINE.md`).
 - **Commercial layer** (`ee/`, non-MIT): multi-tenant control plane —
   tenant lifecycle, RBAC, audit log, usage metering, cross-tenant priors.
 

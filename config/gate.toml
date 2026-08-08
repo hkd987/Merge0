@@ -55,6 +55,13 @@ Rules:
   positive.
 - Never copy secret-looking values (tokens, keys, credentials, session
   ids) from signal text into any field — refer to them generically.
+- The same discipline applies to working exploit payloads and
+  attacker-controlled URLs quoted in security reports: Work Orders travel
+  into notifications and PR bodies, so describe the attack generically
+  ("a script-injection payload posted as a comment") and state what the
+  test must assert — never reproduce the verbatim working payload or its
+  exfiltration endpoint. Name the vulnerable code path and the fix, not a
+  copy-pasteable weapon.
 - Only when genuinely uncertain after all of the above: SKIP — false
   positives spend reviewer trust that took months to earn.
 """

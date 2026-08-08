@@ -16,10 +16,16 @@ cargo run -p merge0-evals --bin gate-eval
 # optional: MERGE0_EVAL_MODEL=<model id>   MERGE0_EVAL_CLI=<path to claude>
 ```
 
-Scenarios live in `evals/scenarios/*.toml` (14 cases: clear crashes,
-cross-source corroboration, release regressions, intended-behavior traps,
-vague noise, deterministic-guard controls, a secret-value canary, repeated
-reverts, prompt-injection, a feature request). Scoring is deterministic:
+Scenarios live in `evals/scenarios/*.toml` (27 cases). The first 14 are
+hand-built controls: clear crashes, cross-source corroboration, release
+regressions, intended-behavior traps, vague noise, deterministic-guard
+controls, a secret-value canary, repeated reverts, prompt-injection, a
+feature request. Scenarios 15–27 model the shapes of real high-traffic
+GitHub issues (anonymized to the example.com domain): flaky tests, perf
+regressions, memory leaks, docs drift, CVEs, an XSS report with a payload
+canary, "works on my machine" noise, rewrite demands, support questions,
+by-design closures, encoding corruption, and a user-bisected regression.
+Scoring is deterministic:
 decision correctness, zero-token proof for guard cases, content mentions,
 canary absence. Results land in `evals/results/` (gitignored); the first
 measured run is recorded in `BASELINE.md`.

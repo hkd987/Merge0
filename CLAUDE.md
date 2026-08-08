@@ -83,4 +83,5 @@ Rules (mirroring PRD §5c/§5d discipline):
 - [2026-08-08] The working tree may carry another session's in-flight change (e.g. a new required Signal field): write new code against the tree's current structs, not the last commit or stale reads, and attribute workspace-wide build breaks to the right diff before "fixing" them.
 - [2026-08-08] Postgres `SUM()` over BIGINT returns NUMERIC — cast `::BIGINT` before `query_scalar::<i64>` or sqlx fails with ColumnDecode at runtime, invisible to compile checks.
 - [2026-08-08] The server's `auth_header` helper returns the raw Authorization value INCLUDING the "Bearer " scheme prefix — strip the prefix before comparing tokens directly (require_bearer does it internally; manual comparisons must too).
+- [2026-08-08] The gate's secret-redaction discipline must extend to security-report content: working exploit payloads and attacker exfil endpoints leak into Work Orders (and thence PR bodies/Slack) exactly like credentials — forbid the verbatim payload + endpoint in eval canaries, but not ubiquitous API identifiers (e.g. `document.cookie`), which the model needs to write a useful repro.
 <!-- merge0:lessons:end -->

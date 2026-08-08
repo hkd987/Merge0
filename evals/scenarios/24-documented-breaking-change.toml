@@ -1,0 +1,28 @@
+# Archetype: the by-design closure — a user reports a removed behavior
+# as a bug; the intent notes say the removal was deliberate. The gate
+# must honor documented product decisions over user insistence.
+name = "documented-breaking-change"
+description = "User reports removed legacy login as a bug; intent notes say the removal is deliberate — SKIP (intended)."
+intent = """
+Chalk is a K-12 gradebook.
+This is a feature, not a bug: the legacy /signin form was removed in
+v2.4.0 on purpose — district SSO is now the only login path. Do not
+restore it.
+"""
+
+[[signals]]
+source = "github"
+kind = "ticket"
+severity = "high"
+title = "REGRESSION: /signin returns 404 since v2.4.0 — login form is gone"
+body = "The old login form at /signin 404s since updating to v2.4.0. This has to be a routing regression — our lab machines bookmarked that page for years. Please restore it, several teachers are blocked until they get their SSO invites."
+affected_count = 14
+url_path = "/signin"
+release = "v2.4.0"
+evidence_label = "github issue #2200"
+evidence_url = "https://github.example.com/chalk/chalk/issues/2200"
+
+[expect]
+decision = "skip"
+# "intent"/"intention(al)" all match; the model phrases this freely.
+skip_reason_mentions = ["intent"]

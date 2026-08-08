@@ -1,0 +1,25 @@
+# Archetype: the flaky-test issue (Kubernetes/OpenZFS style): a named
+# test failing intermittently in CI with a rate, a seed, and the failing
+# assertion — concrete location, observable wrong behavior, clear
+# success criterion (deflake it).
+name = "flaky-test"
+description = "A named test flaking in CI at a measured rate with the failing assertion quoted — WORK."
+intent = """
+Chalk is a K-12 gradebook. CI must stay trustworthy: a flaky suite
+trains people to re-run until green.
+"""
+
+[[signals]]
+source = "github"
+kind = "ticket"
+severity = "high"
+title = "Flake: grade_rollup::weighted_average_matches_manual_total fails ~1 in 7 CI runs"
+body = "Intermittent failure in tests/grade_rollup.rs::weighted_average_matches_manual_total. Assertion: expected 87.40, got 87.39999999999999. Passes locally every time; fails roughly 1 in 7 GitHub Actions runs (12 failures across the last 83 runs, links in thread). Suspect float accumulation order — the test iterates a HashMap of category weights."
+affected_count = 12
+url_path = "/ci/grade_rollup"
+evidence_label = "github issue #1988 (CI run links)"
+evidence_url = "https://github.example.com/chalk/chalk/issues/1988"
+
+[expect]
+decision = "work"
+work_order_mentions = ["weighted_average", "flak"]

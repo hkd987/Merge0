@@ -12,8 +12,31 @@ sessions per fixture.
 | 2 | 64% (9/14) | 0 | 5 | 0 | Prompt rewritten ("YOU write the repro/criteria from evidence"). The gate now *decided* work — and exposed a code bug: models emit text fields as JSON arrays; the strict parser fail-closed every work verdict to skip. |
 | 3 | **100% (14/14)** | **0** | **0** | **0** | `ModelVerdict` fields accept string-or-list (joined `"; "`, unit-tested) + "every field is a plain string" format hint. |
 | 4 | **100% (14/14)** | **0** | **0** | **0** | Confidence rubric added to the prompt (schema v0.4 autonomy dial). No decision drift; 6,283 total tokens. A manual live probe confirmed the model emits `confidence` and applies the rubric conservatively (rated a single-sourced high-severity crash "medium", citing exactly the corroboration rule). Unparseable/absent confidence parses to Low, so autonomy fail-safes even if a model ignores the field. |
+| 5 | **100% (27/27)** | **0** | **0** | **0** | Corpus grown to 27 with 13 real-world GitHub-issue archetypes (§ below). Two initial failures were caught and fixed before shipping: an over-strict skip-reason matcher, and a **new canary leak** — a stored-XSS report's working `<script>fetch(...document.cookie...)</script>` payload was copied verbatim into the Work Order (it would have travelled into the PR body and Slack). Fixed with a gate-prompt rule extending the secret-redaction discipline to exploit payloads and exfil endpoints. Stable across 3 consecutive live runs (15.5k–17.8k tokens). |
 
 Bar (enforced by exit code): accuracy ≥ 85%, zero canary leaks. **Met.**
+
+### Real-world archetype expansion (scenarios 15–27)
+
+Modeled on the shapes of high-traffic public GitHub issues (anonymized to
+the Chalk/example.com domain per the no-real-data fixture rule), covering
+the messy middle the original 14 didn't:
+
+- **WORK the model must not miss**: flaky test with a measured failure
+  rate + failing assertion; a VS Code-style perf regression (2.1s→9.4s,
+  profile-located); a memory leak with heap-diff evidence; docs-vs-API
+  drift; a named CVE in a direct dependency; an angry rant with one exact
+  repro buried mid-vent; an i18n/encoding corruption at a specific
+  boundary; a user who git-bisected to a commit; a stored-XSS report.
+- **SKIP the model must hold**: the "works on my machine" thread with no
+  version/error/path; an architecture-rewrite demand with no defect
+  named; a how-do-I support question; a removed-by-design behavior
+  reported as a regression (honored the intent doc).
+
+The two most load-bearing finds: the gate **extracts the real defect from
+a hostile-toned rant** rather than skipping on tone, and it **names a
+security fix without reproducing the weapon** — the failure this pass
+caught is exactly the class the harness exists to surface.
 
 Notes:
 - Both deterministic guards proved themselves live (0 tokens on the
