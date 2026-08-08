@@ -18,6 +18,7 @@ WEBHOOK_SECRET="e2e-hook-secret"
 SLACK_SIGNING="e2e-slack-signing"
 POSTHOG_WEBHOOK_TOKEN="e2e-posthog-token"
 JIRA_WEBHOOK_TOKEN="e2e-jira-token"
+LINEAR_WEBHOOK_SECRET="e2e-linear-secret"
 TENANT="e2e_manual_$(date +%s)"
 PASS=0; FAIL=0
 
@@ -40,6 +41,7 @@ MERGE0_GITHUB_WEBHOOK_SECRET="$WEBHOOK_SECRET" \
 MERGE0_SLACK_SIGNING_SECRET="$SLACK_SIGNING" \
 MERGE0_POSTHOG_WEBHOOK_TOKEN="$POSTHOG_WEBHOOK_TOKEN" \
 MERGE0_JIRA_WEBHOOK_TOKEN="$JIRA_WEBHOOK_TOKEN" \
+MERGE0_LINEAR_WEBHOOK_SECRET="$LINEAR_WEBHOOK_SECRET" \
 MERGE0_TRIAGE_INTERVAL_SECS=0 \
 MERGE0_BIND="127.0.0.1:$PORT" \
 ./target/debug/merge0-server &
@@ -52,6 +54,7 @@ done
 check "healthz (DB-backed)" "$(curl -sf "$BASE/healthz")" "ok"
 
 NOW="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+EPOCH_NOW="$(date +%s)"
 
 say "1. Auth: every product route is closed without the API token"
 for route in "reports" "telemetry" "metrics" "safety" "onboarding"; do
@@ -101,12 +104,86 @@ JIRA_RES=$(curl -sf -X POST "$BASE/webhooks/jira" \
     "created": "2026-08-07T08:00:00.000Z", "updated": "$NOW"}}}
 JIRAEOF
 )
-check "jira native webhook inserted=1" "$JIRA_RES" '"inserted":1' 
+check "jira native webhook inserted=1" "$JIRA_RES" '"inserted":1'
 
-say "3. Triage run: cross-source cluster + jira ticket -> gate -> two Work Orders"
+say "2b. Ticket connectors: Linear + Slack signed webhooks, Asana/Trello/Intercom ingest"
+LINEAR_BODY=$(cat <<EOF
+{"type": "Issue", "action": "create", "data": {
+  "identifier": "OPS-901",
+  "title": "Weekly digest email sends twice to every admin",
+  "url": "https://linear.example.com/acme/issue/OPS-901/digest-sends-twice",
+  "priority": 2,
+  "createdAt": "2026-08-07T09:00:00Z", "updatedAt": "$NOW"}}
+EOF
+)
+FORGED_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/webhooks/linear" \
+  -H "linear-signature: deadbeef" -H "content-type: application/json" -d "$LINEAR_BODY")
+check "linear webhook with forged signature -> 401" "$FORGED_STATUS" "401"
+LINEAR_SIG=$(printf '%s' "$LINEAR_BODY" | openssl dgst -sha256 -hmac "$LINEAR_WEBHOOK_SECRET" | awk '{print $2}')
+LINEAR_RES=$(curl -sf -X POST "$BASE/webhooks/linear" \
+  -H "linear-signature: $LINEAR_SIG" -H "content-type: application/json" -d "$LINEAR_BODY")
+check "linear native webhook inserted=1" "$LINEAR_RES" '"inserted":1'
+
+TS=$(date +%s)
+SLACK_CHALLENGE_BODY='{"type":"url_verification","challenge":"e2e-challenge-42"}'
+SIG="v0=$(printf 'v0:%s:%s' "$TS" "$SLACK_CHALLENGE_BODY" | openssl dgst -sha256 -hmac "$SLACK_SIGNING" | awk '{print $2}')"
+CHALLENGE_RES=$(curl -sf -X POST "$BASE/webhooks/slack" \
+  -H "x-slack-request-timestamp: $TS" -H "x-slack-signature: $SIG" \
+  -H "content-type: application/json" -d "$SLACK_CHALLENGE_BODY")
+check "slack url_verification challenge echoed" "$CHALLENGE_RES" '"challenge":"e2e-challenge-42"'
+SLACK_EVENT_BODY='{"type":"event_callback","event":{"type":"message","channel":"C0E2EBUGS01","ts":"'"$EPOCH_NOW"'.000200","user":"U0EXAMPLE07","text":"Parent portal shows last term grades after rollover","reply_count":4}}'
+SIG="v0=$(printf 'v0:%s:%s' "$TS" "$SLACK_EVENT_BODY" | openssl dgst -sha256 -hmac "$SLACK_SIGNING" | awk '{print $2}')"
+SLACK_RES=$(curl -sf -X POST "$BASE/webhooks/slack" \
+  -H "x-slack-request-timestamp: $TS" -H "x-slack-signature: $SIG" \
+  -H "content-type: application/json" -d "$SLACK_EVENT_BODY")
+check "slack message event inserted=1" "$SLACK_RES" '"inserted":1'
+
+ASANA_RES=$(auth -X POST "$BASE/ingest/asana" -H "content-type: application/json" -d @- <<EOF
+{"endpoint": "tasks", "context": {}, "payload": {"data": [{
+  "gid": "1207009998887776",
+  "name": "Report card PDF renders blank second page",
+  "notes": "Reported by pilot-school@example.com: exporting report cards produces a blank page 2 for every student.",
+  "completed": false,
+  "created_at": "2026-08-05T10:00:00Z", "modified_at": "$NOW",
+  "permalink_url": "https://app.asana.com/0/1206000111222333/1207009998887776"}]}}
+EOF
+)
+check "asana ingest inserted=1" "$ASANA_RES" '"inserted":1'
+
+TRELLO_RES=$(auth -X POST "$BASE/ingest/trello" -H "content-type: application/json" -d @- <<EOF
+{"endpoint": "cards", "context": {}, "payload": [{
+  "id": "64f1c0ffee0badc0de000901",
+  "name": "Bulk enrollment CSV rejects rows with accented names",
+  "desc": "Reported by demo-district@example.com: rows containing accented characters fail validation.",
+  "closed": false,
+  "dateLastActivity": "$NOW",
+  "shortUrl": "https://trello.com/c/e2eCard01",
+  "labels": [{"id": "6501aa000000000000000901", "name": "bug", "color": "orange"}],
+  "idList": "64f1b0000000000000000010"}]}
+EOF
+)
+check "trello ingest inserted=1" "$TRELLO_RES" '"inserted":1'
+
+INTERCOM_RES=$(auth -X POST "$BASE/ingest/intercom" -H "content-type: application/json" -d @- <<EOF
+{"endpoint": "conversations",
+ "context": {"app_base_url": "https://app.intercom-example.com/a/inbox/abc123"},
+ "payload": {"conversations": [{
+  "type": "conversation", "id": "70090901", "title": "Invoices page times out",
+  "state": "open", "priority": "priority",
+  "created_at": $((EPOCH_NOW - 86400)), "updated_at": $EPOCH_NOW,
+  "source": {"type": "conversation",
+    "body": "<p>The invoices page never loads for our billing admin.</p>",
+    "author": {"type": "user", "id": "6401ab234cde567890f90901",
+      "name": "Jordan Example", "email": "jordan@example.com"}}}]}}
+EOF
+)
+check "intercom ingest inserted=1" "$INTERCOM_RES" '"inserted":1'
+
+say "3. Triage run: cluster + 6 tickets -> 7 reports; gate budget caps Work Orders at 3"
 TRIAGE_RES=$(auth -X POST "$BASE/triage/run")
-check "two reports created (cluster + ticket)" "$TRIAGE_RES" '"reports_created":2'
-check "two work orders" "$TRIAGE_RES" '"work_orders":2'
+check "all eight signals became candidates" "$TRIAGE_RES" '"candidates":8'
+check "seven reports created (cluster + 6 tickets)" "$TRIAGE_RES" '"reports_created":7'
+check "work orders capped by max_work_orders_per_run" "$TRIAGE_RES" '"work_orders":3'
 
 REPORT_ID=$(auth "$BASE/reports?status=awaiting_review" | python3 -c 'import sys,json; rs=json.load(sys.stdin); print(next(r["id"] for r in rs if "districtId" in r["title"]))')
 SIGNALS=$(auth "$BASE/reports/$REPORT_ID" | python3 -c 'import sys,json; print(len(json.load(sys.stdin)["report"]["signal_ids"]))')
