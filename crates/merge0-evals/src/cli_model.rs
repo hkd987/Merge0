@@ -122,13 +122,43 @@ impl Model for CliModel {
 mod tests {
     use super::*;
 
-    /// Write an executable stub standing in for the `claude` binary.
+    /// Write an executable stub standing in for the `claude` binary, and
+    /// return only once it can actually be exec'd.
+    ///
+    /// The wait is not superstition: tests in one binary run on many
+    /// threads, and `fork` from any of them duplicates every open write fd
+    /// in the process. If a sibling thread forks while this file is still
+    /// open for writing, the kernel refuses our `exec` with `ETXTBSY`
+    /// ("Text file busy") until that child execs and drops the inherited
+    /// descriptor. The window is microseconds, but it is real — it failed a
+    /// full-workspace run. Probing until exec succeeds turns a flake into a
+    /// deterministic wait; the stubs are side-effect-free, so the extra
+    /// invocation costs nothing.
     fn stub(body: &str) -> std::path::PathBuf {
         use std::os::unix::fs::PermissionsExt;
         let path = std::env::temp_dir().join(format!("merge0-cli-stub-{}", ulid::Ulid::new()));
         std::fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
-        path
+
+        for attempt in 0..200 {
+            match std::process::Command::new(&path)
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+            {
+                Ok(mut child) => {
+                    let _ = child.wait();
+                    return path;
+                }
+                // 26 == ETXTBSY. Anything else is a genuine failure.
+                Err(e) if e.raw_os_error() == Some(26) && attempt < 199 => {
+                    std::thread::sleep(std::time::Duration::from_millis(5));
+                }
+                Err(e) => panic!("stub {} is not executable: {e}", path.display()),
+            }
+        }
+        unreachable!("loop returns or panics")
     }
 
     fn request() -> ModelRequest {

@@ -329,7 +329,7 @@ impl TenantStore {
             format!(
                 "UPDATE {t} SET status = $2, dismiss_reason = $3, decided_at = $4,
                      dismissal_affected_count = (
-                         SELECT COALESCE(SUM(s.affected_count), 0)
+                         SELECT COALESCE(SUM(s.affected_count), 0)::BIGINT
                          FROM {rs} rs JOIN {signals} s ON s.id = rs.signal_id
                          WHERE rs.report_id = $1
                      )

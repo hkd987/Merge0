@@ -43,6 +43,17 @@ All three of fmt/clippy/test must pass before any commit.
    test); the inbox stays a keyboard-first review queue, pages stay data-free
    static assets with client-side token auth. Change the system via tokens +
    the guide in the same PR, never by special-casing a component.
+9. **Fixing a bug means encoding the prevention.** Apply Merge0's own
+   hardening hierarchy to Merge0 (`merge0-hardening`: LintRule >
+   RegressionTest > IntentAmendment). Before calling a fix done, ask which
+   artifact stops it recurring — in order of preference: a rule in
+   `crates/merge0-e2e/tests/repo_hygiene.rs` or a clippy lint (fails the
+   build for everyone, forever), a regression test (when the pattern is
+   behavioral), an eval canary (when only a live model exposes it), and only
+   as a last resort a CLAUDE.md lesson (prose has never failed a build).
+   A rule must be a real incident and precisely detectable: false positives
+   train people to ignore the lint, which is worse than not having it.
+   Verify a new rule *fails* on the reintroduced bug before trusting it.
 
 ## Self-improvement protocol (standing instruction)
 
@@ -77,11 +88,9 @@ Rules (mirroring PRD §5c/§5d discipline):
 - [2026-08-07] File-sized build inputs (CA bundles, keys) blow past `--build-arg` argv limits — pass them into `docker build` as BuildKit secret mounts.
 - [2026-08-07] Model-output parsers must tolerate benign shape variance (models emit lists where a string was asked for): strict serde + fail-closed silently zeroes yield — a failure class only live-model evals catch, never scripted-model tests.
 - [2026-08-07] In diff-measuring harnesses, build side-products (Cargo.lock, target/) must be in the base commit or .gitignore, or the measurement blames the agent for them.
-- [2026-08-08] When adding a source, check the adapter's default severity against the shipped gate's min_severity floor — a below-floor default means every signal from that source is silently guard-skipped and never triaged.
 - [2026-08-08] New sources change triage arithmetic: e2e assertions on report/work-order counts must be revisited whenever a scout's source list grows, and report lookups should select by content (title match), never by index.
 - [2026-08-08] E2e payloads need generated now-relative timestamps, not values copied from fixtures — scouts filter on `last_seen >= period_start`, so a stale epoch silently drops the signal from triage; and work-order expectations must respect the shipped gate's max_work_orders_per_run cap.
 - [2026-08-08] The working tree may carry another session's in-flight change (e.g. a new required Signal field): write new code against the tree's current structs, not the last commit or stale reads, and attribute workspace-wide build breaks to the right diff before "fixing" them.
-- [2026-08-08] Postgres `SUM()` over BIGINT returns NUMERIC — cast `::BIGINT` before `query_scalar::<i64>` or sqlx fails with ColumnDecode at runtime, invisible to compile checks.
-- [2026-08-08] The server's `auth_header` helper returns the raw Authorization value INCLUDING the "Bearer " scheme prefix — strip the prefix before comparing tokens directly (require_bearer does it internally; manual comparisons must too).
 - [2026-08-08] The gate's secret-redaction discipline must extend to security-report content: working exploit payloads and attacker exfil endpoints leak into Work Orders (and thence PR bodies/Slack) exactly like credentials — forbid the verbatim payload + endpoint in eval canaries, but not ubiquitous API identifiers (e.g. `document.cookie`), which the model needs to write a useful repro.
+- [2026-08-08] PROMOTED (now CI-enforced in `crates/merge0-e2e/tests/repo_hygiene.rs`, so they are deleted from this list rather than restated): SQL `SUM()` must be cast `::BIGINT`; raw `auth_header` values keep the `Bearer ` prefix; every adapter must emit at least one signal at/above the shipped gate floor. Prefer adding a rule there over adding a line here.
 <!-- merge0:lessons:end -->
