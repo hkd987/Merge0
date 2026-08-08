@@ -208,6 +208,7 @@ check "delegated jira ticket became a report" "$JIRA_DELEGATED" "yes"
 
 say "4. Surfaces: SPA shell, onboarding bundle, safety"
 check "SPA shell serves (auth happens client-side)" "$(curl -sf "$BASE/inbox")" '<div id="root">'
+check "report detail deep-link serves the shell (data stays behind the API)" "$(curl -sf "$BASE/inbox/$REPORT_ID")" '<div id="root">'
 check "dashboard route serves the same shell" "$(curl -sf "$BASE/dashboard")" '<div id="root">'
 ONBOARDING=$(auth "$BASE/onboarding")
 check "onboarding ships the workflow" "$ONBOARDING" "merge0.yml"
