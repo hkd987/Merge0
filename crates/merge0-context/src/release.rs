@@ -65,6 +65,7 @@ mod tests {
                 ..Default::default()
             },
             affected_count: None,
+            delegated: false,
             first_seen,
             last_seen: first_seen,
             raw: serde_json::Value::Null,

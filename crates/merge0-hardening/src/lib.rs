@@ -524,6 +524,7 @@ mod tests {
             fingerprint: fp.to_string(),
             join_keys: JoinKeys::default(),
             affected_count: None,
+            delegated: false,
             first_seen: chrono::DateTime::UNIX_EPOCH,
             last_seen: chrono::DateTime::UNIX_EPOCH,
             raw: serde_json::Value::Null,

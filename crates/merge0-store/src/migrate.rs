@@ -12,7 +12,11 @@ use sqlx::PgPool;
 
 /// The registry. Append-only across releases.
 fn steps(schema: &str) -> Vec<(i32, Vec<String>)> {
-    vec![(1, ddl_v1(schema)), (2, ddl_v2(schema))]
+    vec![
+        (1, ddl_v1(schema)),
+        (2, ddl_v2(schema)),
+        (3, ddl_v3(schema)),
+    ]
 }
 
 pub(crate) async fn provision(pool: &PgPool, schema: &str) -> Result<()> {
@@ -57,6 +61,45 @@ pub(crate) async fn provision(pool: &PgPool, schema: &str) -> Result<()> {
         .await?;
     }
     Ok(())
+}
+
+/// v3 — the market-gap pass (schema v0.4 + autonomy/escalation audit):
+/// - `signals.delegated`: ticket explicitly handed to Merge0 via a tracker
+///   label; prioritized by triage
+/// - `dispatches.dispatched_by`: who pulled the trigger (`human`, `slack`,
+///   or `auto`) — the autonomy dial's audit trail
+/// - `reports.dismissal_affected_count`: affected-count snapshot at dismissal
+///   time, the baseline for escalation re-opens
+/// - `triage_runs`: per-run token ledger, the substrate of the rolling
+///   24h spend budget
+fn ddl_v3(schema: &str) -> Vec<String> {
+    let s = schema;
+    vec![
+        format!(
+            "ALTER TABLE \"{s}\".signals
+                 ADD COLUMN IF NOT EXISTS delegated BOOLEAN NOT NULL DEFAULT FALSE"
+        ),
+        format!(
+            "ALTER TABLE \"{s}\".dispatches
+                 ADD COLUMN IF NOT EXISTS dispatched_by TEXT NOT NULL DEFAULT 'human'"
+        ),
+        format!(
+            "ALTER TABLE \"{s}\".reports
+                 ADD COLUMN IF NOT EXISTS dismissal_affected_count BIGINT"
+        ),
+        format!(
+            "CREATE TABLE IF NOT EXISTS \"{s}\".triage_runs (
+                 id TEXT PRIMARY KEY,
+                 started_at TIMESTAMPTZ NOT NULL,
+                 tokens_used BIGINT NOT NULL,
+                 budget_exhausted BOOLEAN NOT NULL DEFAULT FALSE
+             )"
+        ),
+        format!(
+            "CREATE INDEX IF NOT EXISTS idx_triage_runs_started
+                 ON \"{s}\".triage_runs (started_at)"
+        ),
+    ]
 }
 
 /// v2 — idempotency + ingestion state:

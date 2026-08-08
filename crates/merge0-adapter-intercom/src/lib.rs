@@ -174,6 +174,7 @@ fn normalize_conversation(
         affected_count: conversation
             .statistics
             .and_then(|stats| stats.count_conversation_parts),
+        delegated: false,
         first_seen: parse_unix_seconds(conversation.created_at, "created_at")?,
         last_seen: parse_unix_seconds(conversation.updated_at, "updated_at")?,
         raw: raw.clone(),

@@ -119,6 +119,7 @@ fn normalize_ticket(raw: &serde_json::Value, base_url: &str) -> Result<Signal, A
             ..Default::default()
         },
         affected_count: None,
+        delegated: false,
         first_seen: ticket.created_at,
         last_seen: ticket.updated_at,
         raw: raw.clone(),

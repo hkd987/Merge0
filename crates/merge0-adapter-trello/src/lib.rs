@@ -118,6 +118,7 @@ fn normalize_card(raw: &serde_json::Value) -> Result<Option<Signal>, AdapterErro
         fingerprint: fingerprint(Source::Trello, &[&id]),
         join_keys: JoinKeys::default(),
         affected_count: None,
+        delegated: false,
         first_seen: card.start.unwrap_or(card.date_last_activity),
         last_seen: card.date_last_activity,
         raw: raw.clone(),

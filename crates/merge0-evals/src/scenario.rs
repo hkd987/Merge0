@@ -151,6 +151,7 @@ impl Scenario {
                     url_path: spec.url_path.clone(),
                 },
                 affected_count: spec.affected_count,
+                delegated: false,
                 first_seen: now - Duration::hours(spec.first_seen_hours_ago),
                 last_seen: now - Duration::hours(spec.last_seen_hours_ago),
                 raw: serde_json::Value::Null,

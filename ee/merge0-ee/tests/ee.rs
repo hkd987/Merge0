@@ -87,6 +87,7 @@ fn make_signal(source: Source, severity: Severity, tag: &str) -> Signal {
         fingerprint: fingerprint(source, &["issue", tag]),
         join_keys: JoinKeys::default(),
         affected_count: Some(10),
+        delegated: false,
         first_seen: ts(1, 0),
         last_seen: ts(2, 0),
         raw: serde_json::json!({ "id": tag }),

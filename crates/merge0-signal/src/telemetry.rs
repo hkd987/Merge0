@@ -28,6 +28,35 @@ pub struct TelemetryCounts {
     pub median_time_to_review_secs: Option<i64>,
     /// Total tokens spent on runs whose PR merged.
     pub tokens_on_merged: Option<u64>,
+    /// Close-the-loop: merged fixes whose signals stayed quiet past the
+    /// grace period.
+    #[serde(default)]
+    pub fixes_confirmed: u64,
+    /// Merged fixes whose member signals recurred after the grace period.
+    #[serde(default)]
+    pub fixes_recurred: u64,
+    /// Merged fixes still inside the grace period.
+    #[serde(default)]
+    pub fixes_pending: u64,
+    /// Dispatches pulled by the autonomy dial rather than a human.
+    #[serde(default)]
+    pub auto_dispatched: u64,
+    /// Model spend over the trailing 24h (gate + runner), independent of
+    /// `window_days` — the budget gauge's numerator.
+    #[serde(default)]
+    pub tokens_spent_24h: u64,
+}
+
+/// Post-merge verdict on one fix: did the signals actually stop?
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FixEfficacy {
+    /// Inside the grace period; too early to call.
+    Pending,
+    /// Grace period elapsed with no member signal recurring.
+    Confirmed,
+    /// A member signal was seen again after the grace period.
+    Recurred,
 }
 
 /// Computed rates + the Phase 0 gate check (≥60% merge rate over the window
@@ -44,6 +73,10 @@ pub struct TelemetrySnapshot {
     pub gate_precision: Option<f64>,
     /// Mean tokens per merged PR (P2 cost accounting).
     pub tokens_per_merged_pr: Option<f64>,
+    /// confirmed / (confirmed + recurred) — how often a merged fix actually
+    /// made the signal stop. None until at least one fix leaves the grace
+    /// period.
+    pub fix_efficacy_rate: Option<f64>,
     /// The blocking Phase 0 validation gate.
     pub phase0_gate_met: bool,
 }
@@ -60,12 +93,17 @@ impl TelemetrySnapshot {
             _ => None,
         };
         let phase0_gate_met = decided >= 10 && merge_rate.is_some_and(|r| r >= 0.60);
+        let fix_efficacy_rate = ratio(
+            counts.fixes_confirmed,
+            counts.fixes_confirmed + counts.fixes_recurred,
+        );
         TelemetrySnapshot {
             counts,
             merge_rate,
             runner_yield,
             gate_precision,
             tokens_per_merged_pr,
+            fix_efficacy_rate,
             phase0_gate_met,
         }
     }
@@ -138,5 +176,18 @@ mod tests {
         c.tokens_on_merged = Some(400_000);
         let snap = TelemetrySnapshot::from_counts(c);
         assert_eq!(snap.tokens_per_merged_pr, Some(100_000.0));
+    }
+
+    #[test]
+    fn fix_efficacy_rate_excludes_pending() {
+        let mut c = counts(0, 0, 0);
+        c.fixes_confirmed = 3;
+        c.fixes_recurred = 1;
+        c.fixes_pending = 10; // pending fixes must not dilute the rate
+        let snap = TelemetrySnapshot::from_counts(c);
+        assert_eq!(snap.fix_efficacy_rate, Some(0.75));
+
+        let snap = TelemetrySnapshot::from_counts(counts(0, 0, 0));
+        assert_eq!(snap.fix_efficacy_rate, None, "no decided fixes, no rate");
     }
 }

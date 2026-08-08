@@ -1,4 +1,4 @@
-# Signal Schema — v0.3
+# Signal Schema — v0.4
 
 The Signal is the contract between every Merge0 component and the integration
 surface for external adapters (including the future generic webhook adapter).
@@ -15,6 +15,11 @@ and the types cannot drift silently.
 
 ### Changelog
 
+- **v0.4** — added `delegated` (boolean, default `false`): a ticket
+  explicitly handed to Merge0 via a tracker label (e.g. a `merge0` label in
+  Jira/Linear). Delegated signals bypass no safety checks — they are simply
+  prioritized by triage. Also adds the internal `GateConfidence` enum
+  (`low` / `medium` / `high`) carried on Work Orders; see Related types.
 - **v0.3** — `source` enum extended with the planning/ticketing tools:
   `jira`, `linear`, `slack` (messages/threads from designated channels),
   `asana`, and `trello`. Additive only; no field changes.
@@ -42,6 +47,7 @@ and the types cannot drift silently.
 | `fingerprint` | string | yes | Stable hash for dedupe within a source: the same underlying defect must produce the same fingerprint across payload variants and re-ingestion. Format: `<source>:<16-byte-sha256-hex>`. |
 | `join_keys` | `JoinKeys` | yes (fields optional) | Correlation context — **required where derivable** from the vendor payload. |
 | `affected_count` | integer | no | Users/accounts impacted. |
+| `delegated` | boolean | no (default `false`) | The signal was explicitly handed to Merge0 (e.g. a `merge0` label on the source ticket). Serialized only when `true`. |
 | `first_seen` | RFC 3339 timestamp | yes | |
 | `last_seen` | RFC 3339 timestamp | yes | |
 | `raw` | JSON | yes | Original vendor payload, verbatim, for audit only. |
@@ -118,6 +124,10 @@ same one community adapters are expected to use.
 
 ## Related types
 
-`WorkOrder` and `OutcomeRef` (defined in `crates/merge0-signal` alongside
-`Signal`) are internal pipeline types, not part of the adapter integration
-surface; their canonical definition is the Rust source and the PRD (§4).
+`WorkOrder`, `OutcomeRef`, and `GateConfidence` (defined in
+`crates/merge0-signal` alongside `Signal`) are internal pipeline types, not
+part of the adapter integration surface; their canonical definition is the
+Rust source and the PRD (§4). `GateConfidence` (`low` / `medium` / `high`,
+default `low`) is the gate's self-assessed fix confidence carried on each
+Work Order; unparseable model output maps to `low` so autonomy decisions
+fail conservative.

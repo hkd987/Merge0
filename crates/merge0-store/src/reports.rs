@@ -323,10 +323,27 @@ impl TenantStore {
         reason: Option<DismissReason>,
         now: DateTime<Utc>,
     ) -> Result<()> {
-        let sql = format!(
-            "UPDATE {t} SET status = $2, dismiss_reason = $3, decided_at = $4 WHERE id = $1",
-            t = self.table("reports")
-        );
+        // Dismissals snapshot the summed member affected-count — the
+        // baseline `reopen_escalated` measures growth against.
+        let sql = if reason.is_some() {
+            format!(
+                "UPDATE {t} SET status = $2, dismiss_reason = $3, decided_at = $4,
+                     dismissal_affected_count = (
+                         SELECT COALESCE(SUM(s.affected_count), 0)
+                         FROM {rs} rs JOIN {signals} s ON s.id = rs.signal_id
+                         WHERE rs.report_id = $1
+                     )
+                 WHERE id = $1",
+                t = self.table("reports"),
+                rs = self.table("report_signals"),
+                signals = self.table("signals"),
+            )
+        } else {
+            format!(
+                "UPDATE {t} SET status = $2, dismiss_reason = $3, decided_at = $4 WHERE id = $1",
+                t = self.table("reports")
+            )
+        };
         let updated = sqlx::query(&sql)
             .bind(id.to_string())
             .bind(enum_str(&status))
@@ -338,6 +355,92 @@ impl TenantStore {
             return Err(StoreError::NotFound(format!("report {id}")));
         }
         Ok(())
+    }
+
+    /// Escalation re-open (dismissals are not forever): a dismissed report
+    /// whose members' summed affected-count has grown to `factor`× its
+    /// dismissal-time snapshot — or that has since gained a `delegated`
+    /// member signal — returns to the inbox with the prior dismissal noted.
+    ///
+    /// `intended_behavior` dismissals stay closed: their recurrence path is
+    /// the Opportunity classifier, never a Maintenance re-open. Only reports
+    /// that still have a Work Order qualify (they were reviewable before).
+    pub async fn reopen_escalated(&self, factor: u64, now: DateTime<Utc>) -> Result<Vec<Report>> {
+        if factor == 0 {
+            return Ok(Vec::new());
+        }
+        let candidates_sql = format!(
+            "SELECT r.id, r.dismiss_reason, r.decided_at, r.dismissal_affected_count,
+                    (SELECT COALESCE(SUM(s.affected_count), 0)::BIGINT
+                     FROM {rs} rs JOIN {signals} s ON s.id = rs.signal_id
+                     WHERE rs.report_id = r.id) AS current_affected,
+                    EXISTS (SELECT 1 FROM {rs} rs JOIN {signals} s ON s.id = rs.signal_id
+                            WHERE rs.report_id = r.id AND s.delegated) AS delegated
+             FROM {reports} r
+             WHERE r.status = 'dismissed'
+               AND r.dismiss_reason <> 'intended_behavior'
+               AND EXISTS (SELECT 1 FROM {wo} wo WHERE wo.report_id = r.id)",
+            reports = self.table("reports"),
+            rs = self.table("report_signals"),
+            signals = self.table("signals"),
+            wo = self.table("work_orders"),
+        );
+        let rows = sqlx::query(&candidates_sql).fetch_all(self.pool()).await?;
+
+        let mut reopened = Vec::new();
+        for row in &rows {
+            let id: String = row.get("id");
+            let snapshot = row
+                .get::<Option<i64>, _>("dismissal_affected_count")
+                .unwrap_or(0);
+            let current: i64 = row.get("current_affected");
+            let delegated: bool = row.get("delegated");
+            let escalated = snapshot > 0 && current >= snapshot.saturating_mul(factor as i64);
+            if !escalated && !delegated {
+                continue;
+            }
+            let reason: Option<String> = row.get("dismiss_reason");
+            let decided: Option<DateTime<Utc>> = row.get("decided_at");
+            let note = if delegated {
+                format!(
+                    "\n\n-- REOPENED {}: a member ticket was delegated to Merge0 \
+                     after this report was dismissed as {} on {}.",
+                    now.date_naive(),
+                    reason.as_deref().unwrap_or("unknown"),
+                    decided
+                        .map(|d| d.date_naive().to_string())
+                        .unwrap_or_default(),
+                )
+            } else {
+                format!(
+                    "\n\n-- REOPENED {}: affected count grew {} -> {} (>= {}x) since \
+                     this report was dismissed as {} on {}.",
+                    now.date_naive(),
+                    snapshot,
+                    current,
+                    factor,
+                    reason.as_deref().unwrap_or("unknown"),
+                    decided
+                        .map(|d| d.date_naive().to_string())
+                        .unwrap_or_default(),
+                )
+            };
+            let update_sql = format!(
+                "UPDATE {t} SET status = 'awaiting_review', decided_at = NULL,
+                     dismissal_affected_count = NULL, summary = summary || $2
+                 WHERE id = $1 AND status = 'dismissed'",
+                t = self.table("reports")
+            );
+            let updated = sqlx::query(&update_sql)
+                .bind(&id)
+                .bind(&note)
+                .execute(self.pool())
+                .await?;
+            if updated.rows_affected() > 0 {
+                reopened.push(self.get_report(parse_ulid(&id)?).await?);
+            }
+        }
+        Ok(reopened)
     }
 
     async fn hydrate_report(&self, row: &PgRow) -> Result<Report> {

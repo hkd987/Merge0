@@ -136,6 +136,7 @@ fn normalize_issue(raw: &serde_json::Value) -> Result<Signal, AdapterError> {
             ..Default::default()
         },
         affected_count: issue.user_count,
+        delegated: false,
         first_seen: issue.first_seen,
         last_seen: issue.last_seen,
         raw: raw.clone(),

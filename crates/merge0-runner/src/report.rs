@@ -94,6 +94,7 @@ mod tests {
                 max_files: 4,
                 max_total_lines: 150,
             },
+            confidence: Default::default(),
         }
     }
 

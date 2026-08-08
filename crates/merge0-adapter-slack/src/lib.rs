@@ -155,6 +155,7 @@ fn normalize_message(
         fingerprint: fingerprint(Source::Slack, &[&format!("{channel_id}:{thread_root}")]),
         join_keys: JoinKeys::default(),
         affected_count: Some(message.reply_count.map_or(1, |replies| replies + 1)),
+        delegated: false,
         first_seen,
         last_seen,
         raw: raw.clone(),

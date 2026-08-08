@@ -1578,12 +1578,14 @@ dependencies = [
  "merge0-adapter-webhook",
  "merge0-adapter-zendesk",
  "merge0-adapters",
+ "merge0-broker",
  "merge0-context",
  "merge0-fetch",
  "merge0-github",
  "merge0-hardening",
  "merge0-meta",
  "merge0-model",
+ "merge0-registry",
  "merge0-runner",
  "merge0-signal",
  "merge0-slack",
@@ -1661,6 +1663,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "toml",
+ "tracing",
  "ulid",
 ]
 

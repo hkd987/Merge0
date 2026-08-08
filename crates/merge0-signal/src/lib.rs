@@ -1,6 +1,6 @@
 //! The Signal schema — the contract between every Merge0 component.
 //!
-//! Normative spec: `docs/signal-schema.md` (v0.2). A test below round-trips
+//! Normative spec: `docs/signal-schema.md` (v0.4). A test below round-trips
 //! the doc's JSON example, so this crate and the doc cannot drift silently.
 //! Schema changes must update the doc (and its version) in the same PR.
 //!
@@ -16,7 +16,7 @@ use ulid::Ulid;
 pub mod report;
 pub mod telemetry;
 
-pub use report::{DismissReason, GateDecision, Report, ReportKind, ReportStatus};
+pub use report::{DismissReason, GateConfidence, GateDecision, Report, ReportKind, ReportStatus};
 pub use telemetry::TelemetrySnapshot;
 
 /// Where a Signal was ingested from.
@@ -143,6 +143,10 @@ pub struct Signal {
     pub join_keys: JoinKeys,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub affected_count: Option<u64>,
+    /// Explicitly handed to Merge0 (e.g. a `merge0` label on the source
+    /// ticket). Prioritized by triage; bypasses no safety checks.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub delegated: bool,
     pub first_seen: DateTime<Utc>,
     pub last_seen: DateTime<Utc>,
     pub raw: serde_json::Value,
@@ -195,6 +199,10 @@ pub struct WorkOrder {
     /// discards itself with a "fix larger than expected" outcome.
     #[serde(default)]
     pub diff_budget: DiffBudget,
+    /// The gate's self-assessed fix confidence — drives the (off-by-default)
+    /// auto-dispatch autonomy dial. Absent in old payloads → `Low`.
+    #[serde(default)]
+    pub confidence: report::GateConfidence,
 }
 
 /// The empirical two-regime finding: small scoped PRs merge, sprawling ones
@@ -267,6 +275,9 @@ mod tests {
         assert_eq!(signal.kind, SignalKind::Exception);
         assert_eq!(signal.severity, Severity::High);
         assert_eq!(signal.affected_count, Some(42));
+        // v0.4: absent `delegated` deserializes false and stays omitted on
+        // serialize (the example deliberately leaves it out).
+        assert!(!signal.delegated);
         assert_eq!(signal.join_keys.release.as_deref(), Some("v2.3.0"));
         assert!(signal.join_keys.account_id.is_none());
         assert_eq!(signal.evidence.len(), 2);
@@ -339,6 +350,7 @@ mod tests {
                 note: Some("March attempt reverted: broke district admin view".into()),
             }],
             diff_budget: DiffBudget::default(),
+            confidence: Default::default(),
         };
         let json = serde_json::to_string(&order).unwrap();
         let back: WorkOrder = serde_json::from_str(&json).unwrap();

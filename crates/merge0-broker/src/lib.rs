@@ -406,6 +406,7 @@ mod tests {
             constraints: "Single concern".into(),
             prior_attempts: vec![],
             diff_budget: Default::default(),
+            confidence: Default::default(),
         };
         let mut broker = Broker::new(FakeMinter);
         broker.add_runner_key(RUNNER_KEY);

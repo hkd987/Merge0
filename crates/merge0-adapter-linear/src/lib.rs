@@ -21,6 +21,14 @@
 //!   resurrect closed issues. Absent state → not skipped.
 //! - **`body`** is the issue `description` (plain markdown); absent/null
 //!   description → empty string.
+//! - **Delegation.** A label named `merge0` (case-insensitive) marks the
+//!   issue as explicitly handed to Merge0: `delegated: true` and severity
+//!   floored at high (`severity.max(High)` — an urgent priority stays
+//!   critical). Labels arrive as the GraphQL connection shape
+//!   (`labels: { nodes: [{ name }] }`, the poller's query) or a flat array
+//!   of label objects (`labels: [{ name }]`, the webhook payload shape) —
+//!   both are accepted. Absent labels or no matching label →
+//!   `delegated: false`, severity unchanged.
 //! - **`first_seen`/`last_seen`** come from `createdAt`/`updatedAt` — an
 //!   issue "lives" from filing to last activity.
 //! - **Evidence** is the issue's own `url` (Linear provides canonical deep
@@ -60,12 +68,45 @@ struct IssueNode {
     url: String,
     #[serde(default)]
     state: Option<State>,
+    #[serde(default)]
+    labels: Option<Labels>,
 }
 
 #[derive(Debug, Deserialize)]
 struct State {
     #[serde(default, rename = "type")]
     state_type: Option<String>,
+}
+
+/// Issue labels in either shape Linear serves them (see module docs):
+/// the GraphQL connection (`{ "nodes": [...] }`) or the webhook's flat
+/// array.
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum Labels {
+    Connection { nodes: Vec<Label> },
+    Flat(Vec<Label>),
+}
+
+#[derive(Debug, Deserialize)]
+struct Label {
+    #[serde(default)]
+    name: Option<String>,
+}
+
+impl Labels {
+    fn contains_merge0(&self) -> bool {
+        let nodes = match self {
+            Labels::Connection { nodes } => nodes,
+            Labels::Flat(nodes) => nodes,
+        };
+        nodes.iter().any(|label| {
+            label
+                .name
+                .as_deref()
+                .is_some_and(|name| name.eq_ignore_ascii_case("merge0"))
+        })
+    }
 }
 
 impl Adapter for LinearAdapter {
@@ -111,13 +152,21 @@ fn normalize_node(raw: &serde_json::Value) -> Result<Option<Signal>, AdapterErro
         return Ok(None);
     }
 
+    let delegated = node.labels.as_ref().is_some_and(Labels::contains_merge0);
+    let mut severity = severity_from_priority(node.priority);
+    if delegated {
+        // An explicit human delegation is at least high urgency; an urgent
+        // priority stays critical.
+        severity = severity.max(Severity::High);
+    }
+
     let identifier = node.identifier;
     Ok(Some(Signal {
         id: Ulid::new(),
         source: Source::Linear,
         source_ref: identifier.clone(),
         kind: SignalKind::Ticket,
-        severity: severity_from_priority(node.priority),
+        severity,
         title: node.title.clone(),
         body: node.description.clone().unwrap_or_default(),
         evidence: vec![EvidenceLink {
@@ -128,6 +177,7 @@ fn normalize_node(raw: &serde_json::Value) -> Result<Option<Signal>, AdapterErro
         fingerprint: fingerprint(Source::Linear, &[&identifier]),
         join_keys: JoinKeys::default(),
         affected_count: None,
+        delegated,
         first_seen: node.created_at,
         last_seen: node.updated_at,
         raw: raw.clone(),
@@ -199,6 +249,52 @@ mod tests {
         let signals = normalize(serde_json::json!([completed, canceled, started, stateless]));
         let refs: Vec<&str> = signals.iter().map(|s| s.source_ref.as_str()).collect();
         assert_eq!(refs, ["ENG-3", "ENG-4"]);
+    }
+
+    #[test]
+    fn merge0_label_delegates_and_floors_severity_case_insensitively() {
+        // Mixed-case label among others, GraphQL connection shape →
+        // delegated, low → floored to high.
+        let mut labeled = minimal_node("ENG-10");
+        labeled["labels"] =
+            serde_json::json!({ "nodes": [{ "name": "bug" }, { "name": "Merge0" }] });
+        let signals = normalize(serde_json::json!([labeled]));
+        assert!(signals[0].delegated);
+        assert_eq!(signals[0].severity, Severity::High);
+
+        // An urgent priority stays critical when delegated.
+        let mut critical = minimal_node("ENG-11");
+        critical["labels"] = serde_json::json!({ "nodes": [{ "name": "MERGE0" }] });
+        critical["priority"] = serde_json::json!(1);
+        let signals = normalize(serde_json::json!([critical]));
+        assert!(signals[0].delegated);
+        assert_eq!(signals[0].severity, Severity::Critical);
+    }
+
+    #[test]
+    fn webhook_flat_label_array_also_delegates() {
+        // Linear webhooks serve labels as a flat array of label objects.
+        let mut labeled = minimal_node("ENG-12");
+        labeled["labels"] = serde_json::json!([{ "id": "lbl-1", "name": "merge0" }]);
+        let signals = normalize(serde_json::json!([labeled]));
+        assert!(signals[0].delegated);
+        assert_eq!(signals[0].severity, Severity::High);
+    }
+
+    #[test]
+    fn labels_without_merge0_do_not_delegate() {
+        let mut labeled = minimal_node("ENG-13");
+        labeled["labels"] = serde_json::json!({ "nodes": [{ "name": "bug" }] });
+        let signals = normalize(serde_json::json!([labeled]));
+        assert!(!signals[0].delegated);
+        assert_eq!(signals[0].severity, Severity::Low);
+    }
+
+    #[test]
+    fn missing_labels_field_does_not_delegate() {
+        let signals = normalize(serde_json::json!([minimal_node("ENG-14")]));
+        assert!(!signals[0].delegated);
+        assert_eq!(signals[0].severity, Severity::Low);
     }
 
     #[test]

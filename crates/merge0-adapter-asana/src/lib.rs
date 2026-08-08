@@ -120,6 +120,7 @@ fn normalize_task(raw: &serde_json::Value) -> Result<Option<Signal>, AdapterErro
         fingerprint: fingerprint(Source::Asana, &[&gid]),
         join_keys: JoinKeys::default(),
         affected_count: None,
+        delegated: false,
         first_seen: task.created_at,
         last_seen: task.modified_at,
         raw: raw.clone(),

@@ -163,6 +163,7 @@ mod tests {
             constraints: String::new(),
             prior_attempts: vec![],
             diff_budget: DiffBudget::default(),
+            confidence: Default::default(),
         }
     }
 

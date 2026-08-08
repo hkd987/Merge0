@@ -49,6 +49,7 @@ fn sample_signal(fp_part: &str, first: DateTime<Utc>, last: DateTime<Utc>) -> Si
             ..Default::default()
         },
         affected_count: Some(10),
+        delegated: false,
         first_seen: first,
         last_seen: last,
         raw: serde_json::json!({"id": fp_part}),
@@ -84,6 +85,7 @@ fn sample_work_order(report: &Report) -> WorkOrder {
         constraints: "".into(),
         prior_attempts: vec![],
         diff_budget: Default::default(),
+        confidence: Default::default(),
     }
 }
 
@@ -553,7 +555,13 @@ async fn transactional_approve_dispatch_and_rollback() {
 
     let extensions = serde_json::json!({"mcp": ["internal-api"], "skills": ["house-style"]});
     tenant
-        .approve_for_dispatch(report.id, "claude-code", Some(&extensions), ts(3, 0))
+        .approve_for_dispatch(
+            report.id,
+            "claude-code",
+            Some(&extensions),
+            "human",
+            ts(3, 0),
+        )
         .await
         .unwrap();
     assert_eq!(
@@ -565,7 +573,7 @@ async fn transactional_approve_dispatch_and_rollback() {
 
     // Approving a non-awaiting report fails atomically (no dispatch row).
     let err = tenant
-        .approve_for_dispatch(report.id, "claude-code", None, ts(3, 1))
+        .approve_for_dispatch(report.id, "claude-code", None, "human", ts(3, 1))
         .await;
     assert!(matches!(err, Err(StoreError::NotFound(_))));
 
@@ -705,7 +713,7 @@ async fn telemetry_computes_rates_and_phase0_gate() {
             .unwrap();
     }
 
-    let snapshot = tenant.telemetry(30, now).await.unwrap();
+    let snapshot = tenant.telemetry(30, 3, now).await.unwrap();
     assert_eq!(snapshot.counts.dispatched, 12);
     assert_eq!(snapshot.counts.prs_opened, 10);
     assert_eq!(snapshot.counts.prs_merged, 6);
@@ -728,7 +736,7 @@ async fn telemetry_computes_rates_and_phase0_gate() {
 
     // Outside the window nothing counts.
     let empty = tenant
-        .telemetry(30, now + Duration::days(90))
+        .telemetry(30, 3, now + Duration::days(90))
         .await
         .unwrap();
     assert_eq!(empty.counts.dispatched, 0);

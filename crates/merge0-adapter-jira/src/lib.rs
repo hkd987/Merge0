@@ -24,6 +24,11 @@
 //!   Format object (API v3) is flattened by concatenating every `"text"`
 //!   field found recursively, in document order. Absent description or any
 //!   other/unknown shape → empty body, never an error.
+//! - **Delegation.** A `fields.labels` entry equal to `merge0`
+//!   (case-insensitive) marks the ticket as explicitly handed to Merge0:
+//!   `delegated: true` and severity floored at high
+//!   (`severity.max(High)` — a critical priority stays critical). Absent
+//!   `labels` or no matching label → `delegated: false`, severity unchanged.
 //! - **`first_seen`/`last_seen`** come from `fields.created`/`fields.updated`
 //!   — an issue "lives" from filing to last activity.
 //! - **`join_keys`** are left empty: `fields.project.key` is a repo/project
@@ -71,6 +76,8 @@ struct Fields {
     updated: DateTime<Utc>,
     #[serde(default)]
     status: Option<Status>,
+    #[serde(default)]
+    labels: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -141,19 +148,31 @@ fn normalize_issue(
         return Ok(None);
     }
 
+    let delegated = issue
+        .fields
+        .labels
+        .iter()
+        .any(|label| label.eq_ignore_ascii_case("merge0"));
+    let mut severity = severity_from_priority(
+        issue
+            .fields
+            .priority
+            .as_ref()
+            .and_then(|p| p.name.as_deref()),
+    );
+    if delegated {
+        // An explicit human delegation is at least high urgency; a critical
+        // priority stays critical.
+        severity = severity.max(Severity::High);
+    }
+
     let key = issue.key;
     Ok(Some(Signal {
         id: Ulid::new(),
         source: Source::Jira,
         source_ref: key.clone(),
         kind: SignalKind::Ticket,
-        severity: severity_from_priority(
-            issue
-                .fields
-                .priority
-                .as_ref()
-                .and_then(|p| p.name.as_deref()),
-        ),
+        severity,
         title: issue.fields.summary.clone(),
         body: issue
             .fields
@@ -169,6 +188,7 @@ fn normalize_issue(
         fingerprint: fingerprint(Source::Jira, &[&key]),
         join_keys: JoinKeys::default(),
         affected_count: None,
+        delegated,
         first_seen: issue.fields.created,
         last_seen: issue.fields.updated,
         raw: raw.clone(),
@@ -326,6 +346,40 @@ mod tests {
         // Absent description too.
         let signals = normalize(serde_json::json!([minimal_issue("CHK-7")]));
         assert_eq!(signals[0].body, "");
+    }
+
+    #[test]
+    fn merge0_label_delegates_and_floors_severity_case_insensitively() {
+        // Mixed-case label among others → delegated, low → floored to high.
+        let mut labeled = minimal_issue("CHK-10");
+        labeled["fields"]["labels"] = serde_json::json!(["checkout", "Merge0"]);
+        let signals = normalize(serde_json::json!([labeled]));
+        assert!(signals[0].delegated);
+        assert_eq!(signals[0].severity, Severity::High);
+
+        // A critical priority stays critical when delegated.
+        let mut critical = minimal_issue("CHK-11");
+        critical["fields"]["labels"] = serde_json::json!(["MERGE0"]);
+        critical["fields"]["priority"] = serde_json::json!({ "name": "Highest" });
+        let signals = normalize(serde_json::json!([critical]));
+        assert!(signals[0].delegated);
+        assert_eq!(signals[0].severity, Severity::Critical);
+    }
+
+    #[test]
+    fn labels_without_merge0_do_not_delegate() {
+        let mut labeled = minimal_issue("CHK-12");
+        labeled["fields"]["labels"] = serde_json::json!(["checkout", "payments"]);
+        let signals = normalize(serde_json::json!([labeled]));
+        assert!(!signals[0].delegated);
+        assert_eq!(signals[0].severity, Severity::Low);
+    }
+
+    #[test]
+    fn missing_labels_field_does_not_delegate() {
+        let signals = normalize(serde_json::json!([minimal_issue("CHK-13")]));
+        assert!(!signals[0].delegated);
+        assert_eq!(signals[0].severity, Severity::Low);
     }
 
     #[test]

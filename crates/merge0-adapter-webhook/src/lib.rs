@@ -126,6 +126,7 @@ fn normalize_submission(raw: &serde_json::Value) -> Result<Signal, AdapterError>
         fingerprint: fingerprint(Source::Webhook, &["custom", &submission.dedupe_key]),
         join_keys: submission.join_keys.clone(),
         affected_count: submission.affected_count,
+        delegated: false,
         first_seen: submission.first_seen,
         last_seen: submission.last_seen,
         raw: raw.clone(),
@@ -303,6 +304,7 @@ fn normalize_log_record(
             ..Default::default()
         },
         affected_count: None,
+        delegated: false,
         first_seen: timestamp,
         last_seen: timestamp,
         raw: raw.clone(),

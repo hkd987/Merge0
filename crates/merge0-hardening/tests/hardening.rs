@@ -40,6 +40,7 @@ fn exception_signal(reference: &str, title: &str) -> Signal {
         fingerprint: fingerprint(Source::Sentry, &["issue", reference]),
         join_keys: JoinKeys::default(),
         affected_count: Some(12),
+        delegated: false,
         first_seen: now() - Duration::days(3),
         last_seen: now() - Duration::hours(2),
         raw: serde_json::Value::Null,
