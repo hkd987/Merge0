@@ -410,7 +410,21 @@ async fn shutdown_signal() {
 }
 
 fn required(name: &str) -> Result<String, String> {
-    std::env::var(name).map_err(|_| format!("missing required env var {name}"))
+    std::env::var(name).map_err(|_| {
+        // Boot failures are the first thing a new operator sees — point at
+        // the fix, not just the symptom.
+        let hint = match name {
+            "MERGE0_GITHUB_APP_ID"
+            | "MERGE0_GITHUB_APP_PRIVATE_KEY"
+            | "MERGE0_GITHUB_INSTALLATION_ID" => {
+                " — create the GitHub App with docs/github-app-setup.md, \
+                 or set MERGE0_DEV_FAKES=1 to run without GitHub"
+            }
+            "ANTHROPIC_API_KEY" => " — or set MERGE0_DEV_FAKES=1 to run without a model",
+            _ => "",
+        };
+        format!("missing required env var {name}{hint}")
+    })
 }
 
 /// `MERGE0_SLACK_NOTIFY`: comma-separated notification classes to enable

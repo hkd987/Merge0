@@ -114,6 +114,13 @@ cp .env.example .env    # fill in tokens + GitHub App credentials
 docker compose up --build
 ```
 
+First time? Merge0 authenticates as a **GitHub App** (never a PAT), which
+you create once — about five minutes, walked through step by step with
+the exact permissions and events in
+**[docs/github-app-setup.md](docs/github-app-setup.md)**. To look around
+first without creating anything, `MERGE0_DEV_FAKES=1 docker compose up
+--build` runs the whole loop against in-process fakes.
+
 Then open `http://127.0.0.1:8080/setup`: it serves the three files to
 commit to your product repo (the runner workflow, `MERGE0.md` intent doc,
 `.merge0/agent.toml` manifest), the two Actions secrets to configure, and
