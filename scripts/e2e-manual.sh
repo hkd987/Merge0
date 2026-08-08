@@ -97,8 +97,9 @@ REPORT_ID=$(auth "$BASE/reports?status=awaiting_review" | python3 -c 'import sys
 SIGNALS=$(auth "$BASE/reports/$REPORT_ID" | python3 -c 'import sys,json; print(len(json.load(sys.stdin)["report"]["signal_ids"]))')
 check "report references BOTH signals (P0-3)" "$SIGNALS" "2"
 
-say "4. Surfaces: inbox shell, onboarding bundle, safety"
-check "inbox shell serves (auth happens client-side)" "$(curl -sf "$BASE/inbox")" "merge0_token"
+say "4. Surfaces: SPA shell, onboarding bundle, safety"
+check "SPA shell serves (auth happens client-side)" "$(curl -sf "$BASE/inbox")" '<div id="root">'
+check "dashboard route serves the same shell" "$(curl -sf "$BASE/dashboard")" '<div id="root">'
 ONBOARDING=$(auth "$BASE/onboarding")
 check "onboarding ships the workflow" "$ONBOARDING" "merge0.yml"
 check "onboarding lists required secrets" "$ONBOARDING" "secrets_to_configure"

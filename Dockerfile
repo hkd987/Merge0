@@ -4,6 +4,19 @@
 # copied in so a mismatched base image fails fast instead of compiling
 # with a different rustc than CI verified.
 
+# UI build stage: the SPA is embedded into the server binary at compile
+# time, so it must be built first.
+FROM node:22-bookworm-slim AS ui-builder
+WORKDIR /build/ui
+COPY ui/package.json ui/package-lock.json ./
+RUN --mount=type=secret,id=extra_ca_certs \
+    if [ -f /run/secrets/extra_ca_certs ]; then \
+      npm config set cafile /run/secrets/extra_ca_certs; \
+    fi \
+    && npm ci --no-audit --no-fund
+COPY ui/ ./
+RUN npm run build
+
 FROM rust:1.97.1-bookworm AS builder
 WORKDIR /build
 
@@ -27,6 +40,7 @@ COPY crates ./crates
 COPY ee ./ee
 COPY config ./config
 COPY docs ./docs
+COPY --from=ui-builder /build/ui/dist ./ui/dist
 
 RUN cargo build --release --locked -p merge0-server -p merge0-hosted
 

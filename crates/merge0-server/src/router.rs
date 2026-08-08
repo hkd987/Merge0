@@ -38,10 +38,16 @@ pub fn app(state: AppState) -> Router {
     // Self-authenticated or data-free routes. (`/webhooks/github` is a
     // static route and takes precedence over the `{vendor}` capture.)
     // Rate-limited per IP: these verify their own signatures, but the
-    // verification itself must not be a free DoS vector.
+    // verification itself must not be a free DoS vector. The SPA routes
+    // serve embedded, data-free static assets (auth is client-side —
+    // audit C2).
     let open = Router::new()
         .route("/healthz", get(handlers::health::healthz))
-        .route("/inbox", get(handlers::inbox::page))
+        .route("/", get(handlers::spa::serve))
+        .route("/inbox", get(handlers::spa::serve))
+        .route("/dashboard", get(handlers::spa::serve))
+        .route("/setup", get(handlers::spa::serve))
+        .route("/assets/{*file}", get(handlers::spa::serve))
         .route("/runner/callback", post(handlers::runner::callback))
         .route("/webhooks/github", post(handlers::webhooks::github))
         .route(

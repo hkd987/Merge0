@@ -101,12 +101,22 @@ Optional env:
   per-IP limit on the self-authenticated open routes (webhooks, runner
   callback, Slack interactions, inbox shell).
 
-Surfaces: `/inbox` (review queue; paste the API token once, stored in the
-browser), `/onboarding` (generated workflow + MERGE0.md + agent.toml bundle
-and setup checklist), `/telemetry`, `/metrics` (Prometheus text — point your
-scraper at it with `authorization: Bearer $MERGE0_API_TOKEN`), `/safety`,
-`POST /ingest/{source}`
-(envelope), `POST /webhooks/{sentry,posthog,zendesk,datadog}` (native,
+**Web app** (React SPA embedded in the binary; styling contract in
+`docs/style-guide.md`): `/inbox` (the review queue — keyboard-first
+approve/dismiss), `/dashboard` (P0-10 acceptance-rate telemetry vs the
+Phase 0 gate), `/setup` (onboarding bundle with copyable files + safety
+status). The app asks for the API token once and stores it in the browser;
+pages themselves are data-free static assets.
+
+Dev loop: `cd ui && npm run dev` (Vite on :5173, API proxied to
+`127.0.0.1:8080`), or `npm run build` then rebuild the server — the built
+`ui/dist` is embedded at compile time. `npm test` runs the UI suite,
+including the style-guide lint (no color literals outside `theme.css`).
+
+JSON API: `/reports`, `/onboarding`, `/telemetry`, `/metrics` (Prometheus
+text — scrape with `authorization: Bearer $MERGE0_API_TOKEN`), `/safety`,
+`POST /ingest/{source}` (envelope),
+`POST /webhooks/{sentry,posthog,zendesk,datadog}` (native,
 vendor-signature-verified), `POST /triage/run`, `POST /slack/interactions`.
 All product routes require `Authorization: Bearer $MERGE0_API_TOKEN`;
 webhooks and the runner callback authenticate with their own schemes.

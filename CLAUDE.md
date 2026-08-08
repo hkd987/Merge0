@@ -38,6 +38,11 @@ All three of fmt/clippy/test must pass before any commit.
 7. **Well tested is the bar.** New logic ships with tests: golden tests for
    normalization, unit tests for mappings/edge cases. Untested code is
    incomplete code.
+8. **All UI follows `docs/style-guide.md`.** Colors, type, spacing, and radii
+   come only from the tokens in `ui/src/theme.css` (enforced by the style-lint
+   test); the inbox stays a keyboard-first review queue, pages stay data-free
+   static assets with client-side token auth. Change the system via tokens +
+   the guide in the same PR, never by special-casing a component.
 
 ## Self-improvement protocol (standing instruction)
 

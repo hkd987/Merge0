@@ -409,20 +409,27 @@ async fn every_data_route_requires_the_bearer_token() {
         .await
         .unwrap();
     assert_eq!(res.status(), 200);
-    let shell = h
-        .client
-        .get(format!("{}/inbox", h.base))
-        .send()
-        .await
-        .unwrap()
-        .text()
-        .await
-        .unwrap();
-    assert!(
-        shell.contains("merge0_token"),
-        "shell prompts for the token"
-    );
-    assert!(!shell.contains("TypeError"), "shell carries no report data");
+    // SPA routes serve the same data-free shell (or an actionable 503 when
+    // the UI bundle isn't built in this environment).
+    for page in ["/", "/inbox", "/dashboard", "/setup"] {
+        let res = h
+            .client
+            .get(format!("{}{page}", h.base))
+            .send()
+            .await
+            .unwrap();
+        let status = res.status().as_u16();
+        assert!(
+            status == 200 || status == 503,
+            "GET {page} must serve the shell or an unbuilt-UI 503, got {status}"
+        );
+        let body = res.text().await.unwrap();
+        assert!(
+            !body.contains("TypeError: districtId"),
+            "shell carries no report data"
+        );
+        assert!(!body.contains("api-secret"), "shell carries no token");
+    }
 
     h.teardown().await;
 }
