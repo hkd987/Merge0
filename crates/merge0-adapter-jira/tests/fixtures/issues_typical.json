@@ -1,0 +1,97 @@
+{
+  "endpoint": "issues",
+  "context": { "browse_base_url": "https://acme-example.atlassian.net/browse" },
+  "payload": {
+    "startAt": 0,
+    "maxResults": 50,
+    "total": 4,
+    "issues": [
+      {
+        "id": "10042",
+        "key": "CHK-42",
+        "self": "https://acme-example.atlassian.net/rest/api/3/issue/10042",
+        "fields": {
+          "summary": "Checkout spinner never resolves after coupon apply",
+          "description": {
+            "type": "doc",
+            "version": 1,
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  { "type": "text", "text": "Applying a coupon on the checkout page leaves the " },
+                  { "type": "text", "text": "Pay now", "marks": [{ "type": "strong" }] },
+                  { "type": "text", "text": " button spinning forever." }
+                ]
+              },
+              {
+                "type": "paragraph",
+                "content": [
+                  { "type": "text", "text": " Reported by three pilot districts this week." }
+                ]
+              }
+            ]
+          },
+          "priority": { "id": "1", "name": "Highest" },
+          "status": {
+            "name": "In Progress",
+            "statusCategory": { "id": 4, "key": "indeterminate", "name": "In Progress" }
+          },
+          "project": { "id": "10000", "key": "CHK", "name": "Checkout" },
+          "labels": ["checkout", "payments"],
+          "created": "2026-08-04T11:30:00Z",
+          "updated": "2026-08-06T16:45:00Z"
+        }
+      },
+      {
+        "id": "10057",
+        "key": "CHK-57",
+        "self": "https://acme-example.atlassian.net/rest/api/3/issue/10057",
+        "fields": {
+          "summary": "Order confirmation email uses wrong sender name",
+          "description": "Emails arrive from \"noreply@example.com\" with the sender name of the staging brand instead of the store name.",
+          "priority": { "id": "3", "name": "Medium" },
+          "status": {
+            "name": "To Do",
+            "statusCategory": { "id": 2, "key": "new", "name": "To Do" }
+          },
+          "project": { "id": "10000", "key": "CHK", "name": "Checkout" },
+          "created": "2026-08-05T09:00:00Z",
+          "updated": "2026-08-05T09:00:00Z"
+        }
+      },
+      {
+        "id": "10061",
+        "key": "CHK-61",
+        "self": "https://acme-example.atlassian.net/rest/api/3/issue/10061",
+        "fields": {
+          "summary": "Upgrade payment SDK to v9",
+          "description": "Done as part of the August maintenance window.",
+          "priority": { "id": "4", "name": "Low" },
+          "status": {
+            "name": "Done",
+            "statusCategory": { "id": 3, "key": "done", "name": "Done" }
+          },
+          "project": { "id": "10000", "key": "CHK", "name": "Checkout" },
+          "created": "2026-07-28T10:00:00Z",
+          "updated": "2026-08-03T15:00:00Z"
+        }
+      },
+      {
+        "id": "10073",
+        "key": "CHK-73",
+        "self": "https://acme-example.atlassian.net/rest/api/3/issue/10073",
+        "fields": {
+          "summary": "Add keyboard navigation to the coupon field",
+          "status": {
+            "name": "Backlog",
+            "statusCategory": { "id": 2, "key": "new", "name": "To Do" }
+          },
+          "project": { "id": "10000", "key": "CHK", "name": "Checkout" },
+          "created": "2026-08-06T08:15:00Z",
+          "updated": "2026-08-07T12:00:00Z"
+        }
+      }
+    ]
+  }
+}

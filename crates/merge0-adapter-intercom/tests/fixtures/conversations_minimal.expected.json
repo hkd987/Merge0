@@ -1,0 +1,30 @@
+[
+  {
+    "body": "Cannot log in",
+    "evidence": [
+      {
+        "kind": "ticket",
+        "label": "Intercom conversation 70019999",
+        "url": "https://app.intercom-example.com/a/inbox/abc123/conversation/70019999"
+      }
+    ],
+    "fingerprint": "intercom:b8678bb9f292df380779e7ef97ef48ec",
+    "first_seen": "2024-08-08T06:53:20Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "ticket",
+    "last_seen": "2024-08-08T06:53:20Z",
+    "raw": {
+      "created_at": 1723100000,
+      "id": "70019999",
+      "source": {
+        "body": "Cannot log in"
+      },
+      "updated_at": 1723100000
+    },
+    "severity": "low",
+    "source": "intercom",
+    "source_ref": "70019999",
+    "title": "Cannot log in"
+  }
+]

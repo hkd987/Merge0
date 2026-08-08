@@ -1,0 +1,18 @@
+{
+  "endpoint": "conversations",
+  "context": {
+    "app_base_url": "https://app.intercom-example.com/a/inbox/abc123/"
+  },
+  "payload": {
+    "conversations": [
+      {
+        "id": "70019999",
+        "created_at": 1723100000,
+        "updated_at": 1723100000,
+        "source": {
+          "body": "Cannot log in"
+        }
+      }
+    ]
+  }
+}

@@ -10,6 +10,12 @@ members = [
     "crates/merge0-adapter-webhook",
     "crates/merge0-adapter-datadog",
     "crates/merge0-adapter-loopforge",
+    "crates/merge0-adapter-jira",
+    "crates/merge0-adapter-linear",
+    "crates/merge0-adapter-slack",
+    "crates/merge0-adapter-asana",
+    "crates/merge0-adapter-trello",
+    "crates/merge0-adapter-intercom",
     "crates/merge0-store",
     "crates/merge0-fetch",
     "crates/merge0-model",
@@ -83,6 +89,12 @@ merge0-adapter-github-issues = { path = "crates/merge0-adapter-github-issues" }
 merge0-adapter-webhook = { path = "crates/merge0-adapter-webhook" }
 merge0-adapter-datadog = { path = "crates/merge0-adapter-datadog" }
 merge0-adapter-loopforge = { path = "crates/merge0-adapter-loopforge" }
+merge0-adapter-jira = { path = "crates/merge0-adapter-jira" }
+merge0-adapter-linear = { path = "crates/merge0-adapter-linear" }
+merge0-adapter-slack = { path = "crates/merge0-adapter-slack" }
+merge0-adapter-asana = { path = "crates/merge0-adapter-asana" }
+merge0-adapter-trello = { path = "crates/merge0-adapter-trello" }
+merge0-adapter-intercom = { path = "crates/merge0-adapter-intercom" }
 merge0-server = { path = "crates/merge0-server" }
 merge0-ee = { path = "ee/merge0-ee" }
 merge0-hosted = { path = "ee/merge0-hosted" }

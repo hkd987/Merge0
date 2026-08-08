@@ -1,0 +1,52 @@
+{
+  "endpoint": "issues",
+  "context": {},
+  "payload": {
+    "nodes": [
+      {
+        "id": "b1c2d3e4-0000-4000-8000-000000000101",
+        "identifier": "ENG-101",
+        "title": "Webhook deliveries time out for large payloads",
+        "description": "Deliveries to customer endpoints time out once the payload exceeds ~1 MB.\n\nSteps:\n1. Configure a webhook\n2. Trigger a bulk export\n3. Observe repeated 504s in the delivery log",
+        "priority": 1,
+        "url": "https://linear.example.com/acme/issue/ENG-101/webhook-deliveries-time-out",
+        "state": { "id": "st-started", "name": "In Progress", "type": "started" },
+        "labels": { "nodes": [{ "name": "bug" }] },
+        "createdAt": "2026-08-03T10:00:00Z",
+        "updatedAt": "2026-08-06T17:30:00Z"
+      },
+      {
+        "id": "b1c2d3e4-0000-4000-8000-000000000123",
+        "identifier": "ENG-123",
+        "title": "Report export fails for workspaces with >10k rows",
+        "description": "CSV export returns a 500 for large workspaces. Suspect the in-memory buffer in the export worker.",
+        "priority": 3,
+        "url": "https://linear.example.com/acme/issue/ENG-123/report-export-fails",
+        "state": { "id": "st-backlog", "name": "Backlog", "type": "backlog" },
+        "createdAt": "2026-08-05T09:15:00Z",
+        "updatedAt": "2026-08-05T09:15:00Z"
+      },
+      {
+        "id": "b1c2d3e4-0000-4000-8000-000000000140",
+        "identifier": "ENG-140",
+        "title": "Rotate the staging TLS certificate",
+        "description": "Rotated on 2026-08-04.",
+        "priority": 2,
+        "url": "https://linear.example.com/acme/issue/ENG-140/rotate-staging-tls",
+        "state": { "id": "st-done", "name": "Done", "type": "completed" },
+        "createdAt": "2026-07-30T08:00:00Z",
+        "updatedAt": "2026-08-04T12:00:00Z"
+      },
+      {
+        "id": "b1c2d3e4-0000-4000-8000-000000000155",
+        "identifier": "ENG-155",
+        "title": "Consider dark mode for the settings page",
+        "priority": 0,
+        "url": "https://linear.example.com/acme/issue/ENG-155/dark-mode-settings",
+        "state": { "id": "st-triage", "name": "Triage", "type": "triage" },
+        "createdAt": "2026-08-06T14:45:00Z",
+        "updatedAt": "2026-08-07T11:00:00Z"
+      }
+    ]
+  }
+}

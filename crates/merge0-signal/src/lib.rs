@@ -32,6 +32,12 @@ pub enum Source {
     Otel,
     Datadog,
     Loopforge,
+    Jira,
+    Linear,
+    /// Messages/threads from designated Slack channels (e.g. #bugs).
+    Slack,
+    Asana,
+    Trello,
     /// Merge0's own operational telemetry, ingested as just another source
     /// (the meta-loop, PRD §5d).
     Meta,
@@ -50,6 +56,11 @@ impl Source {
             Source::Otel => "otel",
             Source::Datadog => "datadog",
             Source::Loopforge => "loopforge",
+            Source::Jira => "jira",
+            Source::Linear => "linear",
+            Source::Slack => "slack",
+            Source::Asana => "asana",
+            Source::Trello => "trello",
             Source::Meta => "meta",
         }
     }

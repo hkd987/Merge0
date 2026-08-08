@@ -1,0 +1,13 @@
+{
+  "endpoint": "cards",
+  "context": {},
+  "payload": [
+    {
+      "id": "64f1c0ffee0badc0de000006",
+      "name": "Check retry behavior on flaky sync",
+      "closed": false,
+      "dateLastActivity": "2026-08-05T14:00:00Z",
+      "shortUrl": "https://trello.com/c/uVwX1122"
+    }
+  ]
+}

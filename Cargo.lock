@@ -1156,6 +1156,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
+name = "merge0-adapter-asana"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "merge0-adapters",
+ "merge0-signal",
+ "serde",
+ "serde_json",
+ "ulid",
+]
+
+[[package]]
 name = "merge0-adapter-datadog"
 version = "0.1.0"
 dependencies = [
@@ -1169,6 +1181,42 @@ dependencies = [
 
 [[package]]
 name = "merge0-adapter-github-issues"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "merge0-adapters",
+ "merge0-signal",
+ "serde",
+ "serde_json",
+ "ulid",
+]
+
+[[package]]
+name = "merge0-adapter-intercom"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "merge0-adapters",
+ "merge0-signal",
+ "serde",
+ "serde_json",
+ "ulid",
+]
+
+[[package]]
+name = "merge0-adapter-jira"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "merge0-adapters",
+ "merge0-signal",
+ "serde",
+ "serde_json",
+ "ulid",
+]
+
+[[package]]
+name = "merge0-adapter-linear"
 version = "0.1.0"
 dependencies = [
  "chrono",
@@ -1205,6 +1253,30 @@ dependencies = [
 
 [[package]]
 name = "merge0-adapter-sentry"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "merge0-adapters",
+ "merge0-signal",
+ "serde",
+ "serde_json",
+ "ulid",
+]
+
+[[package]]
+name = "merge0-adapter-slack"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "merge0-adapters",
+ "merge0-signal",
+ "serde",
+ "serde_json",
+ "ulid",
+]
+
+[[package]]
+name = "merge0-adapter-trello"
 version = "0.1.0"
 dependencies = [
  "chrono",
@@ -1344,10 +1416,16 @@ dependencies = [
  "chrono",
  "hex",
  "hmac",
+ "merge0-adapter-asana",
  "merge0-adapter-datadog",
  "merge0-adapter-github-issues",
+ "merge0-adapter-intercom",
+ "merge0-adapter-jira",
+ "merge0-adapter-linear",
  "merge0-adapter-posthog",
  "merge0-adapter-sentry",
+ "merge0-adapter-slack",
+ "merge0-adapter-trello",
  "merge0-adapter-zendesk",
  "merge0-adapters",
  "merge0-github",
@@ -1486,11 +1564,17 @@ dependencies = [
  "chrono",
  "hex",
  "hmac",
+ "merge0-adapter-asana",
  "merge0-adapter-datadog",
  "merge0-adapter-github-issues",
+ "merge0-adapter-intercom",
+ "merge0-adapter-jira",
+ "merge0-adapter-linear",
  "merge0-adapter-loopforge",
  "merge0-adapter-posthog",
  "merge0-adapter-sentry",
+ "merge0-adapter-slack",
+ "merge0-adapter-trello",
  "merge0-adapter-webhook",
  "merge0-adapter-zendesk",
  "merge0-adapters",

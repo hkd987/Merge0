@@ -1,0 +1,30 @@
+[
+  {
+    "body": "",
+    "evidence": [
+      {
+        "kind": "ticket",
+        "label": "Jira OPS-7",
+        "url": "https://acme-example.atlassian.net/browse/OPS-7"
+      }
+    ],
+    "fingerprint": "jira:0834aae2ab9ae504eb97717d71b6b7f1",
+    "first_seen": "2026-08-05T14:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "ticket",
+    "last_seen": "2026-08-05T14:00:00Z",
+    "raw": {
+      "fields": {
+        "created": "2026-08-05T14:00:00Z",
+        "summary": "Nightly sync job logs a warning",
+        "updated": "2026-08-05T14:00:00Z"
+      },
+      "key": "OPS-7"
+    },
+    "severity": "low",
+    "source": "jira",
+    "source_ref": "OPS-7",
+    "title": "Nightly sync job logs a warning"
+  }
+]

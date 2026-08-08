@@ -1,4 +1,4 @@
-# Signal Schema — v0.2
+# Signal Schema — v0.3
 
 The Signal is the contract between every Merge0 component and the integration
 surface for external adapters (including the future generic webhook adapter).
@@ -15,6 +15,9 @@ and the types cannot drift silently.
 
 ### Changelog
 
+- **v0.3** — `source` enum extended with the planning/ticketing tools:
+  `jira`, `linear`, `slack` (messages/threads from designated channels),
+  `asana`, and `trello`. Additive only; no field changes.
 - **v0.2** — `source` enum extended with `intercom`, `otel`, `datadog`,
   `loopforge`, and `meta` (Merge0's own operational telemetry, ingested for
   the meta-loop). Additive only; no field changes.
@@ -29,7 +32,7 @@ and the types cannot drift silently.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `id` | ULID string | yes | Assigned by the adapter at normalization time. Not stable across re-ingestion — use `fingerprint` for dedupe. |
-| `source` | enum | yes | `posthog`, `sentry`, `zendesk`, `intercom`, `github`, `webhook`, `otel`, `datadog`, `loopforge`, `meta` |
+| `source` | enum | yes | `posthog`, `sentry`, `zendesk`, `intercom`, `github`, `webhook`, `otel`, `datadog`, `loopforge`, `jira`, `linear`, `slack`, `asana`, `trello`, `meta` |
 | `kind` | enum | yes | `exception`, `ux_friction`, `ticket`, `regression`, `custom` |
 | `severity` | enum | yes | `low`, `medium`, `high`, `critical` |
 | `source_ref` | string | yes | Vendor-native ID for the underlying object (issue ID, session ID, ticket ID). Deep links go in `evidence`. |

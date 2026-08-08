@@ -1,0 +1,90 @@
+[
+  {
+    "affected_count": 5,
+    "body": "Sync status page goes blank for Lincoln Elementary\nRepro: open the sync status page for any school with no linked district. Console shows a TypeError.",
+    "evidence": [
+      {
+        "kind": "other",
+        "label": "Slack thread in #bugs",
+        "url": "https://acme-example.slack.com/archives/C0123456789/p1723273600000400"
+      }
+    ],
+    "fingerprint": "slack:cb66841670dbf97cee0b603a0fafa85c",
+    "first_seen": "2024-08-10T07:06:40Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "ticket",
+    "last_seen": "2024-08-11T07:06:40Z",
+    "raw": {
+      "latest_reply": "1723360000.000900",
+      "reply_count": 4,
+      "reply_users_count": 3,
+      "team": "T0EXAMPLE00",
+      "text": "Sync status page goes blank for Lincoln Elementary\nRepro: open the sync status page for any school with no linked district. Console shows a TypeError.",
+      "thread_ts": "1723273600.000400",
+      "ts": "1723273600.000400",
+      "type": "message",
+      "user": "U0EXAMPLE03"
+    },
+    "severity": "medium",
+    "source": "slack",
+    "source_ref": "C0123456789:1723273600.000400",
+    "title": "Sync status page goes blank for Lincoln Elementary"
+  },
+  {
+    "affected_count": 1,
+    "body": "Roster CSV export downloads an empty file when the roster has more than 500 students",
+    "evidence": [
+      {
+        "kind": "other",
+        "label": "Slack thread in #bugs",
+        "url": "https://acme-example.slack.com/archives/C0123456789/p1723187200000200"
+      }
+    ],
+    "fingerprint": "slack:07e9ebef367391a916c6a895027f5c21",
+    "first_seen": "2024-08-09T07:06:40Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "ticket",
+    "last_seen": "2024-08-09T07:06:40Z",
+    "raw": {
+      "team": "T0EXAMPLE00",
+      "text": "Roster CSV export downloads an empty file when the roster has more than 500 students",
+      "ts": "1723187200.000200",
+      "type": "message",
+      "user": "U0EXAMPLE02"
+    },
+    "severity": "medium",
+    "source": "slack",
+    "source_ref": "C0123456789:1723187200.000200",
+    "title": "Roster CSV export downloads an empty file when the roster has more than 500 students"
+  },
+  {
+    "affected_count": 1,
+    "body": "Grade band dropdown on the reports page lists each band twice",
+    "evidence": [
+      {
+        "kind": "other",
+        "label": "Slack thread in #bugs",
+        "url": "https://acme-example.slack.com/archives/C0123456789/p1723100000000100"
+      }
+    ],
+    "fingerprint": "slack:7e41fb604fae67894c212f39595cefcf",
+    "first_seen": "2024-08-08T06:53:20Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "ticket",
+    "last_seen": "2024-08-08T06:53:20Z",
+    "raw": {
+      "team": "T0EXAMPLE00",
+      "text": "Grade band dropdown on the reports page lists each band twice",
+      "ts": "1723100000.000100",
+      "type": "message",
+      "user": "U0EXAMPLE01"
+    },
+    "severity": "medium",
+    "source": "slack",
+    "source_ref": "C0123456789:1723100000.000100",
+    "title": "Grade band dropdown on the reports page lists each band twice"
+  }
+]
