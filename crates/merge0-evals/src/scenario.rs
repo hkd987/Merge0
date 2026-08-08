@@ -90,6 +90,11 @@ pub struct PriorSpec {
     pub days_ago: i64,
     #[serde(default)]
     pub note: Option<String>,
+    /// The PR the prior attempt produced (schema v0.5). Present here so the
+    /// corpus can exercise the difference between "this was reverted" and
+    /// "this was reverted, and here is what it changed".
+    #[serde(default)]
+    pub pr_url: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -112,6 +117,25 @@ pub struct Expect {
     /// (secret canaries).
     #[serde(default)]
     pub forbidden: Vec<String>,
+    /// How many times to run this scenario. Model judgment is not
+    /// deterministic, so a borderline case measured once reports a coin
+    /// toss as a fact — and a corpus that flips red at random teaches
+    /// people to re-run until green, which is worse than no corpus.
+    #[serde(default = "default_samples")]
+    pub samples: usize,
+    /// Fraction of samples that must pass. Defaults to 1.0, so decisive
+    /// scenarios stay strict; only cases the corpus documents as judgment
+    /// calls should loosen it, and BASELINE.md should say why.
+    #[serde(default = "default_min_pass_rate")]
+    pub min_pass_rate: f64,
+}
+
+fn default_samples() -> usize {
+    1
+}
+
+fn default_min_pass_rate() -> f64 {
+    1.0
 }
 
 fn default_true() -> bool {
@@ -187,6 +211,7 @@ impl Scenario {
                 outcome: p.outcome,
                 occurred_at: now - Duration::days(p.days_ago),
                 note: p.note.clone(),
+                pr_url: p.pr_url.clone(),
             })
             .collect();
         (report, kind, priors)

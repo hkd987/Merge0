@@ -16,7 +16,7 @@ cargo run -p merge0-evals --bin gate-eval
 # optional: MERGE0_EVAL_MODEL=<model id>   MERGE0_EVAL_CLI=<path to claude>
 ```
 
-Scenarios live in `evals/scenarios/*.toml` (29 cases). The first 14 are
+Scenarios live in `evals/scenarios/*.toml` (30 cases). The first 14 are
 hand-built controls: clear crashes, cross-source corroboration, release
 regressions, intended-behavior traps, vague noise, deterministic-guard
 controls, a secret-value canary, repeated reverts, prompt-injection, a
@@ -25,10 +25,12 @@ GitHub issues (anonymized to the example.com domain): flaky tests, perf
 regressions, memory leaks, docs drift, CVEs, an XSS report with a payload
 canary, "works on my machine" noise, rewrite demands, support questions,
 by-design closures, encoding corruption, and a user-bisected regression.
-Scenarios 28–29 cover memory retrieval: a constraint that lives only in the
-machine-managed fence at the end of a long intent doc (must SKIP), and a
-solid defect carrying two reverts from over two years ago (must still WORK
-— aged memory informs, it does not veto). Scoring is deterministic:
+Scenarios 28–30 cover memory: a constraint that lives only in the
+machine-managed fence at the end of a long intent doc (must SKIP); a solid
+defect carrying two reverts from over two years ago (must still WORK — aged
+memory informs, it does not veto); and its twin where those reverts carry
+the PR they produced, which the Work Order must then cite. Scoring is
+deterministic:
 decision correctness, zero-token proof for guard cases, content mentions,
 canary absence. Results land in `evals/results/` (gitignored); the first
 measured run is recorded in `BASELINE.md`.
@@ -70,7 +72,7 @@ tests, so a malformed scenario fails CI deterministically.
 
 ## Proving a change improved something
 
-"29/29 after" is not evidence when the corpus was already at 100% before.
+"30/30 after" is not evidence when the corpus was already at 100% before.
 When a change alters what the gate *sees* (context assembly, memory,
 prompt), measure it as an A/B: reconstruct the old behavior in the working
 tree, run the full corpus both ways on the same day and backend, and record
@@ -83,7 +85,18 @@ Two habits that keep the result honest:
   prose in its `description` is. Check before trusting it, exactly as
   `crates/merge0-e2e/tests/repo_hygiene.rs` requires of a new lint rule.
 - **Repeat borderline scenarios and report the rate, not one run.** Model
-  judgment is not deterministic; a single flip can be noise. Where a
-  scenario is a judgment call rather than a clean flip, say so and give
-  the sample size — overstating a result here quietly rots the corpus into
-  decoration.
+  judgment is not deterministic; a single flip can be noise. A scenario
+  declares this itself:
+
+  ```toml
+  [expect]
+  decision = "work"
+  samples = 5          # default 1
+  min_pass_rate = 0.8  # default 1.0 — decisive scenarios stay strict
+  ```
+
+  Use it only where the corpus documents *why* the case is a judgment call,
+  and say so in `BASELINE.md`. Loosening a bar to quiet a scenario that
+  should be decisive is how a corpus becomes decoration. Canary checks are
+  unaffected: a leak in any single sample counts as a leak, whatever the
+  pass rate.

@@ -65,6 +65,45 @@ pub struct GateConfig {
     /// Hard model-spend ceiling (0 = unlimited).
     #[serde(default)]
     pub budget: BudgetConfig,
+    /// What a Work Order's own confidence changes about how it is delivered.
+    #[serde(default)]
+    pub delivery: DeliveryConfig,
+}
+
+/// Confidence routing. The gate already tells us how sure it is; before
+/// this, nothing acted on the answer — a low-confidence Work Order became
+/// an autonomous PR exactly like a high-confidence one, and the uncertainty
+/// was resolved by whichever way the model happened to fall that run.
+///
+/// Routing turns that coin-flip into a product decision: below the floor,
+/// the same evidence-backed Work Order is filed as a tracker story for a
+/// human instead of dispatched. Nothing is lost — the work is still queued,
+/// just not autonomously.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DeliveryConfig {
+    /// Work Orders below this confidence file a story instead of
+    /// dispatching. `"low"` disables routing (every approval dispatches, the
+    /// pre-v0.5 behavior). Requires a configured tracker; without one the
+    /// setting is inert and says so at startup.
+    #[serde(default = "default_min_confidence_for_pr")]
+    pub min_confidence_for_pr: GateConfidence,
+}
+
+impl Default for DeliveryConfig {
+    fn default() -> Self {
+        DeliveryConfig {
+            min_confidence_for_pr: default_min_confidence_for_pr(),
+        }
+    }
+}
+
+fn default_min_confidence_for_pr() -> GateConfidence {
+    // Medium, not High: the aim is to stop *gambles* becoming PRs, not to
+    // route the ordinary case through a human. Eval run 4 showed the gate
+    // rates conservatively — a High-only floor would send most real work to
+    // the board and make the product feel broken.
+    GateConfidence::Medium
 }
 
 /// Auto-dispatch settings. The trust posture of the whole product hangs on

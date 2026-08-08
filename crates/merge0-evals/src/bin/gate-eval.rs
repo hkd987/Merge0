@@ -39,33 +39,54 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut results = Vec::new();
     for scenario in &scenarios {
-        let now = Utc::now();
-        let (report, kind, priors) = scenario.build_report(&gate_config, now);
-        let actual_owner;
-        let actual = if kind == ReportKind::Opportunity {
-            // The pipeline hands opportunities off without a gate call;
-            // the eval mirrors that path exactly.
-            Actual::ClassifiedOpportunity
-        } else {
-            let outcome = merge0_triage::gate::evaluate(
-                &report,
-                "chalk/chalk",
-                &scenario.intent,
-                priors,
-                &gate_config,
-                &model,
-            )
-            .await?;
-            actual_owner = outcome;
-            Actual::Gate {
-                decision: &actual_owner.decision,
-                tokens_used: actual_owner.tokens_used,
-            }
-        };
-        let result = score(scenario, kind, &actual);
+        // Most scenarios are decisive and run once. A scenario the corpus
+        // documents as a judgment call declares `samples`, and is then
+        // measured as a rate — one run of a borderline case reports a coin
+        // toss as a fact.
+        let mut samples = Vec::new();
+        for _ in 0..scenario.expect.samples.max(1) {
+            let now = Utc::now();
+            let (report, kind, priors) = scenario.build_report(&gate_config, now);
+            let actual_owner;
+            let actual = if kind == ReportKind::Opportunity {
+                // The pipeline hands opportunities off without a gate call;
+                // the eval mirrors that path exactly.
+                Actual::ClassifiedOpportunity
+            } else {
+                let outcome = merge0_triage::gate::evaluate(
+                    &report,
+                    "chalk/chalk",
+                    &scenario.intent,
+                    priors,
+                    &gate_config,
+                    &model,
+                )
+                .await?;
+                actual_owner = outcome;
+                Actual::Gate {
+                    decision: &actual_owner.decision,
+                    tokens_used: actual_owner.tokens_used,
+                }
+            };
+            samples.push(score(scenario, kind, &actual));
+        }
+        let mut result =
+            merge0_evals::scoring::fold_samples(samples, scenario.expect.min_pass_rate);
+        result.scenario = scenario.name.clone();
+        result.expected = scenario.expect.decision.clone();
+
         let mark = if result.passed { "PASS" } else { "FAIL" };
+        let rate = if result.samples > 1 {
+            format!(
+                " [{}/{} runs]",
+                (result.pass_rate * result.samples as f64).round() as usize,
+                result.samples
+            )
+        } else {
+            String::new()
+        };
         println!(
-            "{mark}  {:<38} expected {:<11} got {:<11} ({} tokens)",
+            "{mark}  {:<38} expected {:<11} got {:<11} ({} tokens){rate}",
             result.scenario, result.expected, result.actual, result.tokens_used
         );
         for check in result.checks.iter().filter(|c| !c.passed) {

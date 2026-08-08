@@ -70,7 +70,10 @@ change. No red PRs, no auto-merge, ever.
   the gate's self-assessed confidence (`low`/`medium`/`high`,
   fail-conservative parsing). Auto-dispatch of high-confidence orders
   exists but **ships off** (`[autonomy]` in `config/gate.toml`); every
-  dispatch records its actor (`human`/`slack`/`auto`) for audit.
+  dispatch records its actor (`human`/`slack`/`auto`) for audit. And the
+  confidence *acts*: below `[delivery] min_confidence_for_pr` a Work Order
+  is filed as a story for a human instead of sent to an agent, so a
+  borderline judgment produces a queued ticket rather than a gambled PR.
 - **Close-the-loop telemetry**: after a PR merges, Merge0 watches
   whether the originating signals actually stop — fixes are
   `pending`/`confirmed`/`recurred` and the fix-efficacy rate rides the

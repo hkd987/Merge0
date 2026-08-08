@@ -350,5 +350,52 @@ check "story recorded on the report" "$STORY_DETAIL" '"story_key":"FAKE-1"'
 check "report is terminally handed off" "$STORY_DETAIL" '"status":"handed_off"'
 check "no PR was dispatched in story mode" "$STORY_DETAIL" '"dispatch":null'
 
+say "12. Confidence routing: a low-confidence Work Order goes to the board"
+# Same PR-mode configuration as the main server — the ONLY difference is
+# that the gate is not confident. A third process, because delivery mode
+# and the fake model's confidence are both process-level.
+ROUTE_PORT=18082
+ROUTE_BASE="http://127.0.0.1:$ROUTE_PORT"
+ROUTE_TENANT="${TENANT}_route"
+MERGE0_DATABASE_URL="$DB_URL" \
+MERGE0_TENANT="$ROUTE_TENANT" \
+MERGE0_REPO="chalk/chalk" \
+MERGE0_DEV_FAKES=1 \
+MERGE0_DEV_FAKE_CONFIDENCE=low \
+MERGE0_DELIVERY_MODE=pr \
+MERGE0_API_TOKEN="$API_TOKEN" \
+MERGE0_RUNNER_TOKEN="$RUNNER_TOKEN" \
+MERGE0_TRIAGE_INTERVAL_SECS=0 \
+MERGE0_BIND="127.0.0.1:$ROUTE_PORT" \
+./target/debug/merge0-server > /tmp/merge0-e2e-route.log 2>&1 &
+ROUTE_PID=$!
+trap 'kill $SERVER_PID $STORY_PID $ROUTE_PID 2>/dev/null || true' EXIT
+for _ in $(seq 1 50); do
+  curl -sf "$ROUTE_BASE/healthz" >/dev/null 2>&1 && break
+  sleep 0.2
+done
+rauth() { curl -sf -H "authorization: Bearer $API_TOKEN" "$@"; }
+
+rauth -X POST "$ROUTE_BASE/ingest/sentry" -H "content-type: application/json" -d @- <<EOF >/dev/null
+{"endpoint": "issues", "payload": [{
+  "id": "7002", "shortId": "CHALK-8",
+  "title": "TypeError: gradebook totals drift after a term change",
+  "permalink": "https://sentry.example.com/organizations/chalk/issues/7002/",
+  "level": "error",
+  "metadata": {"type": "TypeError", "value": "totals drift"},
+  "userCount": 31, "firstSeen": "2026-08-06T04:00:00Z", "lastSeen": "$NOW"
+}]}
+EOF
+rauth -X POST "$ROUTE_BASE/triage/run" >/dev/null
+ROUTE_REPORT=$(rauth "$ROUTE_BASE/reports?status=awaiting_review" | python3 -c 'import sys,json; print(json.load(sys.stdin)[0]["id"])')
+APPROVE_ROUTE=$(rauth -X POST "$ROUTE_BASE/reports/$ROUTE_REPORT/approve")
+check "low confidence is delivered as a story, not a PR" "$APPROVE_ROUTE" '"delivered_as":"story"'
+check "the routing reason is reported" "$APPROVE_ROUTE" '"routed_by_confidence":true'
+check "the confidence that caused it is reported" "$APPROVE_ROUTE" '"confidence":"low"'
+
+ROUTE_DETAIL=$(rauth "$ROUTE_BASE/reports/$ROUTE_REPORT")
+check "no agent was dispatched on a low-confidence order" "$ROUTE_DETAIL" '"dispatch":null'
+check "the reason is persisted for whoever reads it later" "$ROUTE_DETAIL" "gate confidence was low"
+
 say "Result: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

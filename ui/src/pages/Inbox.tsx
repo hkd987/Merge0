@@ -4,7 +4,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ApiError, approveReport, dismissReport, fetchReports, type Report } from "../api";
+import {
+  ApiError,
+  approvalMessage,
+  approveReport,
+  dismissReport,
+  fetchReports,
+  type Report,
+} from "../api";
 import { DismissDialog } from "../components/DismissDialog";
 import { ReportCard } from "../components/ReportCard";
 import { useToasts } from "../components/Toasts";
@@ -52,7 +59,7 @@ export function Inbox({ onUnauthorized }: { onUnauthorized: () => void }) {
       setBusy(true);
       try {
         const res = await approveReport(id);
-        toast(`Approved — dispatched to ${res.dispatched_to}`);
+        toast(approvalMessage(res));
         await load();
       } catch (e) {
         if (e instanceof ApiError && e.status === 401) return onUnauthorized();

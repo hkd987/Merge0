@@ -120,6 +120,20 @@ pub fn story_from_work_order(work_order: &WorkOrder, evidence_limit: usize) -> S
              check the Merge0 report before re-doing work.\n",
             work_order.prior_attempts.len()
         ));
+        // Whoever picks this story up is about to solve a problem someone
+        // already tried to solve. A link to that attempt is worth more than
+        // the count: it is the difference between a warning and a head start.
+        for attempt in &work_order.prior_attempts {
+            if let Some(url) = attempt.pr_url.as_deref() {
+                body.push_str(&format!(
+                    "- {} on {}: {url}\n",
+                    serde_json::to_string(&attempt.outcome)
+                        .unwrap_or_default()
+                        .trim_matches('"'),
+                    attempt.occurred_at.date_naive()
+                ));
+            }
+        }
     }
 
     body.push_str(&format!(
@@ -304,10 +318,16 @@ mod tests {
             outcome: OutcomeKind::Reverted,
             occurred_at: chrono::Utc::now(),
             note: Some("broke admin view".into()),
+            pr_url: Some("https://github.com/chalk/chalk/pull/412".into()),
         }];
         let story = story_from_work_order(&order, 8);
         assert!(story.description.contains("Prior attempts"));
         assert!(story.description.contains("1 earlier attempt"));
+        // The link, not just the count: whoever picks this up should be able
+        // to read what was tried before they try it again.
+        assert!(story
+            .description
+            .contains("https://github.com/chalk/chalk/pull/412"));
     }
 
     #[tokio::test]

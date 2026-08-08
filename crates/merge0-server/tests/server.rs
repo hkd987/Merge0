@@ -20,6 +20,13 @@ fn database_url() -> String {
 const WORK_JSON: &str = r#"{"decision":"work","summary":"Fix the crash","repro":"open /districts/sync",
     "success_criteria":"regression test passes","constraints":"stay small"}"#;
 
+/// The same verdict, stated confidently. WORK_JSON omits `confidence`, which
+/// parses to Low — so with a tracker configured it is routed to a story
+/// rather than dispatched. Tests that mean to exercise *dispatch* must say
+/// they are confident, exactly as a real gate would.
+const WORK_JSON_HIGH: &str = r#"{"decision":"work","summary":"Fix the crash","repro":"open /districts/sync",
+    "success_criteria":"regression test passes","constraints":"stay small","confidence":"high"}"#;
+
 struct Harness {
     base: String,
     #[allow(dead_code)]
@@ -1518,6 +1525,7 @@ async fn story_and_pr_mode_files_the_story_and_still_dispatches() {
     let h = Harness::start(HarnessOptions {
         delivery_mode: merge0_server::handlers::actions::DeliveryMode::StoryAndPr,
         tracker: Some(tracker.clone()),
+        model_responses: vec![WORK_JSON_HIGH],
         ..HarnessOptions::default()
     })
     .await;
@@ -1592,6 +1600,7 @@ async fn tracker_failure_blocks_story_only_delivery_but_never_the_pr() {
         tracker: Some(Arc::new(merge0_tracker::RecordingTracker::failing(
             "jira is down",
         ))),
+        model_responses: vec![WORK_JSON_HIGH],
         ..HarnessOptions::default()
     })
     .await;
@@ -1620,6 +1629,7 @@ async fn an_existing_story_is_reused_rather_than_duplicated() {
     let h = Harness::start(HarnessOptions {
         delivery_mode: merge0_server::handlers::actions::DeliveryMode::StoryAndPr,
         tracker: Some(tracker.clone()),
+        model_responses: vec![WORK_JSON_HIGH],
         ..HarnessOptions::default()
     })
     .await;
@@ -1647,5 +1657,129 @@ async fn an_existing_story_is_reused_rather_than_duplicated() {
         tracker.stories().is_empty(),
         "no second story may be filed for the same report"
     );
+    h.teardown().await;
+}
+
+/// Confidence routing, end to end: a PR-mode install with a tracker turns a
+/// Work Order the gate is NOT confident in into a story instead of an
+/// autonomous PR.
+///
+/// This is the product's answer to a borderline gate decision. Before it,
+/// uncertainty was resolved by whichever way the model happened to fall on
+/// a given run, and the result was a PR either way.
+#[tokio::test]
+async fn a_low_confidence_work_order_is_routed_to_a_story_instead_of_dispatched() {
+    let tracker = Arc::new(merge0_tracker::RecordingTracker::new());
+    let h = Harness::start(HarnessOptions {
+        // Configured for PRs — routing, not configuration, changes this.
+        delivery_mode: merge0_server::handlers::actions::DeliveryMode::Pr,
+        tracker: Some(tracker.clone()),
+        model_responses: vec![WORK_JSON], // no confidence field → Low
+        ..HarnessOptions::default()
+    })
+    .await;
+    let report_id = h.seed_awaiting_report().await;
+
+    let body: serde_json::Value = h
+        .post(
+            &format!("/reports/{report_id}/approve"),
+            Some("api-secret"),
+            None,
+        )
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(body["delivered_as"], "story");
+    assert_eq!(body["confidence"], "low");
+    assert_eq!(
+        body["routed_by_confidence"], true,
+        "a reviewer expecting a PR must be told why they got a story"
+    );
+
+    assert_eq!(tracker.stories().len(), 1, "the work is still queued");
+
+    // The reason survives the request: a reviewer opening this report
+    // tomorrow can tell "the gate was unsure" from "this install files
+    // stories", which are very different facts about the same outcome.
+    let detail: serde_json::Value = h
+        .get(&format!("/reports/{report_id}"))
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(detail["report"]["status"], "handed_off");
+    let brief = detail["handoff_brief"].as_str().unwrap();
+    assert!(
+        brief.contains("gate confidence was low"),
+        "the routing reason must be persisted, not only returned: {brief}"
+    );
+
+    assert!(
+        h.github.state.lock().unwrap().dispatches.is_empty(),
+        "a low-confidence Work Order must never become an autonomous PR"
+    );
+    h.teardown().await;
+}
+
+/// The other side of the same rule: confidence at or above the floor
+/// dispatches exactly as before, so routing costs the confident path
+/// nothing.
+#[tokio::test]
+async fn a_confident_work_order_still_dispatches_with_a_tracker_configured() {
+    let tracker = Arc::new(merge0_tracker::RecordingTracker::new());
+    let h = Harness::start(HarnessOptions {
+        delivery_mode: merge0_server::handlers::actions::DeliveryMode::Pr,
+        tracker: Some(tracker.clone()),
+        model_responses: vec![WORK_JSON_HIGH],
+        ..HarnessOptions::default()
+    })
+    .await;
+    let report_id = h.seed_awaiting_report().await;
+
+    let body: serde_json::Value = h
+        .post(
+            &format!("/reports/{report_id}/approve"),
+            Some("api-secret"),
+            None,
+        )
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(body["delivered_as"], "pr");
+    assert_eq!(body["dispatched_to"], "chalk/chalk");
+    assert!(
+        tracker.stories().is_empty(),
+        "PR mode files no story when it dispatches"
+    );
+    h.teardown().await;
+}
+
+/// Without a tracker the floor has nowhere to route to, so it stays inert
+/// rather than turning approvals into no-ops. (Startup warns; see main.rs.)
+#[tokio::test]
+async fn routing_is_inert_when_no_tracker_is_configured() {
+    let h = Harness::start(HarnessOptions {
+        delivery_mode: merge0_server::handlers::actions::DeliveryMode::Pr,
+        tracker: None,
+        model_responses: vec![WORK_JSON], // Low confidence
+        ..HarnessOptions::default()
+    })
+    .await;
+    let report_id = h.seed_awaiting_report().await;
+
+    let body: serde_json::Value = h
+        .post(
+            &format!("/reports/{report_id}/approve"),
+            Some("api-secret"),
+            None,
+        )
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(body["delivered_as"], "pr");
+    assert_eq!(body["dispatched_to"], "chalk/chalk");
     h.teardown().await;
 }

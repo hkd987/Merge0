@@ -67,11 +67,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 required_checks: true,
             },
         );
+        // Confidence is overridable so the confidence-routing path is
+        // drivable end to end (dev fakes only — production reads the real
+        // model's own self-assessment and nothing can override it).
+        let fake_confidence =
+            std::env::var("MERGE0_DEV_FAKE_CONFIDENCE").unwrap_or_else(|_| "high".into());
         let fixed = merge0_model::FixedModel {
-            response: r#"{"decision":"work","summary":"Fix the reported defect",
+            response: format!(
+                r#"{{"decision":"work","summary":"Fix the reported defect",
                 "repro":"see evidence links","success_criteria":"regression test passes",
-                "constraints":"stay within the diff budget","confidence":"high"}"#
-                .to_string(),
+                "constraints":"stay within the diff budget","confidence":"{fake_confidence}"}}"#
+            ),
         };
         (Arc::new(fixed), Arc::new(fake_github))
     } else {
@@ -122,6 +128,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Err(_) => None,
         }
     };
+
+    // Confidence routing needs somewhere to route to. Saying so at boot
+    // beats a config knob that quietly does nothing for months.
+    if tracker.is_none() && gate.delivery.min_confidence_for_pr > merge0_signal::GateConfidence::Low
+    {
+        tracing::warn!(
+            "config/gate.toml sets [delivery] min_confidence_for_pr = {:?} but no tracker is \
+             configured (MERGE0_JIRA_PROJECT) — confidence routing is INERT and low-confidence \
+             Work Orders will dispatch as PRs",
+            gate.delivery.min_confidence_for_pr.as_str()
+        );
+    }
 
     let api_token = std::env::var("MERGE0_API_TOKEN").ok();
     if api_token.is_none() {

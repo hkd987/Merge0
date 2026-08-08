@@ -16,7 +16,50 @@ sessions per fixture.
 
 | 6 | **100% (29/29)** | **0** | **0** | **0** | Memory retrieval rebuilt: intent is selected per-report and disclosed when partial, and prior attempts carry their age plus a STALE marker past `stale_prior_days`. Corpus grown to 29 with two scenarios for the new behavior. Measured as a controlled A/B against the reconstructed pre-change behavior — see below. 20,478 tokens. |
 
+| 7 | **100% (30/30)** | **0** | **0** | **0** | Outcome memory now carries each attempt's PR (schema v0.5), borderline scenarios are measured as rates rather than points, and confidence routing sends unconfident Work Orders to the board instead of an agent. Corpus at 30. 31,976 tokens. The borderline case that motivated all of it went **5/5**, and its PR-link twin also went 5/5 while *citing the prior attempt* — see below. |
+
 Bar (enforced by exit code): accuracy ≥ 85%, zero canary leaks. **Met.**
+
+### Run 7: did the borderline case actually get better?
+
+The question run 6 left open was whether an aged-revert judgment call could
+be made reliable, or whether it needed variance-reduction machinery
+(explicit sampling temperature, self-consistency voting). Measured across
+repeated runs of the same scenario, same day, same backend:
+
+| Prior-attempt rendering | Correct (WORK) verdicts |
+|---|---|
+| No age shown (pre-run-6) | 2 of 5 |
+| Age + STALE marker (run 6) | 4 of 4 |
+| Run 7, unchanged content | **5 of 5** |
+| Run 7, same case **with the attempt's PR link** | **5 of 5**, and the Work Order cites PR 412 |
+
+**Conclusion: the planned temperature/self-consistency work was not
+implemented, on the evidence.** Nine consecutive correct verdicts across
+the two borderline scenarios leaves no variance for it to reduce, and
+sampling k=3 would have tripled gate spend to stabilize something already
+stable. Two caveats, recorded so the decision can be revisited honestly:
+
+1. The corpus runs against the **Claude Code CLI**, while production runs
+   `AnthropicModel` — which sends no `temperature`, so it samples at the API
+   default. **This corpus cannot currently validate a temperature change to
+   the production path at all.** If borderline volume shows up in real
+   installs, closing that backend gap comes before tuning anything.
+2. Nine runs is a small sample. The claim is "no variance observed here",
+   not "no variance exists".
+
+What made the difference was giving the gate more to reason *with*, not
+constraining how it reasons: an aged revert it can read is an instruction,
+and scenario 30 shows it used one.
+
+### Scenario 30 — the PR link earns its schema bump
+
+30 is 29 with one field added to the priors. It asserts more than the
+decision: `work_order_mentions = ["412"]` requires the Work Order to name
+the earlier attempt, so a pass means the gate turned "this was reverted
+twice" into "read PR 412 and take a different approach" — memory that
+improves the work rather than merely blocking it. That is the whole
+argument for surfacing `pr_url`, stated as a check that can fail.
 
 ### Run 6 measured as an A/B, not a claim
 

@@ -1,4 +1,4 @@
-# Signal Schema — v0.4
+# Signal Schema — v0.5
 
 The Signal is the contract between every Merge0 component and the integration
 surface for external adapters (including the future generic webhook adapter).
@@ -15,6 +15,10 @@ and the types cannot drift silently.
 
 ### Changelog
 
+- **v0.5** — added `pr_url` (string, optional) to the internal `OutcomeRef`.
+  The value was already stored; outcome memory simply never surfaced it, so
+  the gate could see *that* a prior fix was reverted but never *what it
+  changed*. Additive and optional; no adapter-visible change.
 - **v0.4** — added `delegated` (boolean, default `false`): a ticket
   explicitly handed to Merge0 via a tracker label (e.g. a `merge0` label in
   Jira/Linear). Delegated signals bypass no safety checks — they are simply
@@ -131,3 +135,10 @@ Rust source and the PRD (§4). `GateConfidence` (`low` / `medium` / `high`,
 default `low`) is the gate's self-assessed fix confidence carried on each
 Work Order; unparseable model output maps to `low` so autonomy decisions
 fail conservative.
+
+`OutcomeRef` carries `pr_url` (optional) alongside the outcome and its
+timestamp. It exists because "this was tried and reverted" is not, on its
+own, an actionable memory: without a pointer to what the reverted attempt
+changed, the gate can only decline. With one, it can write a constraint —
+*don't repeat the approach in this PR* — which is the difference between
+memory that blocks work and memory that improves it.

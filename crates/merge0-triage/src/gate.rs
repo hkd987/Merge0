@@ -137,8 +137,15 @@ fn build_prompt(
             } else {
                 ""
             };
+            // The PR link is what makes a revert actionable rather than
+            // merely discouraging: it is the only way the gate can say
+            // "don't repeat what that attempt did" instead of declining.
+            let pr = match p.pr_url.as_deref() {
+                Some(url) => format!(" [attempt PR: {url}]"),
+                None => String::new(),
+            };
             format!(
-                "- {} on {} ({age_days} days ago{staleness}) ({})",
+                "- {} on {} ({age_days} days ago{staleness}) ({}){pr}",
                 serde_json::to_string(&p.outcome).unwrap(),
                 p.occurred_at.date_naive(),
                 p.note.as_deref().unwrap_or("no note")
@@ -514,6 +521,7 @@ mod tests {
             outcome: merge0_signal::OutcomeKind::Reverted,
             occurred_at: Utc.with_ymd_and_hms(2026, 3, 1, 0, 0, 0).unwrap(),
             note: Some("broke admin view".into()),
+            pr_url: Some("https://github.com/o/r/pull/412".into()),
         }];
         let outcome = evaluate(
             &report(Severity::High, true),
@@ -529,8 +537,17 @@ mod tests {
             panic!("expected work");
         };
         assert_eq!(work_order.prior_attempts, prior);
-        // The prompt surfaced the revert to the model.
+        // The prompt surfaced the revert to the model — and, since v0.5, the
+        // PR it produced. Without that link the gate can only decline; with
+        // it, it can instruct the agent to take a different approach.
         assert!(model.requests()[1].prompt.contains("broke admin view"));
+        assert!(
+            model.requests()[1]
+                .prompt
+                .contains("https://github.com/o/r/pull/412"),
+            "the attempt's PR must reach the gate: {}",
+            model.requests()[1].prompt
+        );
     }
 
     /// Memory without decay over-vetoes. A revert from last week is a real
@@ -549,12 +566,14 @@ mod tests {
             outcome: merge0_signal::OutcomeKind::Reverted,
             occurred_at: now - chrono::Duration::days(3),
             note: Some("recent revert".into()),
+            pr_url: None,
         }];
         let ancient = vec![OutcomeRef {
             work_order_id: Ulid::new(),
             outcome: merge0_signal::OutcomeKind::Reverted,
             occurred_at: now - chrono::Duration::days(400),
             note: Some("ancient revert".into()),
+            pr_url: None,
         }];
         for prior in [recent, ancient] {
             evaluate(

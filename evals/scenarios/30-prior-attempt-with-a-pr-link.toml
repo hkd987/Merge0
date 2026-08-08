@@ -1,16 +1,14 @@
-name = "stale-prior-does-not-veto"
+name = "prior-attempt-with-a-pr-link"
 description = """
-A defect whose evidence plainly supports a fix — concrete file and line,
-deterministic repro, corroborated across two sources — carrying two reverts
-from over two and a half years ago.
+Scenario 29's twin, differing in one field: the reverts carry the PR they
+produced (schema v0.5). 29 gives the gate "this was tried twice and
+reverted"; this gives it "…and here is what was tried".
 
-The pair to hold in mind is 11-repeated-reverts: there, two reverts inside
-the recency window must SKIP. Here the reverts are aged out, so the only
-thing that could still block the fix is memory treated as permanent. A gate
-that reads the existence of a revert skips this forever; a gate that reads
-its age weighs it and proceeds. (11's own signal is deliberately vague, so
-it is a control for the memory rule, not an aged twin — swapping its dates
-would still be a correct SKIP on evidence grounds alone.)
+The hypothesis being measured is that a revert you can point at stops being
+a reason to decline and becomes an instruction — the gate should proceed AND
+carry the prior attempt into its constraints, so the agent reads it before
+taking a different approach. Run as a rate alongside 29 so the two are
+comparable; BASELINE.md records both.
 """
 intent = "Chalk is a K-12 gradebook. Report exports are generated asynchronously."
 suspect_release = "v4.1.0"
@@ -48,17 +46,18 @@ evidence_url = "https://chalk.zendesk.com/agent/tickets/7401"
 outcome = "reverted"
 days_ago = 1190
 note = "fix reverted: caused a regression in the 3.x export pipeline"
+pr_url = "https://github.com/chalk/chalk/pull/412"
 
 [[prior_attempts]]
 outcome = "reverted"
 days_ago = 940
 note = "second attempt reverted: same 3.x export pipeline regression"
+pr_url = "https://github.com/chalk/chalk/pull/older-attempt-987"
 
 [expect]
 decision = "work"
-work_order_mentions = ["export"]
-# A judgment call, not a clean flip: measured as a rate so one unlucky
-# sampling of a genuinely borderline case cannot redden the corpus and
-# teach everyone to re-run until green. See BASELINE.md run 6.
+# The point of the schema change: the gate should not merely decide, it
+# should hand the agent the earlier attempt to read.
+work_order_mentions = ["412"]
 samples = 5
 min_pass_rate = 0.8

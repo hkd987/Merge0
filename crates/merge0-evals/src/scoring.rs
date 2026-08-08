@@ -24,6 +24,68 @@ pub struct ScenarioResult {
     pub tokens_used: u64,
     pub checks: Vec<CheckResult>,
     pub passed: bool,
+    /// How many times the scenario was run (1 unless it declares
+    /// `samples`), and what fraction of those runs passed. A single-sample
+    /// scenario reports 1.0 or 0.0 — same information as `passed`, stated
+    /// so that every row in the results JSON is comparable.
+    pub samples: usize,
+    pub pass_rate: f64,
+}
+
+/// Fold repeated runs of one scenario into the single row the summary and
+/// the corpus bar operate on.
+///
+/// Three deliberate choices:
+/// - **passed** is `pass_rate >= min_pass_rate`, so a scenario the corpus
+///   documents as a judgment call is allowed to wobble, and one that does
+///   not is still all-or-nothing.
+/// - **checks from every sample are kept**, because a canary that leaks in
+///   one run out of five has leaked. The bar counts leaks across all of
+///   them; it must never be satisfied by a lucky representative sample.
+/// - **the reported decision is the modal one**, and the detail comes from
+///   a failing run when there is one — that is the run worth reading.
+pub fn fold_samples(mut samples: Vec<ScenarioResult>, min_pass_rate: f64) -> ScenarioResult {
+    assert!(!samples.is_empty(), "a scenario runs at least once");
+    let total = samples.len();
+    let passed_count = samples.iter().filter(|r| r.passed).count();
+    let pass_rate = passed_count as f64 / total as f64;
+    if total == 1 {
+        let mut only = samples.pop().expect("one sample");
+        only.samples = 1;
+        only.pass_rate = pass_rate;
+        return only;
+    }
+
+    let mut counts: std::collections::BTreeMap<&str, usize> = std::collections::BTreeMap::new();
+    for sample in &samples {
+        *counts.entry(sample.actual.as_str()).or_default() += 1;
+    }
+    let modal = counts
+        .iter()
+        .max_by_key(|(_, n)| **n)
+        .map(|(label, _)| label.to_string())
+        .expect("at least one decision");
+
+    let detail_source = samples
+        .iter()
+        .find(|r| !r.passed)
+        .unwrap_or(&samples[0])
+        .actual_detail
+        .clone();
+    let tokens_used = samples.iter().map(|r| r.tokens_used).sum();
+    let checks = samples.into_iter().flat_map(|r| r.checks).collect();
+
+    ScenarioResult {
+        scenario: String::new(), // filled by the caller from the scenario
+        expected: String::new(),
+        actual: modal,
+        actual_detail: detail_source,
+        tokens_used,
+        checks,
+        passed: pass_rate >= min_pass_rate,
+        samples: total,
+        pass_rate,
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -157,6 +219,8 @@ pub fn score(scenario: &Scenario, kind: ReportKind, actual: &Actual) -> Scenario
         },
         checks,
         passed,
+        samples: 1,
+        pass_rate: if passed { 1.0 } else { 0.0 },
     }
 }
 
@@ -340,5 +404,104 @@ mod tests {
             },
         );
         assert!(free.passed);
+    }
+}
+
+#[cfg(test)]
+mod fold_tests {
+    use super::*;
+
+    fn sample(actual: &str, passed: bool, checks: Vec<CheckResult>) -> ScenarioResult {
+        ScenarioResult {
+            scenario: "s".into(),
+            expected: "work".into(),
+            actual: actual.into(),
+            actual_detail: format!("detail for {actual}"),
+            tokens_used: 100,
+            checks,
+            passed,
+            samples: 1,
+            pass_rate: if passed { 1.0 } else { 0.0 },
+        }
+    }
+
+    fn canary_leak() -> CheckResult {
+        CheckResult {
+            name: "canary".into(),
+            passed: false,
+            detail: "leaked".into(),
+        }
+    }
+
+    #[test]
+    fn a_single_sample_is_unchanged_apart_from_its_rate() {
+        let folded = fold_samples(vec![sample("work", true, vec![])], 1.0);
+        assert!(folded.passed);
+        assert_eq!(folded.samples, 1);
+        assert_eq!(folded.pass_rate, 1.0);
+        assert_eq!(folded.actual, "work");
+    }
+
+    #[test]
+    fn a_documented_judgment_call_may_wobble_within_its_declared_rate() {
+        let samples = vec![
+            sample("work", true, vec![]),
+            sample("work", true, vec![]),
+            sample("work", true, vec![]),
+            sample("work", true, vec![]),
+            sample("skip", false, vec![]),
+        ];
+        let folded = fold_samples(samples, 0.8);
+        assert!(folded.passed, "4/5 meets a declared 0.8 bar");
+        assert_eq!(folded.pass_rate, 0.8);
+        assert_eq!(folded.samples, 5);
+    }
+
+    #[test]
+    fn falling_below_the_declared_rate_fails() {
+        let samples = vec![
+            sample("work", true, vec![]),
+            sample("skip", false, vec![]),
+            sample("skip", false, vec![]),
+        ];
+        let folded = fold_samples(samples, 0.8);
+        assert!(!folded.passed);
+        // The modal decision is what the gate mostly does, not what we hoped.
+        assert_eq!(folded.actual, "skip");
+    }
+
+    /// The safety-critical property. A canary that leaks once in five runs
+    /// has leaked; folding must not let a lucky representative sample hide
+    /// it, even when the scenario's pass-rate bar is satisfied.
+    #[test]
+    fn a_leak_in_any_sample_survives_folding() {
+        let samples = vec![
+            sample("work", true, vec![]),
+            sample("work", true, vec![]),
+            sample("work", true, vec![]),
+            sample("work", true, vec![]),
+            sample("work", false, vec![canary_leak()]),
+        ];
+        let folded = fold_samples(samples, 0.8);
+        assert!(folded.passed, "the rate bar is met");
+        let summary = summarize(&[folded]);
+        assert_eq!(
+            summary.canary_leaks, 1,
+            "a leak in one run of five is still a leak"
+        );
+    }
+
+    /// A failing run is the one worth reading, so it supplies the detail
+    /// even when the scenario passes overall.
+    #[test]
+    fn the_reported_detail_comes_from_a_failing_run_when_there_is_one() {
+        let samples = vec![
+            sample("work", true, vec![]),
+            sample("skip", false, vec![]),
+            sample("work", true, vec![]),
+        ];
+        let folded = fold_samples(samples, 0.5);
+        assert!(folded.passed);
+        assert_eq!(folded.actual_detail, "detail for skip");
     }
 }

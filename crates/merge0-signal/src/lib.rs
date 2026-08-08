@@ -1,6 +1,6 @@
 //! The Signal schema — the contract between every Merge0 component.
 //!
-//! Normative spec: `docs/signal-schema.md` (v0.4). A test below round-trips
+//! Normative spec: `docs/signal-schema.md` (v0.5). A test below round-trips
 //! the doc's JSON example, so this crate and the doc cannot drift silently.
 //! Schema changes must update the doc (and its version) in the same PR.
 //!
@@ -261,6 +261,11 @@ pub struct OutcomeRef {
     pub occurred_at: DateTime<Utc>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
+    /// The PR the attempt produced, when there was one. Schema v0.5: without
+    /// it the gate knows only *that* a prior fix was reverted, which can
+    /// justify declining but never justifies a better attempt.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pr_url: Option<String>,
 }
 
 #[cfg(test)]
@@ -363,6 +368,7 @@ mod tests {
                 outcome: OutcomeKind::Reverted,
                 occurred_at: Utc::now(),
                 note: Some("March attempt reverted: broke district admin view".into()),
+                pr_url: Some("https://github.com/chalk/chalk/pull/412".into()),
             }],
             diff_budget: DiffBudget::default(),
             confidence: Default::default(),

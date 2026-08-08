@@ -340,6 +340,15 @@ async fn outcome_memory_by_fingerprint_records_reverts_as_history() {
         history[0].note.as_deref(),
         Some("reverted: broke admin view")
     );
+    // Schema v0.5: the attempt's PR must survive the round-trip. It was
+    // written from the start and silently dropped by this query, so the gate
+    // knew a fix had been reverted but never what it changed — which can
+    // justify declining and can never justify a better attempt.
+    assert_eq!(
+        history[0].pr_url.as_deref(),
+        Some("https://github.com/chalk/chalk/pull/12"),
+        "outcome memory must carry the attempt's PR, not just its verdict"
+    );
 
     // Recurrence query for hardening targeting.
     let recurring = tenant

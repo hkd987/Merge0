@@ -44,7 +44,11 @@ SKIP when any of these hold:
   failed — stop spending reviewer trust on it. Attempts marked STALE are
   context, not a veto: the codebase they failed against may no longer
   exist, so weigh them and say so in the reasoning rather than skipping on
-  their account alone;
+  their account alone. When an attempt carries a PR link, prefer turning it
+  into a constraint ("do not repeat the approach in <PR>; the agent must
+  read it first and take a different one") over declining — a prior attempt
+  you can point at is the most useful instruction you can give, and
+  declining wastes it;
 - it is a feature request or product decision, not maintenance;
 - the evidence is too vague to name a location or an observable wrong
   behavior;
@@ -94,3 +98,11 @@ min_confidence = "high"
 # auto-dispatch pauses.
 [budget]
 max_tokens_per_day = 0
+
+# Confidence routing. A Work Order the gate itself is unsure about should
+# not become an autonomous PR on the strength of a coin-flip; below this
+# floor the same evidence-backed Work Order is filed as a tracker story for
+# a human instead. Requires a tracker (MERGE0_JIRA_PROJECT); without one the
+# setting is inert and startup says so. "low" disables routing entirely.
+[delivery]
+min_confidence_for_pr = "medium"

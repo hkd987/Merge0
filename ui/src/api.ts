@@ -199,10 +199,40 @@ export const fetchReports = (status: string) =>
 export const fetchReportDetail = (id: string) =>
   api<ReportDetail>(`/reports/${id}`);
 
+/// What approval actually delivered. Not always a PR: an install can be
+/// configured for stories, and a Work Order below the gate's confidence
+/// floor is routed to one even when the install prefers PRs.
+export interface ApprovalResult {
+  approved: string;
+  delivered_as: "pr" | "story" | "story_and_pr";
+  dispatched_to?: string;
+  story_key?: string;
+  story_url?: string;
+  /// True when the confidence floor — not the configured mode — chose this.
+  routed_by_confidence?: boolean;
+  confidence?: string;
+}
+
 export const approveReport = (id: string) =>
-  api<{ approved: string; dispatched_to: string }>(`/reports/${id}/approve`, {
+  api<ApprovalResult>(`/reports/${id}/approve`, {
     method: "POST",
   });
+
+/// Say what happened, in the reviewer's terms. Getting a story when you
+/// expected a PR is the kind of surprise that erodes trust in the queue, so
+/// the routed case states the reason rather than leaving it to be inferred.
+export function approvalMessage(res: ApprovalResult): string {
+  switch (res.delivered_as) {
+    case "story":
+      return res.routed_by_confidence
+        ? `Filed as ${res.story_key} for a human — ${res.confidence} gate confidence, so it was not sent to an agent`
+        : `Filed as ${res.story_key}`;
+    case "story_and_pr":
+      return `Approved — dispatched to ${res.dispatched_to}, filed as ${res.story_key}`;
+    default:
+      return `Approved — dispatched to ${res.dispatched_to}`;
+  }
+}
 
 export const dismissReport = (id: string, reason: string) =>
   api<{ dismissed: string }>(`/reports/${id}/dismiss`, {

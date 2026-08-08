@@ -471,7 +471,7 @@ impl TenantStore {
     /// reverted". Feeds `WorkOrder::prior_attempts` and hardening targeting.
     pub async fn outcomes_for_fingerprint(&self, fingerprint: &str) -> Result<Vec<OutcomeRef>> {
         let sql = format!(
-            "SELECT o.report_id, o.kind, o.occurred_at, o.note
+            "SELECT o.report_id, o.kind, o.occurred_at, o.note, o.pr_url
              FROM {outcomes} o
              JOIN {report_signals} rs ON rs.report_id = o.report_id
              WHERE rs.fingerprint = $1
@@ -492,6 +492,7 @@ impl TenantStore {
                     outcome: enum_parse(row.get("kind"))?,
                     occurred_at: row.get("occurred_at"),
                     note: row.get("note"),
+                    pr_url: row.get("pr_url"),
                 })
             })
             .collect()
@@ -499,7 +500,7 @@ impl TenantStore {
 
     pub async fn outcomes_for_report(&self, report_id: Ulid) -> Result<Vec<OutcomeRef>> {
         let sql = format!(
-            "SELECT report_id, kind, occurred_at, note FROM {t}
+            "SELECT report_id, kind, occurred_at, note, pr_url FROM {t}
              WHERE report_id = $1 ORDER BY occurred_at DESC",
             t = self.table("outcomes")
         );
@@ -514,6 +515,7 @@ impl TenantStore {
                     outcome: enum_parse(row.get("kind"))?,
                     occurred_at: row.get("occurred_at"),
                     note: row.get("note"),
+                    pr_url: row.get("pr_url"),
                 })
             })
             .collect()

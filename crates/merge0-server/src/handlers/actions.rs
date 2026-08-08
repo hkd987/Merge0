@@ -6,7 +6,7 @@ use crate::AppState;
 use chrono::Utc;
 use merge0_github::safety::verify_repo_safety;
 use merge0_runner::{ActionsRunner, AgentManifest, Runner};
-use merge0_signal::{DismissReason, ReportStatus};
+use merge0_signal::{DismissReason, GateConfidence, ReportStatus};
 use ulid::Ulid;
 
 /// Who pulled the dispatch trigger — recorded on every dispatch (the
@@ -69,6 +69,26 @@ impl DeliveryMode {
     }
 }
 
+/// Confidence routing: what this Work Order's own confidence changes about
+/// how it is delivered.
+///
+/// Only ever downgrades. A Work Order below the floor stops being a PR and
+/// becomes a story — the work stays queued, a human decides. It never turns
+/// a story-mode install into a PR-mode one, and it is inert without a
+/// tracker (there would be nowhere to route *to*, and silently dispatching
+/// anyway is better than silently dropping the approval on the floor).
+pub(crate) fn route_by_confidence(
+    configured: DeliveryMode,
+    confidence: GateConfidence,
+    floor: GateConfidence,
+    has_tracker: bool,
+) -> DeliveryMode {
+    if confidence >= floor || !has_tracker || !configured.dispatches() {
+        return configured;
+    }
+    DeliveryMode::Story
+}
+
 /// Approve → verify safety (P0-9) → transactional verdict+dispatch record →
 /// `repository_dispatch` (P0-6), with rollback to the inbox if the dispatch
 /// API call fails.
@@ -98,11 +118,29 @@ pub async fn approve(
         return Err(ApiError::conflict("report has no work order"));
     };
 
+    // What the gate's own confidence changes about delivery. Computed once
+    // and used everywhere below, so a downgraded Work Order cannot take the
+    // dispatch path by reading `state.delivery_mode` directly.
+    let mode = route_by_confidence(
+        state.delivery_mode,
+        work_order.confidence,
+        state.gate.delivery.min_confidence_for_pr,
+        state.tracker.is_some(),
+    );
+    let routed = mode != state.delivery_mode;
+    if routed {
+        tracing::info!(
+            report = %id,
+            confidence = work_order.confidence.as_str(),
+            "confidence below the PR floor — filing a story instead of dispatching"
+        );
+    }
+
     // Story delivery, when configured. Filed before anything else changes
     // state so a failure in story-only mode leaves the report untouched in
     // the inbox rather than half-approved.
     let mut story: Option<merge0_tracker::CreatedStory> = None;
-    if state.delivery_mode.files_story() {
+    if mode.files_story() {
         // Idempotency: an earlier attempt that filed a story then failed
         // must not file a second one on retry.
         if let Some((key, url)) = state.tenant.report_story(id).await? {
@@ -116,7 +154,7 @@ pub async fn approve(
                         .await?;
                     story = Some(created);
                 }
-                Err(e) if state.delivery_mode == DeliveryMode::Story => {
+                Err(e) if mode == DeliveryMode::Story => {
                     // The story WAS the delivery — fail loudly, keep the
                     // report reviewable.
                     return Err(ApiError::internal(format!(
@@ -135,10 +173,21 @@ pub async fn approve(
 
     // Story-only delivery is terminal: no runner, no PR, so none of the
     // dispatch machinery below applies.
-    if !state.delivery_mode.dispatches() {
+    if !mode.dispatches() {
         let created = story.expect("story mode returns early on failure");
+        // The reason is persisted, not just returned: whoever opens this
+        // report tomorrow needs to know it went to the board because the
+        // gate was unsure, not because the install files stories.
+        let why = if routed {
+            format!(
+                " Routed to the board rather than an agent: gate confidence was {}.",
+                work_order.confidence.as_str()
+            )
+        } else {
+            String::new()
+        };
         let brief = format!(
-            "Filed as tracker story {} ({}).\n\n{}",
+            "Filed as tracker story {} ({}).{why}\n\n{}",
             created.key, created.url, work_order.summary
         );
         state.tenant.hand_off_report(id, &brief, Utc::now()).await?;
@@ -148,6 +197,11 @@ pub async fn approve(
             "story_key": created.key,
             "story_url": created.url,
             "approved_by": by.as_str(),
+            // Distinguishes "this install files stories" from "this Work
+            // Order was not confident enough to dispatch" — a reviewer
+            // seeing a story where they expected a PR deserves the reason.
+            "routed_by_confidence": routed,
+            "confidence": work_order.confidence.as_str(),
         }));
     }
 
@@ -254,5 +308,73 @@ pub async fn fetch_manifest(state: &AppState) -> Result<AgentManifest, ApiError>
             .map_err(|e| ApiError::conflict(format!(".merge0/agent.toml is invalid: {e}"))),
         Ok(None) => Ok(AgentManifest::default()),
         Err(e) => Err(ApiError::internal(format!("manifest fetch failed: {e}"))),
+    }
+}
+
+#[cfg(test)]
+mod routing_tests {
+    use super::*;
+
+    const FLOOR: GateConfidence = GateConfidence::Medium;
+
+    #[test]
+    fn a_work_order_below_the_floor_becomes_a_story_instead_of_a_pr() {
+        assert_eq!(
+            route_by_confidence(DeliveryMode::Pr, GateConfidence::Low, FLOOR, true),
+            DeliveryMode::Story
+        );
+        // …and the accompany mode loses only its dispatch, keeping the story.
+        assert_eq!(
+            route_by_confidence(DeliveryMode::StoryAndPr, GateConfidence::Low, FLOOR, true),
+            DeliveryMode::Story
+        );
+    }
+
+    #[test]
+    fn at_or_above_the_floor_nothing_changes() {
+        for confidence in [GateConfidence::Medium, GateConfidence::High] {
+            assert_eq!(
+                route_by_confidence(DeliveryMode::Pr, confidence, FLOOR, true),
+                DeliveryMode::Pr,
+                "{confidence:?} is at or above the floor"
+            );
+        }
+    }
+
+    /// Routing only ever removes autonomy. A story-mode install stays story
+    /// mode however confident the gate is — the operator's configured
+    /// ceiling is not something a model's self-assessment may raise.
+    #[test]
+    fn routing_never_upgrades() {
+        assert_eq!(
+            route_by_confidence(DeliveryMode::Story, GateConfidence::High, FLOOR, true),
+            DeliveryMode::Story
+        );
+    }
+
+    /// Without a tracker there is nowhere to route to. Dispatching anyway is
+    /// the lesser evil: the alternative is an approval that silently
+    /// delivers nothing. Startup warns that the knob is inert.
+    #[test]
+    fn routing_is_inert_without_a_tracker() {
+        assert_eq!(
+            route_by_confidence(DeliveryMode::Pr, GateConfidence::Low, FLOOR, false),
+            DeliveryMode::Pr
+        );
+    }
+
+    /// `min_confidence_for_pr = "low"` is the documented off switch, since
+    /// every confidence is >= Low.
+    #[test]
+    fn a_low_floor_disables_routing_entirely() {
+        assert_eq!(
+            route_by_confidence(
+                DeliveryMode::Pr,
+                GateConfidence::Low,
+                GateConfidence::Low,
+                true
+            ),
+            DeliveryMode::Pr
+        );
     }
 }
