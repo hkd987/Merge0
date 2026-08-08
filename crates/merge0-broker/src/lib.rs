@@ -239,6 +239,15 @@ impl<M: TokenMinter> Broker<M> {
 
     /// Check the presented key against every registered key without early
     /// exit, so timing does not reveal which (if any) key matched.
+    /// Does this key belong to a registered runner?
+    ///
+    /// Public so a caller can authenticate *before* doing any work on an
+    /// unauthenticated request body — [`Self::request_credentials`] checks
+    /// the same thing, but only after the caller has already parsed.
+    pub fn authenticates(&self, presented: &str) -> bool {
+        self.runner_key_matches(presented)
+    }
+
     fn runner_key_matches(&self, presented: &str) -> bool {
         let mut matched = false;
         for key in &self.runner_keys {

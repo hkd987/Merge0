@@ -1783,3 +1783,73 @@ async fn routing_is_inert_when_no_tracker_is_configured() {
     assert_eq!(body["dispatched_to"], "chalk/chalk");
     h.teardown().await;
 }
+
+/// **Security review regression.** Both unauthenticated surfaces used to
+/// parse the request body before deciding whether the caller was allowed to
+/// talk to them at all. Sending malformed JSON with bad credentials is the
+/// test: a server that authenticates first answers 401, one that parses
+/// first answers 400 and has told an anonymous caller something about the
+/// body shape it expected — while doing work on their behalf.
+#[tokio::test]
+async fn unauthenticated_callers_are_rejected_before_the_body_is_parsed() {
+    let h = Harness::start(HarnessOptions::default()).await;
+    let garbage = "{ this is not json at all";
+
+    // Vendor webhook: wrong shared token.
+    let res = h
+        .client
+        .post(format!("{}/webhooks/posthog", h.base))
+        .header("x-merge0-webhook-token", "wrong")
+        .header("content-type", "application/json")
+        .body(garbage)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(
+        res.status(),
+        401,
+        "bad token must lose before the parser is reached"
+    );
+
+    // Unknown vendor: 404 without parsing either.
+    let res = h
+        .client
+        .post(format!("{}/webhooks/nope", h.base))
+        .header("content-type", "application/json")
+        .body(garbage)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res.status(), 404);
+
+    // Credential broker: wrong runner key.
+    let res = h
+        .client
+        .post(format!("{}/broker/credentials", h.base))
+        .header("authorization", "Bearer wrong-runner-key")
+        .header("content-type", "application/json")
+        .body(garbage)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(
+        res.status(),
+        401,
+        "the broker must authenticate before parsing, as its docs claim"
+    );
+
+    // And the runner callback, which already had this property — asserted so
+    // it keeps it.
+    let res = h
+        .client
+        .post(format!("{}/runner/callback", h.base))
+        .header("authorization", "Bearer wrong-runner-token")
+        .header("content-type", "application/json")
+        .body(garbage)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res.status(), 401);
+
+    h.teardown().await;
+}

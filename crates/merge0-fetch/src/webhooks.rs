@@ -12,6 +12,7 @@
 //!
 //! All comparisons of secrets/MACs are constant-time.
 
+use chrono::{DateTime, Utc};
 use hmac::{Hmac, Mac};
 use serde_json::{json, Value};
 use sha2::Sha256;
@@ -57,10 +58,28 @@ pub fn verify_zendesk_signature(
     timestamp: &str,
     body: &[u8],
     signature_b64: &str,
+    now: DateTime<Utc>,
 ) -> bool {
+    // Freshness FIRST. Binding the timestamp into the MAC proves the sender
+    // chose it; it does not stop anyone who captured that request from
+    // sending it again next year. Zendesk publishes the timestamp header
+    // precisely so receivers can bound the replay window — a scheme whose
+    // replay protection is never checked is a scheme without replay
+    // protection. (Slack's verifier has always done this; this one didn't.)
+    let Ok(sent) = DateTime::parse_from_rfc3339(timestamp.trim()) else {
+        return false;
+    };
+    if (now - sent.with_timezone(&Utc)).num_seconds().abs() > ZENDESK_SIGNATURE_MAX_AGE_SECS {
+        return false;
+    }
     let expected = base64_encode(&hmac_sha256(signing_secret, &[timestamp.as_bytes(), body]));
     constant_time_eq(expected.as_bytes(), signature_b64.trim().as_bytes())
 }
+
+/// How far a Zendesk webhook timestamp may be from our clock, in either
+/// direction (the future side absorbs clock skew). Matches the window Slack
+/// documents for its own scheme.
+pub const ZENDESK_SIGNATURE_MAX_AGE_SECS: i64 = 5 * 60;
 
 /// Shared-token check for vendors without a signature scheme (PostHog and
 /// Datadog webhooks carry a caller-configured token).
@@ -497,29 +516,107 @@ mod tests {
         assert!(!verify_sentry_signature(secret, body, ""));
     }
 
+    /// A timestamp inside the freshness window, so MAC-binding assertions
+    /// are not accidentally passing because the clock check rejected them.
+    fn zendesk_now(timestamp: &str) -> DateTime<Utc> {
+        DateTime::parse_from_rfc3339(timestamp)
+            .expect("fixture timestamp is rfc3339")
+            .with_timezone(&Utc)
+    }
+
     #[test]
     fn zendesk_signature_binds_timestamp_and_body() {
         let secret = "example-signing-secret";
         let timestamp = "2026-08-07T00:00:00Z";
+        let now = zendesk_now(timestamp);
         let body = br#"{"detail":{"id":1}}"#;
         let valid = base64_encode(&hmac_sha256(secret, &[timestamp.as_bytes(), body]));
 
-        assert!(verify_zendesk_signature(secret, timestamp, body, &valid));
+        assert!(verify_zendesk_signature(
+            secret, timestamp, body, &valid, now
+        ));
         // Replayed with a different timestamp → the MAC no longer matches.
         assert!(!verify_zendesk_signature(
             secret,
-            "2026-08-08T00:00:00Z",
+            "2026-08-07T00:02:00Z",
             body,
-            &valid
+            &valid,
+            now
         ));
         assert!(!verify_zendesk_signature(
             secret,
             timestamp,
             br#"{"detail":{"id":2}}"#,
-            &valid
+            &valid,
+            now
         ));
-        assert!(!verify_zendesk_signature("other", timestamp, body, &valid));
-        assert!(!verify_zendesk_signature(secret, timestamp, body, "AAAA"));
+        assert!(!verify_zendesk_signature(
+            "other", timestamp, body, &valid, now
+        ));
+        assert!(!verify_zendesk_signature(
+            secret, timestamp, body, "AAAA", now
+        ));
+    }
+
+    /// **Regression (security review).** The timestamp was signed but its
+    /// freshness was never checked, so a captured Zendesk webhook stayed
+    /// valid forever — the signature scheme's whole replay defence was
+    /// being discarded. A perfectly-valid MAC must still be refused once
+    /// it ages out.
+    #[test]
+    fn a_perfectly_signed_zendesk_webhook_expires() {
+        let secret = "example-signing-secret";
+        let timestamp = "2026-08-07T00:00:00Z";
+        let body = br#"{"detail":{"id":1}}"#;
+        let valid = base64_encode(&hmac_sha256(secret, &[timestamp.as_bytes(), body]));
+        let sent_at = zendesk_now(timestamp);
+
+        // Fresh: accepted.
+        assert!(verify_zendesk_signature(
+            secret, timestamp, body, &valid, sent_at
+        ));
+        // Just inside the window: still accepted.
+        assert!(verify_zendesk_signature(
+            secret,
+            timestamp,
+            body,
+            &valid,
+            sent_at + chrono::Duration::seconds(ZENDESK_SIGNATURE_MAX_AGE_SECS - 1)
+        ));
+        // Replayed later with the SAME valid signature: refused.
+        assert!(!verify_zendesk_signature(
+            secret,
+            timestamp,
+            body,
+            &valid,
+            sent_at + chrono::Duration::seconds(ZENDESK_SIGNATURE_MAX_AGE_SECS + 1)
+        ));
+        assert!(
+            !verify_zendesk_signature(
+                secret,
+                timestamp,
+                body,
+                &valid,
+                sent_at + chrono::Duration::days(365)
+            ),
+            "a year-old capture must not still authenticate"
+        );
+        // Clock skew in the other direction is bounded too.
+        assert!(!verify_zendesk_signature(
+            secret,
+            timestamp,
+            body,
+            &valid,
+            sent_at - chrono::Duration::seconds(ZENDESK_SIGNATURE_MAX_AGE_SECS + 1)
+        ));
+        // A non-timestamp header cannot buy unlimited validity either.
+        assert!(!verify_zendesk_signature(
+            secret,
+            "not-a-date",
+            body,
+            &valid,
+            sent_at
+        ));
     }
 
     #[test]

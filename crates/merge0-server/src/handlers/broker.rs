@@ -42,12 +42,22 @@ pub async fn credentials(
             "credential broker not configured".into(),
         ));
     };
-    // Authentication strictly before parsing: pull the presented runner key
-    // (bearer scheme) and let the broker's constant-time check decide.
+    // Authentication strictly before parsing — and it has to be *checked*
+    // here, not merely extracted. Reading the key and then parsing the body
+    // before `request_credentials` validates it left an unauthenticated
+    // caller able to drive JSON parsing on this endpoint, which is exactly
+    // what this comment claimed was impossible.
     let presented = super::auth_header(&headers)
         .and_then(|value| value.strip_prefix("Bearer "))
         .unwrap_or_default()
         .to_string();
+    if !broker.lock().await.authenticates(&presented) {
+        return Err(ApiError::Status(
+            StatusCode::UNAUTHORIZED,
+            "invalid runner key".into(),
+        ));
+    }
+
     let request: CredentialRequest = serde_json::from_slice(&body)
         .map_err(|e| ApiError::bad_request(format!("bad credential request: {e}")))?;
 
