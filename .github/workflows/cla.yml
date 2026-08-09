@@ -40,7 +40,11 @@ jobs:
           branch: 'cla-signatures'
           # The repo owner is allowlisted: an owner signing their own CLA is
           # meaningless, and a required cla check must not block owner PRs.
-          allowlist: 'hkd987,dependabot[bot],github-actions[bot],*[bot]'
+          # 'Claude' is the unlinked git author name on commits from the
+          # owner's agent sessions (no GitHub account, so *[bot] cannot
+          # match it) — owner-directed agent commits carry the owner's own
+          # rights, and an account-less identity could never sign anyway.
+          allowlist: 'hkd987,Claude,dependabot[bot],github-actions[bot],*[bot]'
           custom-notsigned-prcomment: >
             Thanks for the contribution! Before we can merge, we need you to
             sign the [Contributor License Agreement](https://github.com/${{ github.repository }}/blob/main/CLA.md)
