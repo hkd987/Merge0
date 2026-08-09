@@ -52,11 +52,14 @@ with and without the fix will be asked to prove the test can fail.
 
 - Everything outside `ee/` is MIT. Everything inside `ee/` is under the
   Merge0 Enterprise License (`ee/LICENSE`).
-- Contributions require agreeing to a Contributor License Agreement (CLA);
-  you'll be prompted automatically on your first pull request. The CLA
-  exists because Merge0 is open-core: the project needs the right to
-  relicense contributed code across that boundary. If the CLA bot isn't
-  live yet on your PR, a maintainer will follow up before merge.
+- Contributions require agreeing to the [Contributor License
+  Agreement](CLA.md) **before a PR can merge**. The CLA workflow comments
+  on your first pull request with a one-line signature phrase; posting it
+  records your signature (tied to your GitHub account) in the repo's
+  signature ledger and turns the CLA check green. The CLA exists because
+  Merge0 is open-core: the project needs the right to license contributed
+  code on both sides of the `ee/` boundary. Contributing on behalf of an
+  employer? Read the corporate-contributions section of `CLA.md` first.
 
 ## Evals cost money
 
