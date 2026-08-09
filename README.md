@@ -51,7 +51,9 @@ change. No red PRs, no auto-merge, ever.
 
 - **Signal sources**: errors and product signals — PostHog (error
   tracking, rage/dead clicks, funnel drop-offs), Sentry, Datadog,
-  LoopForge, OTel logs; everywhere work gets written down —
+  LoopForge, OTel logs, **Mixpanel** (saved-funnel drop-offs via the
+  Query API), **OpenPanel** (your named error events via the export
+  API); everywhere work gets written down —
   Zendesk, Intercom, GitHub Issues, **Jira, Linear, Asana, Trello, and
   designated Slack channels** (all `ticket` signals feeding the
   ticket-triage scout); plus a generic webhook envelope for anything

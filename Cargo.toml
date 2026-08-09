@@ -16,6 +16,8 @@ members = [
     "crates/merge0-adapter-asana",
     "crates/merge0-adapter-trello",
     "crates/merge0-adapter-intercom",
+    "crates/merge0-adapter-mixpanel",
+    "crates/merge0-adapter-openpanel",
     "crates/merge0-store",
     "crates/merge0-fetch",
     "crates/merge0-model",
@@ -97,6 +99,8 @@ merge0-adapter-slack = { path = "crates/merge0-adapter-slack" }
 merge0-adapter-asana = { path = "crates/merge0-adapter-asana" }
 merge0-adapter-trello = { path = "crates/merge0-adapter-trello" }
 merge0-adapter-intercom = { path = "crates/merge0-adapter-intercom" }
+merge0-adapter-mixpanel = { path = "crates/merge0-adapter-mixpanel" }
+merge0-adapter-openpanel = { path = "crates/merge0-adapter-openpanel" }
 merge0-server = { path = "crates/merge0-server" }
 merge0-ee = { path = "ee/merge0-ee" }
 merge0-hosted = { path = "ee/merge0-hosted" }

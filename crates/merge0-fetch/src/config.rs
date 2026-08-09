@@ -10,7 +10,8 @@
 
 use crate::pollers::{
     AsanaPoller, DatadogPoller, GithubIssuesPoller, IntercomPoller, JiraPoller, LinearPoller,
-    PosthogPoller, SentryPoller, SlackChannelsPoller, TrelloPoller, ZendeskPoller,
+    MixpanelPoller, OpenpanelPoller, PosthogPoller, SentryPoller, SlackChannelsPoller,
+    TrelloPoller, ZendeskPoller,
 };
 use crate::{FetchError, Fetcher};
 use merge0_github::GitHubApi;
@@ -34,6 +35,80 @@ pub struct SourcesConfig {
     pub asana: Option<AsanaConfig>,
     pub trello: Option<TrelloConfig>,
     pub intercom: Option<IntercomConfig>,
+    pub mixpanel: Option<MixpanelConfig>,
+    pub openpanel: Option<OpenpanelConfig>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MixpanelConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Numeric Mixpanel project id (required by the Query API when
+    /// authenticating with a service account).
+    pub project_id: String,
+    /// Env var *names* holding the service-account username and secret
+    /// (HTTP Basic auth on the Query API).
+    pub service_account_user_env: String,
+    pub service_account_secret_env: String,
+    /// Query API host; EU projects use https://eu.mixpanel.com, India
+    /// https://in.mixpanel.com.
+    #[serde(default = "MixpanelConfig::default_base_url")]
+    pub base_url: String,
+    /// Project UI base for deep links (envelope context `project_base_url`).
+    pub project_base_url: String,
+    /// Saved funnels polled for drop-off analysis. The funnels query is
+    /// Mixpanel's only signal source here, so an enabled section with an
+    /// empty list fails at startup rather than running dead.
+    #[serde(default)]
+    pub funnel_ids: Vec<u64>,
+    /// Trailing window re-read each round (funnel results are aggregates,
+    /// not events — there is no incremental cursor).
+    #[serde(default = "default_lookback_days")]
+    pub lookback_days: i64,
+}
+
+impl MixpanelConfig {
+    fn default_base_url() -> String {
+        "https://mixpanel.com".into()
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct OpenpanelConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// OpenPanel project id (the export API scopes by project).
+    pub project_id: String,
+    /// Env var *names* holding a **read**-mode client's id and secret (the
+    /// default write client cannot use the export API).
+    pub client_id_env: String,
+    pub client_secret_env: String,
+    /// API host; self-hosted deployments override this.
+    #[serde(default = "OpenpanelConfig::default_base_url")]
+    pub base_url: String,
+    /// Dashboard base for deep links (envelope context `project_base_url`).
+    pub project_base_url: String,
+    /// Which event names are defect signals (OpenPanel has no built-in
+    /// error tracking, so this is an operator decision). An enabled section
+    /// with an empty list fails at startup rather than running dead.
+    #[serde(default)]
+    pub error_events: Vec<String>,
+    /// First-round trailing window; later rounds are incremental via the
+    /// stored cursor.
+    #[serde(default = "default_lookback_days")]
+    pub lookback_days: i64,
+}
+
+impl OpenpanelConfig {
+    fn default_base_url() -> String {
+        "https://api.openpanel.dev".into()
+    }
+}
+
+fn default_lookback_days() -> i64 {
+    7
 }
 
 fn default_true() -> bool {
@@ -345,6 +420,16 @@ pub fn build_fetchers(
             fetchers.push(Box::new(IntercomPoller::from_config(c)?));
         }
     }
+    if let Some(c) = &config.mixpanel {
+        if c.enabled {
+            fetchers.push(Box::new(MixpanelPoller::from_config(c)?));
+        }
+    }
+    if let Some(c) = &config.openpanel {
+        if c.enabled {
+            fetchers.push(Box::new(OpenpanelPoller::from_config(c)?));
+        }
+    }
     Ok(fetchers)
 }
 
@@ -380,6 +465,8 @@ mod tests {
             ("asana", config.asana.as_ref().map(|c| c.enabled)),
             ("trello", config.trello.as_ref().map(|c| c.enabled)),
             ("intercom", config.intercom.as_ref().map(|c| c.enabled)),
+            ("mixpanel", config.mixpanel.as_ref().map(|c| c.enabled)),
+            ("openpanel", config.openpanel.as_ref().map(|c| c.enabled)),
         ] {
             assert_eq!(enabled, Some(false), "section [{name}] missing or enabled");
         }

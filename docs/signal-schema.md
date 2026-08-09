@@ -1,4 +1,4 @@
-# Signal Schema — v0.5
+# Signal Schema — v0.6
 
 The Signal is the contract between every Merge0 component and the integration
 surface for external adapters (including the future generic webhook adapter).
@@ -15,6 +15,10 @@ and the types cannot drift silently.
 
 ### Changelog
 
+- **v0.6** — `source` enum extended with the product-analytics tools
+  `mixpanel` (funnel drop-offs via the Query API) and `openpanel`
+  (self-hostable analytics; error-shaped events via the export API).
+  Additive only; no field changes.
 - **v0.5** — added `pr_url` (string, optional) to the internal `OutcomeRef`.
   The value was already stored; outcome memory simply never surfaced it, so
   the gate could see *that* a prior fix was reverted but never *what it

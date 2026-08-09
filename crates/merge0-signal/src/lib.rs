@@ -1,6 +1,6 @@
 //! The Signal schema — the contract between every Merge0 component.
 //!
-//! Normative spec: `docs/signal-schema.md` (v0.5). A test below round-trips
+//! Normative spec: `docs/signal-schema.md` (v0.6). A test below round-trips
 //! the doc's JSON example, so this crate and the doc cannot drift silently.
 //! Schema changes must update the doc (and its version) in the same PR.
 //!
@@ -38,6 +38,8 @@ pub enum Source {
     Slack,
     Asana,
     Trello,
+    Mixpanel,
+    Openpanel,
     /// Merge0's own operational telemetry, ingested as just another source
     /// (the meta-loop, PRD §5d).
     Meta,
@@ -61,6 +63,8 @@ impl Source {
             Source::Slack => "slack",
             Source::Asana => "asana",
             Source::Trello => "trello",
+            Source::Mixpanel => "mixpanel",
+            Source::Openpanel => "openpanel",
             Source::Meta => "meta",
         }
     }

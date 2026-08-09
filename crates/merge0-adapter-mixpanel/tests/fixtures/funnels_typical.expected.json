@@ -1,0 +1,167 @@
+[
+  {
+    "affected_count": 11314,
+    "body": "11314 of 20524 users lost at step 3/3 'Purchase' (55% drop); steps: App Open 32688 → Signup 20524 → Purchase 9210",
+    "evidence": [
+      {
+        "kind": "issue",
+        "label": "mixpanel funnel Signup funnel",
+        "url": "https://mixpanel.example.com/project/318/funnels/301"
+      }
+    ],
+    "fingerprint": "mixpanel:86e38c717443a99f3a5ec0a1c3d35b12",
+    "first_seen": "2026-08-08T12:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "ux_friction",
+    "last_seen": "2026-08-08T12:00:00Z",
+    "raw": {
+      "fetched_at": "2026-08-08T12:00:00Z",
+      "funnel_id": 301,
+      "name": "Signup funnel",
+      "response": {
+        "data": {
+          "2026-08-01": {
+            "analysis": {
+              "completion": 15810,
+              "starting_amount": 30112,
+              "steps": 3,
+              "worst": 1
+            },
+            "steps": [
+              {
+                "avg_time": 2,
+                "count": 30112,
+                "event": "App Open",
+                "goal": "App Open",
+                "overall_conv_ratio": 1,
+                "step_conv_ratio": 1
+              },
+              {
+                "avg_time": 48,
+                "count": 21080,
+                "event": "Signup",
+                "goal": "Signup",
+                "overall_conv_ratio": 0.7,
+                "step_conv_ratio": 0.7
+              },
+              {
+                "avg_time": 120,
+                "count": 15810,
+                "event": "Purchase",
+                "goal": "Purchase",
+                "overall_conv_ratio": 0.525,
+                "step_conv_ratio": 0.75
+              }
+            ]
+          },
+          "2026-08-08": {
+            "analysis": {
+              "completion": 9210,
+              "starting_amount": 32688,
+              "steps": 3,
+              "worst": 2
+            },
+            "steps": [
+              {
+                "avg_time": 2,
+                "count": 32688,
+                "event": "App Open",
+                "goal": "App Open",
+                "overall_conv_ratio": 1,
+                "step_conv_ratio": 1
+              },
+              {
+                "avg_time": 55,
+                "count": 20524,
+                "event": "Signup",
+                "goal": "Signup",
+                "overall_conv_ratio": 0.6279,
+                "step_conv_ratio": 0.6279
+              },
+              {
+                "avg_time": 130,
+                "count": 9210,
+                "event": "Purchase",
+                "goal": "Purchase",
+                "overall_conv_ratio": 0.2818,
+                "step_conv_ratio": 0.4487
+              }
+            ]
+          }
+        },
+        "meta": {
+          "dates": [
+            "2026-08-01",
+            "2026-08-08"
+          ]
+        }
+      }
+    },
+    "severity": "high",
+    "source": "mixpanel",
+    "source_ref": "301",
+    "title": "Funnel drop-off: Signup funnel loses 55% at Purchase"
+  },
+  {
+    "affected_count": 1620,
+    "body": "1620 of 5400 users lost at step 2/2 'Invite Accepted' (30% drop); steps: Invite Viewed 5400 → Invite Accepted 3780",
+    "evidence": [
+      {
+        "kind": "issue",
+        "label": "mixpanel funnel Invite flow",
+        "url": "https://mixpanel.example.com/project/318/funnels/302"
+      }
+    ],
+    "fingerprint": "mixpanel:bdaf641be97bcf3c95e5032a94ec8adc",
+    "first_seen": "2026-08-08T12:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "ux_friction",
+    "last_seen": "2026-08-08T12:00:00Z",
+    "raw": {
+      "fetched_at": "2026-08-08T12:00:00Z",
+      "funnel_id": 302,
+      "name": "Invite flow",
+      "response": {
+        "data": {
+          "2026-08-08": {
+            "analysis": {
+              "completion": 3780,
+              "starting_amount": 5400,
+              "steps": 2,
+              "worst": 1
+            },
+            "steps": [
+              {
+                "avg_time": 4,
+                "count": 5400,
+                "event": "Invite Viewed",
+                "goal": "Invite Viewed",
+                "overall_conv_ratio": 1,
+                "step_conv_ratio": 1
+              },
+              {
+                "avg_time": 90,
+                "count": 3780,
+                "event": "Invite Accepted",
+                "goal": "Invite Accepted",
+                "overall_conv_ratio": 0.7,
+                "step_conv_ratio": 0.7
+              }
+            ]
+          }
+        },
+        "meta": {
+          "dates": [
+            "2026-08-08"
+          ]
+        }
+      }
+    },
+    "severity": "medium",
+    "source": "mixpanel",
+    "source_ref": "302",
+    "title": "Funnel drop-off: Invite flow loses 30% at Invite Accepted"
+  }
+]

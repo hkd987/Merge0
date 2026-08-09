@@ -28,6 +28,8 @@ pub(crate) fn adapter_for(source: &str) -> Option<Box<dyn Adapter>> {
         "asana" => Box::new(merge0_adapter_asana::AsanaAdapter),
         "trello" => Box::new(merge0_adapter_trello::TrelloAdapter),
         "intercom" => Box::new(merge0_adapter_intercom::IntercomAdapter),
+        "mixpanel" => Box::new(merge0_adapter_mixpanel::MixpanelAdapter),
+        "openpanel" => Box::new(merge0_adapter_openpanel::OpenpanelAdapter),
         "meta" => Box::new(merge0_meta::MetaAdapter),
         _ => return None,
     })

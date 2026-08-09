@@ -1240,6 +1240,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "merge0-adapter-mixpanel"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "merge0-adapters",
+ "merge0-signal",
+ "serde",
+ "serde_json",
+ "ulid",
+]
+
+[[package]]
+name = "merge0-adapter-openpanel"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "merge0-adapters",
+ "merge0-signal",
+ "serde",
+ "serde_json",
+ "ulid",
+]
+
+[[package]]
 name = "merge0-adapter-posthog"
 version = "0.1.0"
 dependencies = [
@@ -1422,6 +1446,8 @@ dependencies = [
  "merge0-adapter-intercom",
  "merge0-adapter-jira",
  "merge0-adapter-linear",
+ "merge0-adapter-mixpanel",
+ "merge0-adapter-openpanel",
  "merge0-adapter-posthog",
  "merge0-adapter-sentry",
  "merge0-adapter-slack",
@@ -1438,6 +1464,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "toml",
+ "tracing",
  "ulid",
  "wiremock",
 ]
@@ -1571,6 +1598,8 @@ dependencies = [
  "merge0-adapter-jira",
  "merge0-adapter-linear",
  "merge0-adapter-loopforge",
+ "merge0-adapter-mixpanel",
+ "merge0-adapter-openpanel",
  "merge0-adapter-posthog",
  "merge0-adapter-sentry",
  "merge0-adapter-slack",

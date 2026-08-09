@@ -11,11 +11,13 @@
 use chrono::{DateTime, TimeZone, Utc};
 use merge0_fetch::config::{
     AsanaConfig, DatadogConfig, GithubIssuesConfig, IntercomConfig, JiraConfig, LinearConfig,
-    PosthogConfig, SentryConfig, SlackChannel, SlackChannelsConfig, TrelloConfig, ZendeskConfig,
+    MixpanelConfig, OpenpanelConfig, PosthogConfig, SentryConfig, SlackChannel,
+    SlackChannelsConfig, TrelloConfig, ZendeskConfig,
 };
 use merge0_fetch::pollers::{
     AsanaPoller, DatadogPoller, GithubIssuesPoller, IntercomPoller, JiraPoller, LinearPoller,
-    PosthogPoller, SentryPoller, SlackChannelsPoller, TrelloPoller, ZendeskPoller,
+    MixpanelPoller, OpenpanelPoller, PosthogPoller, SentryPoller, SlackChannelsPoller,
+    TrelloPoller, ZendeskPoller,
 };
 use merge0_fetch::{run_all, run_fetch, FetchError, Fetcher};
 use merge0_github::{FakeGitHub, GitHubApi};
@@ -1058,4 +1060,227 @@ async fn intercom_poller_ingests_and_cursors_by_unix_seconds() {
     assert_eq!(cursor, now().timestamp().to_string());
 
     store.drop_tenant(&schema).await.unwrap();
+}
+
+// ---- Mixpanel ----
+
+fn mixpanel_poller(server: &MockServer, user_env: &str, secret_env: &str) -> MixpanelPoller {
+    set_secret(user_env, "svc-account.abc123");
+    set_secret(secret_env, "mixpanel-test-secret");
+    MixpanelPoller::from_config(&MixpanelConfig {
+        enabled: true,
+        project_id: "318".into(),
+        service_account_user_env: user_env.into(),
+        service_account_secret_env: secret_env.into(),
+        base_url: server.uri(),
+        project_base_url: "https://mixpanel.example.com/project/318".into(),
+        funnel_ids: vec![301],
+        lookback_days: 7,
+    })
+    .unwrap()
+}
+
+/// The grounded funnels Query API response shape (docs.mixpanel.com):
+/// meta.dates + per-date steps/analysis.
+fn mixpanel_funnel_response() -> serde_json::Value {
+    serde_json::json!({
+        "meta": { "dates": ["2026-07-31", "2026-08-07"] },
+        "data": {
+            "2026-08-07": {
+                "steps": [
+                    { "count": 3200, "goal": "App Open", "event": "App Open",
+                      "step_conv_ratio": 1.0, "overall_conv_ratio": 1.0, "avg_time": 2 },
+                    { "count": 1400, "goal": "Signup", "event": "Signup",
+                      "step_conv_ratio": 0.4375, "overall_conv_ratio": 0.4375, "avg_time": 55 }
+                ],
+                "analysis": { "completion": 1400, "starting_amount": 3200, "steps": 2, "worst": 1 }
+            },
+            "2026-07-31": {
+                "steps": [],
+                "analysis": { "completion": 0, "starting_amount": 0, "steps": 0, "worst": 0 }
+            }
+        }
+    })
+}
+
+#[tokio::test]
+async fn mixpanel_poller_polls_configured_funnels_with_names_and_window() {
+    let server = MockServer::start().await;
+    let poller = mixpanel_poller(&server, "MERGE0_TEST_MX_USER_A", "MERGE0_TEST_MX_SECRET_A");
+    let (store, tenant, schema) = fresh_tenant().await;
+
+    // Both endpoints are hit once per round, and this test runs two rounds
+    // (the second proves snapshot re-reads update rather than duplicate).
+    Mock::given(method("GET"))
+        .and(path("/api/query/funnels/list"))
+        .and(query_param("project_id", "318"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+            { "funnel_id": 301, "name": "Signup funnel" }
+        ])))
+        .expect(2)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/api/query/funnels"))
+        .and(query_param("project_id", "318"))
+        .and(query_param("funnel_id", "301"))
+        .and(query_param("from_date", "2026-07-31"))
+        .and(query_param("to_date", "2026-08-07"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(mixpanel_funnel_response()))
+        .expect(2)
+        .mount(&server)
+        .await;
+
+    let outcome = run_fetch(&poller, &tenant, now()).await.unwrap();
+    // One envelope; the 56% worst-step drop clears the adapter's floor, so
+    // exactly one ux_friction signal lands.
+    assert_eq!(
+        (outcome.envelopes, outcome.inserted, outcome.updated),
+        (1, 1, 0)
+    );
+    // Aggregates carry no cursor.
+    assert_eq!(tenant.fetch_cursor("mixpanel").await.unwrap(), None);
+
+    // Re-reading the same window updates rather than duplicates (the
+    // fingerprint-deduped upsert absorbing snapshot re-reads).
+    let outcome = run_fetch(&poller, &tenant, now()).await.unwrap();
+    assert_eq!((outcome.inserted, outcome.updated), (0, 1));
+    server.verify().await;
+    store.drop_tenant(&schema).await.unwrap();
+}
+
+#[test]
+fn mixpanel_without_funnels_fails_at_construction_not_silently() {
+    set_secret("MERGE0_TEST_MX_USER_B", "svc");
+    set_secret("MERGE0_TEST_MX_SECRET_B", "secret");
+    let error = MixpanelPoller::from_config(&MixpanelConfig {
+        enabled: true,
+        project_id: "318".into(),
+        service_account_user_env: "MERGE0_TEST_MX_USER_B".into(),
+        service_account_secret_env: "MERGE0_TEST_MX_SECRET_B".into(),
+        base_url: "https://mixpanel.example.com".into(),
+        project_base_url: "https://mixpanel.example.com/project/318".into(),
+        funnel_ids: vec![],
+        lookback_days: 7,
+    })
+    .err()
+    .expect("an enabled source that can never signal must not construct");
+    assert!(error.to_string().contains("funnel_ids"), "{error}");
+}
+
+// ---- OpenPanel ----
+
+fn openpanel_poller(server: &MockServer, id_env: &str, secret_env: &str) -> OpenpanelPoller {
+    set_secret(id_env, "op-client-id");
+    set_secret(secret_env, "op-client-secret");
+    OpenpanelPoller::from_config(&OpenpanelConfig {
+        enabled: true,
+        project_id: "website".into(),
+        client_id_env: id_env.into(),
+        client_secret_env: secret_env.into(),
+        base_url: server.uri(),
+        project_base_url: "https://openpanel.example.com/acme/website".into(),
+        error_events: vec!["payment_failed".into()],
+        lookback_days: 7,
+    })
+    .unwrap()
+}
+
+/// The grounded /export/events response shape (OpenPanel source:
+/// export.controller.ts + event.service.ts).
+fn openpanel_events_response(created_at: &str) -> serde_json::Value {
+    serde_json::json!({
+        "meta": { "count": 6, "totalCount": 6, "pages": 1, "current": 1 },
+        "data": (0..6).map(|i| serde_json::json!({
+            "id": format!("01J0000000000000000000000{i}"),
+            "name": "payment_failed",
+            "deviceId": format!("d-{i}"),
+            "profileId": format!("p-{i}"),
+            "projectId": "website",
+            "sessionId": format!("s-{i}"),
+            "properties": { "message": "card declined" },
+            "createdAt": created_at,
+            "country": "US", "city": "Denver", "region": "CO",
+            "os": "macOS", "osVersion": "14.5",
+            "browser": "Chrome", "browserVersion": "126",
+            "device": "desktop", "brand": "", "model": "",
+            "path": "/checkout", "origin": "https://app.example.com",
+            "referrer": "", "referrerName": "", "referrerType": ""
+        })).collect::<Vec<_>>()
+    })
+}
+
+#[tokio::test]
+async fn openpanel_poller_ingests_incrementally_with_read_client_headers() {
+    let server = MockServer::start().await;
+    let poller = openpanel_poller(&server, "MERGE0_TEST_OP_ID_A", "MERGE0_TEST_OP_SECRET_A");
+    let (store, tenant, schema) = fresh_tenant().await;
+
+    // First run: no cursor → start = now - lookback_days.
+    Mock::given(method("GET"))
+        .and(path("/export/events"))
+        .and(query_param("project_id", "website"))
+        .and(query_param("event", "payment_failed"))
+        .and(query_param("start", "2026-07-31T12:00:00+00:00"))
+        .and(header("openpanel-client-id", "op-client-id"))
+        .and(header("openpanel-client-secret", "op-client-secret"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(openpanel_events_response("2026-08-07T09:30:00.000Z")),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let outcome = run_fetch(&poller, &tenant, now()).await.unwrap();
+    // Six raw events, one (name, path) group → one exception signal.
+    assert_eq!(
+        (outcome.envelopes, outcome.inserted, outcome.updated),
+        (1, 1, 0)
+    );
+    // Cursor = the vendor's own latest createdAt string, verbatim.
+    assert_eq!(
+        tenant.fetch_cursor("openpanel").await.unwrap().as_deref(),
+        Some("2026-08-07T09:30:00.000Z")
+    );
+
+    // Second run: start = the persisted cursor; an empty page keeps it.
+    server.reset().await;
+    Mock::given(method("GET"))
+        .and(path("/export/events"))
+        .and(query_param("start", "2026-08-07T09:30:00.000Z"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "meta": { "count": 0, "totalCount": 0, "pages": 1, "current": 1 },
+            "data": []
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let later = Utc.with_ymd_and_hms(2026, 8, 7, 13, 0, 0).unwrap();
+    run_fetch(&poller, &tenant, later).await.unwrap();
+    assert_eq!(
+        tenant.fetch_cursor("openpanel").await.unwrap().as_deref(),
+        Some("2026-08-07T09:30:00.000Z")
+    );
+    server.verify().await;
+    store.drop_tenant(&schema).await.unwrap();
+}
+
+#[test]
+fn openpanel_without_error_events_fails_at_construction_not_silently() {
+    set_secret("MERGE0_TEST_OP_ID_B", "id");
+    set_secret("MERGE0_TEST_OP_SECRET_B", "secret");
+    let error = OpenpanelPoller::from_config(&OpenpanelConfig {
+        enabled: true,
+        project_id: "website".into(),
+        client_id_env: "MERGE0_TEST_OP_ID_B".into(),
+        client_secret_env: "MERGE0_TEST_OP_SECRET_B".into(),
+        base_url: "https://openpanel.example.com".into(),
+        project_base_url: "https://openpanel.example.com/acme/website".into(),
+        error_events: vec![],
+        lookback_days: 7,
+    })
+    .err()
+    .expect("an enabled source that can never signal must not construct");
+    assert!(error.to_string().contains("error_events"), "{error}");
 }

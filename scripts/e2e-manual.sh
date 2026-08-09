@@ -397,5 +397,39 @@ ROUTE_DETAIL=$(rauth "$ROUTE_BASE/reports/$ROUTE_REPORT")
 check "no agent was dispatched on a low-confidence order" "$ROUTE_DETAIL" '"dispatch":null'
 check "the reason is persisted for whoever reads it later" "$ROUTE_DETAIL" "gate confidence was low"
 
+say "13. Analytics ingestion: mixpanel + openpanel envelopes normalize and store"
+# Ingest-only checks, deliberately AFTER every triage assertion: new sources
+# change triage arithmetic (standing CLAUDE.md lesson), so these signals
+# must never enter the counted runs above.
+MX_INGEST=$(auth -X POST "$BASE/ingest/mixpanel" -H "content-type: application/json" -d @- <<EOF
+{"endpoint": "funnels",
+ "context": {"project_base_url": "https://mixpanel.example.com/project/318"},
+ "payload": {"results": [{
+   "funnel_id": 301, "name": "Signup funnel", "fetched_at": "$NOW",
+   "response": {"meta": {"dates": ["2026-08-07"]}, "data": {"2026-08-07": {
+     "steps": [
+       {"count": 3200, "goal": "App Open", "event": "App Open", "step_conv_ratio": 1.0, "overall_conv_ratio": 1.0, "avg_time": 2},
+       {"count": 1400, "goal": "Signup", "event": "Signup", "step_conv_ratio": 0.4375, "overall_conv_ratio": 0.4375, "avg_time": 55}
+     ],
+     "analysis": {"completion": 1400, "starting_amount": 3200, "steps": 2, "worst": 1}}}}}]}}
+EOF
+)
+check "mixpanel funnel drop-off normalizes to a signal" "$MX_INGEST" '"inserted":1'
+
+OP_INGEST=$(auth -X POST "$BASE/ingest/openpanel" -H "content-type: application/json" -d @- <<EOF
+{"endpoint": "events",
+ "context": {"project_base_url": "https://openpanel.example.com/acme/website"},
+ "payload": {"meta": {"count": 5, "totalCount": 5, "pages": 1, "current": 1},
+  "data": [
+    {"id": "01JOP1", "name": "payment_failed", "deviceId": "d-1", "profileId": "p-1", "projectId": "website", "sessionId": "s-1", "properties": {"message": "card declined"}, "createdAt": "$NOW", "country": "US", "city": "Denver", "region": "CO", "os": "macOS", "osVersion": "14.5", "browser": "Chrome", "browserVersion": "126", "device": "desktop", "brand": "", "model": "", "path": "/checkout", "origin": "https://app.example.com", "referrer": "", "referrerName": "", "referrerType": ""},
+    {"id": "01JOP2", "name": "payment_failed", "deviceId": "d-2", "profileId": "p-2", "projectId": "website", "sessionId": "s-2", "properties": {"message": "card declined"}, "createdAt": "$NOW", "country": "US", "city": "Austin", "region": "TX", "os": "iOS", "osVersion": "18", "browser": "Safari", "browserVersion": "18", "device": "mobile", "brand": "Apple", "model": "iPhone", "path": "/checkout", "origin": "https://app.example.com", "referrer": "", "referrerName": "", "referrerType": ""},
+    {"id": "01JOP3", "name": "payment_failed", "deviceId": "d-3", "profileId": "p-3", "projectId": "website", "sessionId": "s-3", "properties": {"message": "card declined"}, "createdAt": "$NOW", "country": "DE", "city": "Berlin", "region": "BE", "os": "Windows", "osVersion": "11", "browser": "Edge", "browserVersion": "126", "device": "desktop", "brand": "", "model": "", "path": "/checkout", "origin": "https://app.example.com", "referrer": "", "referrerName": "", "referrerType": ""},
+    {"id": "01JOP4", "name": "payment_failed", "deviceId": "d-4", "profileId": "p-4", "projectId": "website", "sessionId": "s-4", "properties": {"message": "card declined"}, "createdAt": "$NOW", "country": "US", "city": "Boise", "region": "ID", "os": "macOS", "osVersion": "14.5", "browser": "Firefox", "browserVersion": "128", "device": "desktop", "brand": "", "model": "", "path": "/checkout", "origin": "https://app.example.com", "referrer": "", "referrerName": "", "referrerType": ""},
+    {"id": "01JOP5", "name": "payment_failed", "deviceId": "d-5", "profileId": "p-5", "projectId": "website", "sessionId": "s-5", "properties": {"message": "card declined"}, "createdAt": "$NOW", "country": "US", "city": "Reno", "region": "NV", "os": "Android", "osVersion": "15", "browser": "Chrome", "browserVersion": "126", "device": "mobile", "brand": "Google", "model": "Pixel", "path": "/checkout", "origin": "https://app.example.com", "referrer": "", "referrerName": "", "referrerType": ""}
+  ]}}
+EOF
+)
+check "openpanel error events aggregate to a signal" "$OP_INGEST" '"inserted":1'
+
 say "Result: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
