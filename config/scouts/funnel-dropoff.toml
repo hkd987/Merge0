@@ -6,10 +6,11 @@
 name = "funnel-dropoff"
 description = "Rising drop-off on a tracked funnel?"
 schedule = "weekly"
-sources = ["posthog"]
-query_template = "kind = 'ux_friction' AND source = 'posthog' AND affected_count >= 10 AND last_seen >= {{period_start}} ORDER BY affected_count DESC"
+sources = ["posthog", "mixpanel"]
+query_template = "kind = 'ux_friction' AND affected_count >= 10 AND last_seen >= {{period_start}} ORDER BY affected_count DESC"
 prompt = """
-You are reviewing PostHog UX-friction Signals from the last week: funnel
+You are reviewing product-analytics UX-friction Signals (PostHog,
+Mixpanel) from the last week: funnel
 drop-offs ("Funnel '...'") plus rage-click and dead-click groups. For each
 tracked funnel, identify the step losing the most users, whether the loss is
 new or growing relative to prior periods, and what plausibly explains it —

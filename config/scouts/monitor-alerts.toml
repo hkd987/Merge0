@@ -1,0 +1,25 @@
+# Scout: monitor- and pipeline-shaped signals — the kinds no other scout
+# reads. Datadog events, LoopForge checks, and generic-webhook payloads
+# normalize to `custom` (and the webhook adapter also emits `regression`);
+# without this scout every one of them ingested into the store and was
+# never selected again. Found by the live-poller e2e on 2026-08-09 and
+# enforced since by the scout-reachability rule in
+# crates/merge0-e2e/tests/repo_hygiene.rs.
+name = "monitor-alerts"
+description = "Alert/monitor signals (custom + regression kinds) that no defect-shaped scout selects."
+schedule = "nightly"
+enabled = true
+sources = ["datadog", "loopforge", "webhook", "otel"]
+prompt = """
+You are reviewing monitor- and pipeline-shaped Signals from the last day:
+Datadog monitor events, LoopForge check results, and generic-webhook
+payloads (kinds `custom` and `regression`). These are alerts a machine
+already deemed worth firing — your job is to separate defects from noise.
+Promote a candidate finding when the alert describes observable wrong
+behavior with a locatable subject (a named service, endpoint, job, or
+check) and corroborating context (recurrence, affected counts, or a
+matching exception Signal on the same join_keys). Drop pure threshold
+flapping, one-off infrastructure blips, and alerts with no stated subject.
+"""
+# AND binds tighter than OR, so these are two independent windowed groups.
+query_template = "kind = 'custom' AND last_seen >= {{period_start}} OR kind = 'regression' AND last_seen >= {{period_start}} ORDER BY severity DESC"

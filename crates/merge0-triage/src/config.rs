@@ -258,7 +258,16 @@ mod tests {
             .find(|s| s.name == "funnel-dropoff")
             .expect("funnel-dropoff scout must ship");
         assert_eq!(funnel.schedule, "weekly");
-        assert_eq!(funnel.sources, vec![Source::Posthog]);
+        // Every funnel-capable analytics source rides this scout. Contains,
+        // not equals: pinning the exact list is how mixpanel shipped
+        // unreachable — the reachability rule in merge0-e2e's repo_hygiene
+        // owns completeness now.
+        for source in [Source::Posthog, Source::Mixpanel] {
+            assert!(
+                funnel.sources.contains(&source),
+                "funnel-dropoff must select {source:?}"
+            );
+        }
     }
 
     #[test]

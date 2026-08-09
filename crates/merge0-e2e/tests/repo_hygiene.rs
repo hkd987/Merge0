@@ -347,3 +347,94 @@ fn the_machine_fence_is_stripped_only_inside_merge0_context() {
         offenders.join("\n")
     );
 }
+
+/// **Incident (live-poller e2e, 2026-08-09).** A local end-to-end run with
+/// real pollers against fake vendors landed three signals — and triage
+/// selected one. Mixpanel and OpenPanel were absent from every shipped
+/// scout's `sources` list, and the audit that followed found datadog,
+/// loopforge, otel, and webhook had shipped the same way: ingesting
+/// happily, selectable by nothing, dead since the day they were added.
+///
+/// The existing gate-floor rule catches an adapter whose signals are too
+/// weak to matter; this one catches the layer above — an adapter whose
+/// signals never reach triage at all. It runs each adapter's expected
+/// goldens (re-stamped to now, so window filters pass) through the REAL
+/// scout selection over the SHIPPED `config/scouts/`, no parallel parser
+/// to rot: if no shipped scout can select any golden signal from a source,
+/// that source is dead and this fails naming it.
+#[test]
+fn every_adapter_source_is_selectable_by_at_least_one_shipped_scout() {
+    let root = repo_root();
+    let scouts = merge0_triage::config::load_scouts(&root.join("config/scouts"))
+        .expect("shipped scouts load");
+    let now = chrono::Utc::now();
+
+    // source string -> (adapter dir, any golden signal selected?)
+    let mut sources: std::collections::BTreeMap<String, (String, bool)> =
+        std::collections::BTreeMap::new();
+
+    for entry in std::fs::read_dir(root.join("crates"))
+        .expect("crates dir")
+        .flatten()
+    {
+        let dir = entry.path();
+        let name = entry.file_name().to_string_lossy().to_string();
+        if !name.starts_with("merge0-adapter-") {
+            continue;
+        }
+        let Ok(files) = std::fs::read_dir(dir.join("tests/fixtures")) else {
+            continue;
+        };
+        for f in files.flatten() {
+            let path = f.path();
+            if !path.to_string_lossy().ends_with(".expected.json") {
+                continue;
+            }
+            let text = std::fs::read_to_string(&path).expect("fixture readable");
+            let value: serde_json::Value = serde_json::from_str(&text).expect("fixture is JSON");
+            for raw in signals_of(&value) {
+                // The harness normalizes volatile ids to the literal
+                // "<ulid>", which no ULID parser accepts — patch it back to
+                // a real one. And parse failures are LOUD: a silently
+                // skipped golden made the first draft of this rule pass
+                // against six dead sources.
+                let mut raw = raw.clone();
+                if raw.get("id").and_then(|v| v.as_str()) == Some("<ulid>") {
+                    raw["id"] = serde_json::json!(ulid::Ulid::new().to_string());
+                }
+                let mut signal = serde_json::from_value::<merge0_signal::Signal>(raw)
+                    .unwrap_or_else(|e| panic!("golden in {} is not a Signal: {e}", rel(&path)));
+                // Freshness is the poller's job, not the fixture's: stamp to
+                // now so only source/kind/shape decide selectability.
+                signal.first_seen = now;
+                signal.last_seen = now;
+                let selected = !merge0_triage::scouts::union_candidates(
+                    &scouts,
+                    std::slice::from_ref(&signal),
+                    now,
+                )
+                .expect("shipped scout queries parse")
+                .is_empty();
+                let entry = sources
+                    .entry(signal.source.as_str().to_string())
+                    .or_insert((name.clone(), false));
+                entry.1 |= selected;
+            }
+        }
+    }
+
+    let dead: Vec<String> = sources
+        .iter()
+        .filter(|(_, (_, selected))| !selected)
+        .map(|(source, (adapter, _))| format!("{source} (goldens in {adapter})"))
+        .collect();
+    assert!(
+        dead.is_empty(),
+        "no shipped scout in config/scouts/ can select ANY signal these \
+         sources emit — they ingest into the store and then nothing ever \
+         reads them, which is a dead source with extra steps. Add the \
+         source to an appropriate scout's `sources` list (and check its \
+         query's kind filter):\n{}",
+        dead.join("\n")
+    );
+}
