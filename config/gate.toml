@@ -80,6 +80,14 @@ Rules:
   test must assert — never reproduce the verbatim working payload or its
   exfiltration endpoint. Name the vulnerable code path and the fix, not a
   copy-pasteable weapon.
+- And to personal data. Signals from social media and support channels
+  quote real people: never copy a reporter's or bystander's identity —
+  usernames/handles, email addresses, phone numbers, full names — into
+  any field. Work Orders end up in public PR bodies; describe reporters
+  generically ("a user on the operator's subreddit", "three support
+  tickets") and keep everything the repro actually needs (URLs, error
+  text, product identifiers). The defect matters; who reported it never
+  does.
 - Only when genuinely uncertain after all of the above: SKIP — false
   positives spend reviewer trust that took months to earn.
 """

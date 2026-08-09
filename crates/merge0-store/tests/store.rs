@@ -190,7 +190,11 @@ async fn report_lifecycle_gate_approve_dispatch_pr_outcome() {
         work_order: sample_work_order(&report),
     };
     tenant
-        .set_gate_decision(report.id, &decision)
+        .set_gate_decision(
+            report.id,
+            &decision,
+            Some("=== SYSTEM ===\ngate prompt\n=== PROMPT ===\nreport bundle"),
+        )
         .await
         .unwrap();
     assert_eq!(
@@ -282,6 +286,7 @@ async fn gate_skip_and_dismissal_paths() {
             &GateDecision::Skip {
                 reason: "no testable success criterion".into(),
             },
+            None,
         )
         .await
         .unwrap();

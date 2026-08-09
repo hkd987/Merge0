@@ -170,5 +170,12 @@ enabled = false
 # both. An enabled section with an empty query fails at startup rather
 # than running dead.
 query = ""
-# App-only Bearer token (developer.x.com; recent search needs Basic tier+).
+# App-only Bearer token from developer.x.com. NOTE ON COST (2026): X's
+# API is pay-as-you-go — roughly $0.005 per post READ, no free tier, and
+# the old Basic/Pro subscriptions are closed to new signups. Reads here
+# are bounded by max_posts_per_round below; worst-case daily spend is
+# max_posts_per_round x rounds/day x per-read price (e.g. 200 posts x 24
+# hourly rounds x $0.005 = $24/day ceiling; the default nightly cadence
+# caps at $1/day). Posts beyond the cap arrive next round via since_id.
 bearer_token_env = "MERGE0_X_BEARER_TOKEN"
+max_posts_per_round = 200

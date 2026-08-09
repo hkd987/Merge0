@@ -11,7 +11,7 @@ parsing must be measured against the live corpus before shipping. Evals
 cost real money and run manually, never in CI.
 
 ```sh
-cargo run -p merge0-evals --bin gate-eval     # 30-scenario gate corpus
+cargo run -p merge0-evals --bin gate-eval     # full gate scenario corpus (evals/scenarios/)
 scripts/agent-eval.sh                          # agent fixtures (or one: scripts/agent-eval.sh districts)
 ```
 

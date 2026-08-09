@@ -1,0 +1,200 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_PROMETHEUS",
+      "label": "Prometheus",
+      "description": "Prometheus datasource scraping the Merge0 /metrics endpoint",
+      "type": "datasource",
+      "pluginId": "prometheus",
+      "pluginName": "Prometheus"
+    }
+  ],
+  "title": "Merge0 — loop health",
+  "uid": "merge0-loop",
+  "tags": ["merge0"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "1m",
+  "time": { "from": "now-7d", "to": "now" },
+  "templating": { "list": [] },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Time since last triage run",
+      "description": "The loop's heartbeat. No data = the loop has never run.",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "time() - merge0_last_triage_run_timestamp_seconds",
+          "legendFormat": "age",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "never ran",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 90000 },
+              { "color": "red", "value": 93600 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Merge rate (30d)",
+      "description": "merged / decided PRs — the Phase 0 gate metric.",
+      "gridPos": { "h": 6, "w": 4, "x": 6, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "merge0_merge_rate", "legendFormat": "merge rate", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 0.4 },
+              { "color": "green", "value": 0.6 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Runner yield (30d)",
+      "description": "PRs opened / Work Orders dispatched.",
+      "gridPos": { "h": 6, "w": 4, "x": 10, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "merge0_runner_yield", "legendFormat": "yield", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "percentunit", "max": 1 },
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Fix efficacy (30d)",
+      "description": "confirmed / (confirmed + recurred) merged fixes.",
+      "gridPos": { "h": 6, "w": 4, "x": 14, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "merge0_fix_efficacy_rate",
+          "legendFormat": "efficacy",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "max": 1,
+          "noValue": "no verdicts yet"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Tokens spent (24h)",
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "merge0_tokens_spent_24h",
+          "legendFormat": "spent",
+          "refId": "A"
+        },
+        {
+          "expr": "merge0_token_budget_remaining",
+          "legendFormat": "budget remaining",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Report queue by status",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "merge0_reports",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "PR outcomes (30d window)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "merge0_prs_opened", "legendFormat": "opened", "refId": "A" },
+        { "expr": "merge0_prs_merged", "legendFormat": "merged", "refId": "B" },
+        { "expr": "merge0_prs_closed", "legendFormat": "closed", "refId": "C" },
+        {
+          "expr": "merge0_prs_reverted",
+          "legendFormat": "reverted",
+          "refId": "D"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Poller freshness (age of last successful round)",
+      "description": "Flat-lining upward = the source's poller is failing or the scheduler stopped.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "time() - merge0_fetch_last_run_timestamp_seconds",
+          "legendFormat": "{{source}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Poller failures (per 24h, by source)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "increase(merge0_fetch_failures_total[24h])",
+          "legendFormat": "{{source}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "min": 0 }, "overrides": [] }
+    }
+  ]
+}

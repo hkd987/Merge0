@@ -285,6 +285,7 @@ check "spend ledger counts gate + runner tokens" "$TELEMETRY" '"tokens_spent_24h
 METRICS=$(auth "$BASE/metrics")
 check "prometheus metrics render" "$METRICS" "# TYPE merge0_prs_merged gauge"
 check "prometheus merge count" "$METRICS" "merge0_prs_merged 1"
+check "loop liveness gauge present after the triage run" "$METRICS" "merge0_last_triage_run_timestamp_seconds"
 
 say "9. Revert detection: push reverting the merge -> hard negative"
 PUSH_BODY=$(cat <<EOF
@@ -548,6 +549,7 @@ CO_ID=$(auth "$BASE/reports?status=awaiting_review" | python3 -c "import json,sy
 CO_DETAIL=$(auth "$BASE/reports/$CO_ID")
 check "report detail routes the evidence path to its CODEOWNERS team" "$CO_DETAIL" '"@acme/data-team"'
 check "routed entry names the path itself" "$CO_DETAIL" 'src/districts/roster.ts'
+check "gate decision context is replayable (audit)" "$CO_DETAIL" '=== SYSTEM ==='
 
 # CLI quickstart: the real merge0 binary end to end with a stub model CLI
 # (no spend, deterministic) — a bare Sentry array in, a work order out.
@@ -572,6 +574,50 @@ check "quickstart shows the gate confidence" "$CLI_OUT" "High confidence"
 # Onboarding names the selected agent's provider secret (name only).
 ONBOARD_SECRETS=$(auth "$BASE/onboarding")
 check "onboarding names the agent's provider secret" "$ONBOARD_SECRETS" '"ANTHROPIC_API_KEY"'
+
+say "16. Outcome reconciliation: a merged PR whose webhook was lost is repaired"
+# Fresh report -> approve -> runner opens PR #424242 (which the dev fake
+# reports as already merged on GitHub) -> NO webhook arrives -> the next
+# triage run's reconciliation sweep records the merge anyway.
+auth -X POST "$BASE/ingest/sentry" -H "content-type: application/json" -d @- > /dev/null <<EOF2
+{"endpoint": "issues", "payload": [{
+  "id": "9201", "shortId": "CHALK-92R",
+  "title": "ReferenceError: sortRoster is not defined after refactor",
+  "permalink": "https://sentry.example.com/organizations/chalk/issues/9201/",
+  "level": "error",
+  "metadata": {"type": "ReferenceError", "value": "sortRoster is not defined"},
+  "userCount": 22, "firstSeen": "2026-08-06T04:00:00Z", "lastSeen": "$NOW"
+}]}
+EOF2
+auth -X POST "$BASE/triage/run" > /dev/null
+RC_ID=$(auth "$BASE/reports?status=awaiting_review" | python3 -c "import json,sys; print([r['id'] for r in json.load(sys.stdin) if 'sortRoster' in r['title']][0])")
+auth -X POST "$BASE/reports/$RC_ID/approve" > /dev/null
+curl -sf -X POST "$BASE/runner/callback" -H "authorization: Bearer $RUNNER_TOKEN" -H "content-type: application/json" -d "{
+  \"report_id\": \"$RC_ID\", \"status\": \"opened\",
+  \"pr_url\": \"https://github.com/chalk/chalk/pull/424242\",
+  \"branch\": \"merge0/fix-$RC_ID\", \"tokens_spent\": 80000,
+  \"files_changed\": 1, \"total_lines_changed\": 9}" > /dev/null
+RC_BEFORE=$(auth "$BASE/reports/$RC_ID")
+check "report waits as pr_open with no outcome" "$RC_BEFORE" '"status":"pr_open"'
+auth -X POST "$BASE/triage/run" > /dev/null
+RC_AFTER=$(auth "$BASE/reports/$RC_ID")
+check "reconciliation completed the report without any webhook" "$RC_AFTER" '"status":"completed"'
+check "the missed merged outcome is recorded" "$RC_AFTER" '"outcome":"merged"'
+
+say "17. MCP surface: an agent client speaks JSON-RPC to the same inbox"
+MCP_INIT=$(auth -X POST "$BASE/mcp" -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}')
+check "mcp initialize identifies the server" "$MCP_INIT" '"name":"merge0"'
+MCP_TOOLS=$(auth -X POST "$BASE/mcp" -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}')
+check "mcp lists the approve verb" "$MCP_TOOLS" '"approve_report"'
+check "mcp lists the telemetry verb" "$MCP_TOOLS" '"get_telemetry"'
+MCP_LIST=$(auth -X POST "$BASE/mcp" -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_reports","arguments":{}}}')
+check "mcp tools/call reads the report queue" "$MCP_LIST" '"isError":false'
+MCP_401=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/mcp" \
+  -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":4,"method":"tools/list"}')
+check "mcp without the bearer token is rejected" "$MCP_401" '401'
 
 say "Result: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

@@ -20,6 +20,11 @@ use serde::Deserialize;
 pub struct GateOutcome {
     pub decision: GateDecision,
     pub tokens_used: u64,
+    /// The exact system+user context the gate saw when it decided —
+    /// persisted so "why did it decide that?" is answerable by replay
+    /// rather than inference. Deterministic-guard skips record the guard
+    /// instead (no model call happened).
+    pub context: String,
 }
 
 /// What we ask the model to return.
@@ -82,6 +87,7 @@ pub async fn evaluate(
                 ),
             },
             tokens_used: 0,
+            context: "deterministic guard: severity below threshold (no model call)".into(),
         });
     }
     if report.evidence.is_empty() {
@@ -90,6 +96,7 @@ pub async fn evaluate(
                 reason: "no evidence links — nothing a reviewer could verify".into(),
             },
             tokens_used: 0,
+            context: "deterministic guard: no evidence links (no model call)".into(),
         });
     }
 
@@ -99,11 +106,34 @@ pub async fn evaluate(
         max_tokens: 2048,
     };
     let response = model.complete(&request).await?;
-    let decision = interpret(&response.text, report, repo, &prior_attempts, config);
+    let mut tokens_used = response.tokens_used;
+    let mut decision = interpret(&response.text, report, repo, &prior_attempts, config);
+    // One retry when the output itself was malformed (no JSON object, a
+    // bad escape): that is sampling noise, not judgment — the eval canary
+    // caught a live flake where a single invalid escape fail-closed a
+    // clear defect to SKIP. Judgment-level skips never retry, and a
+    // malformed retry still fails closed.
+    if malformed_output(&decision) {
+        let retry = model.complete(&request).await?;
+        tokens_used += retry.tokens_used;
+        decision = interpret(&retry.text, report, repo, &prior_attempts, config);
+    }
+    let context = format!(
+        "=== SYSTEM ===\n{}\n\n=== PROMPT ===\n{}",
+        request.system, request.prompt
+    );
     Ok(GateOutcome {
         decision,
-        tokens_used: response.tokens_used,
+        tokens_used,
+        context,
     })
+}
+
+/// Malformed *output* (as opposed to a parseable verdict we disagree
+/// with): both fail-closed reasons that `interpret` derives from the raw
+/// text rather than from a decision.
+fn malformed_output(decision: &GateDecision) -> bool {
+    matches!(decision, GateDecision::Skip { reason } if reason.starts_with("gate output"))
 }
 
 fn build_prompt(
@@ -472,12 +502,14 @@ mod tests {
 
     #[tokio::test]
     async fn unparseable_output_fails_closed() {
+        // Two copies scripted: malformed output earns exactly one retry,
+        // and a retry that is malformed again must still fail closed.
         for bad in [
             "total garbage",
             r#"{"decision":"maybe"}"#,
             r#"{"decision":42}"#,
         ] {
-            let model = ScriptedModel::new([bad]);
+            let model = ScriptedModel::new([bad, bad]);
             let outcome = evaluate(
                 &report(Severity::High, true),
                 "o/r",
@@ -493,6 +525,52 @@ mod tests {
                 "must fail closed for {bad:?}"
             );
         }
+    }
+
+    /// The canary-caught flake: one sample with an invalid escape must not
+    /// silently skip a clear defect. A single retry recovers; tokens from
+    /// both calls are accounted.
+    #[tokio::test]
+    async fn malformed_output_retries_once_and_recovers() {
+        let model = ScriptedModel::new([
+            r#"{"decision":"work","summary":"broken \escape"#,
+            r#"{"decision":"work","summary":"s","repro":"r","success_criteria":"c"}"#,
+        ]);
+        let outcome = evaluate(
+            &report(Severity::High, true),
+            "o/r",
+            "",
+            vec![],
+            &config(),
+            &model,
+        )
+        .await
+        .unwrap();
+        assert!(
+            matches!(outcome.decision, GateDecision::Work { .. }),
+            "retry must recover the verdict: {:?}",
+            outcome.decision
+        );
+        assert_eq!(model.requests().len(), 2, "exactly one retry");
+
+        // A judgment-level skip is NOT malformed output: no retry, even
+        // with a tempting work verdict scripted behind it.
+        let model = ScriptedModel::new([
+            r#"{"decision":"skip","reason":"intended behavior"}"#,
+            r#"{"decision":"work","summary":"s","repro":"r","success_criteria":"c"}"#,
+        ]);
+        let outcome = evaluate(
+            &report(Severity::High, true),
+            "o/r",
+            "",
+            vec![],
+            &config(),
+            &model,
+        )
+        .await
+        .unwrap();
+        assert!(matches!(outcome.decision, GateDecision::Skip { .. }));
+        assert_eq!(model.requests().len(), 1, "judgment skips never retry");
     }
 
     #[tokio::test]

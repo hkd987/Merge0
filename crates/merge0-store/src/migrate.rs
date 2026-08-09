@@ -17,6 +17,7 @@ fn steps(schema: &str) -> Vec<(i32, Vec<String>)> {
         (2, ddl_v2(schema)),
         (3, ddl_v3(schema)),
         (4, ddl_v4(schema)),
+        (5, ddl_v5(schema)),
     ]
 }
 
@@ -73,6 +74,17 @@ fn ddl_v4(schema: &str) -> Vec<String> {
         format!("ALTER TABLE \"{s}\".reports ADD COLUMN IF NOT EXISTS story_key TEXT"),
         format!("ALTER TABLE \"{s}\".reports ADD COLUMN IF NOT EXISTS story_url TEXT"),
     ]
+}
+
+/// v5 — decision reconstructability: the exact system+user context the
+/// gate saw when it decided, so "why did it skip this?" is answerable by
+/// replay rather than inference. Nullable (pre-v5 decisions have none);
+/// purged alongside raw payloads by the retention job.
+fn ddl_v5(schema: &str) -> Vec<String> {
+    let s = schema;
+    vec![format!(
+        "ALTER TABLE \"{s}\".reports ADD COLUMN IF NOT EXISTS gate_context TEXT"
+    )]
 }
 
 /// v3 — the market-gap pass (schema v0.4 + autonomy/escalation audit):

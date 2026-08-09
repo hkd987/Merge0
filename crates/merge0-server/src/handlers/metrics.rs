@@ -131,6 +131,63 @@ pub async fn scrape(State(state): State<AppState>) -> Result<Response, ApiError>
         );
     }
 
+    // Loop liveness: when triage last ran. Alert on staleness (now - this
+    // exceeding the configured interval) — a wedged scheduler is otherwise
+    // invisible because every count above simply stops moving. Omitted
+    // (not 0) before the first run so "never ran" can't hide as 1970.
+    if let Some(at) = state.tenant.last_triage_run_at().await? {
+        gauge(
+            "merge0_last_triage_run_timestamp_seconds",
+            "Unix time the most recent triage run started.",
+            at.timestamp() as f64,
+        );
+    }
+
+    // Per-source fetch freshness (from the persisted cursor table, so it
+    // survives restarts) + in-process failure counters.
+    let fetch_runs = state.tenant.fetch_last_runs().await?;
+    if !fetch_runs.is_empty() {
+        out.push_str(
+            "# HELP merge0_fetch_last_run_timestamp_seconds Unix time the source's poller last completed.\n\
+             # TYPE merge0_fetch_last_run_timestamp_seconds gauge\n",
+        );
+        for (source, at) in &fetch_runs {
+            out.push_str(&format!(
+                "merge0_fetch_last_run_timestamp_seconds{{source=\"{source}\"}} {}\n",
+                at.timestamp()
+            ));
+        }
+    }
+    if !state.fetchers.is_empty()
+        || !state
+            .fetch_failures
+            .lock()
+            .expect("not poisoned")
+            .is_empty()
+    {
+        out.push_str(
+            "# HELP merge0_fetch_failures_total Failed poll rounds per source since process start.\n\
+             # TYPE merge0_fetch_failures_total counter\n",
+        );
+        // Zero-series for every enabled source so increase() has a
+        // baseline; recorded failures override.
+        let failures = state.fetch_failures.lock().expect("not poisoned").clone();
+        let mut sources: Vec<String> = state
+            .fetchers
+            .iter()
+            .map(|f| f.source_name().to_string())
+            .chain(failures.keys().cloned())
+            .collect();
+        sources.sort();
+        sources.dedup();
+        for source in sources {
+            let count = failures.get(&source).copied().unwrap_or(0);
+            out.push_str(&format!(
+                "merge0_fetch_failures_total{{source=\"{source}\"}} {count}\n"
+            ));
+        }
+    }
+
     // Live queue depths by report status (labels, one TYPE header).
     out.push_str(
         "# HELP merge0_reports Current report count by lifecycle status.\n\

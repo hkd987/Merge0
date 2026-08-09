@@ -26,6 +26,7 @@ pub fn app(state: AppState) -> Router {
         .route("/reports/{id}/approve", post(handlers::reports::approve))
         .route("/reports/{id}/dismiss", post(handlers::reports::dismiss))
         .route("/telemetry", get(handlers::telemetry::snapshot))
+        .route("/mcp", post(handlers::mcp::rpc))
         .route("/metrics", get(handlers::metrics::scrape))
         .route("/safety", get(handlers::safety::verify))
         .route("/onboarding", get(handlers::onboarding::bundle))

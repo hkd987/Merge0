@@ -24,6 +24,10 @@ pub async fn run_once(
 ) -> Result<merge0_triage::pipeline::TriageRun, Box<dyn std::error::Error + Send + Sync>> {
     let started_at = Utc::now();
 
+    // Reconciliation pre-step: repair merged/closed outcomes whose webhook
+    // was missed, so the merge-rate history never silently drifts.
+    super::reconcile::reconcile_outcomes(state).await;
+
     // Escalation pre-step: dismissals are not forever. A dismissed report
     // whose impact multiplied — or that gained a delegated ticket — returns
     // to the inbox before this run's fresh clustering.

@@ -346,3 +346,133 @@ async fn work_order_cap_leaves_overflow_pending_and_skips_persist() {
 
     store.drop_tenant(&schema).await.unwrap();
 }
+
+/// A model that fails N times before answering — the pipeline must isolate
+/// per-report failures (report stays Pending, run continues, ledger lands)
+/// and halt the gate stage on a sustained outage instead of hammering it.
+struct FlakyModel {
+    failures_left: std::sync::Mutex<usize>,
+    answer: String,
+}
+
+#[async_trait::async_trait]
+impl merge0_model::Model for FlakyModel {
+    async fn complete(
+        &self,
+        _request: &merge0_model::ModelRequest,
+    ) -> Result<merge0_model::ModelResponse, merge0_model::ModelError> {
+        let mut left = self.failures_left.lock().unwrap();
+        if *left > 0 {
+            *left -= 1;
+            return Err(merge0_model::ModelError::Transport(
+                "simulated provider outage".into(),
+            ));
+        }
+        Ok(merge0_model::ModelResponse {
+            text: self.answer.clone(),
+            tokens_used: 100,
+        })
+    }
+}
+
+#[tokio::test]
+async fn a_failing_gate_call_isolates_the_report_and_never_loses_the_ledger() {
+    let store = Store::connect(&database_url()).await.unwrap();
+    let schema = format!("t_{}", Ulid::new().to_string().to_lowercase());
+    let tenant = store.tenant(&schema).await.unwrap();
+
+    // Two distinct defects → two reports through the gate.
+    tenant
+        .upsert_signal(&exception(Source::Sentry, "s1", "TypeErrorA"))
+        .await
+        .unwrap();
+    tenant
+        .upsert_signal(&exception(Source::Sentry, "s2", "TypeErrorB"))
+        .await
+        .unwrap();
+
+    // First gate call fails (client retries exhausted), second succeeds.
+    let model = FlakyModel {
+        failures_left: std::sync::Mutex::new(1),
+        answer: WORK_JSON.into(),
+    };
+    let run = run_triage(
+        &tenant,
+        &model,
+        &scouts(),
+        &gate_config(5),
+        "intent",
+        "chalk/chalk",
+        now(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(run.gate_failures, 1, "one isolated failure");
+    assert_eq!(run.work_orders, 1, "the other report still gated");
+    // The failed report stays Pending for the next run.
+    let pending = tenant
+        .list_reports(Some(ReportStatus::Pending))
+        .await
+        .unwrap();
+    assert_eq!(pending.len(), 1);
+    // The spend ledger row landed despite the failure (budget accounting
+    // must never be lost mid-run).
+    let spent = tenant
+        .tokens_spent_since(now() - Duration::hours(1))
+        .await
+        .unwrap();
+    assert_eq!(spent, 100);
+
+    // Next run, model healthy: the stranded report gets its decision.
+    let model = ScriptedModel::new([WORK_JSON]);
+    let run2 = run_triage(
+        &tenant,
+        &model,
+        &scouts(),
+        &gate_config(5),
+        "intent",
+        "chalk/chalk",
+        now() + Duration::minutes(10),
+    )
+    .await
+    .unwrap();
+    assert_eq!(run2.gate_failures, 0);
+    assert_eq!(run2.work_orders, 1);
+
+    // Sustained outage: every call fails → circuit opens after 3, the run
+    // still completes and reports the failures.
+    tenant
+        .upsert_signal(&exception(Source::Sentry, "s3", "TypeErrorC"))
+        .await
+        .unwrap();
+    tenant
+        .upsert_signal(&exception(Source::Sentry, "s4", "TypeErrorD"))
+        .await
+        .unwrap();
+    tenant
+        .upsert_signal(&exception(Source::Sentry, "s5", "TypeErrorE"))
+        .await
+        .unwrap();
+    tenant
+        .upsert_signal(&exception(Source::Sentry, "s6", "TypeErrorF"))
+        .await
+        .unwrap();
+    let dead = FlakyModel {
+        failures_left: std::sync::Mutex::new(usize::MAX),
+        answer: WORK_JSON.into(),
+    };
+    let run3 = run_triage(
+        &tenant,
+        &dead,
+        &scouts(),
+        &gate_config(10),
+        "intent",
+        "chalk/chalk",
+        now() + Duration::minutes(20),
+    )
+    .await
+    .unwrap();
+    assert_eq!(run3.gate_failures, 3, "circuit opened after 3, not 4+");
+
+    store.drop_tenant(&schema).await.unwrap();
+}

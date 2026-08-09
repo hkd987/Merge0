@@ -14,15 +14,13 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use merge0_adapter_x::XAdapter;
 
-/// Pages fetched per round (at `max_results=100` posts each). A viral
-/// spike larger than this drains across rounds via `since_id` rather than
-/// in one unbounded burst.
-const MAX_PAGES_PER_ROUND: u32 = 5;
-
 pub struct XPoller {
     query: String,
     bearer_token: Secret,
     base_url: String,
+    /// Posts read per round, hard-capped: X bills per post read, so this
+    /// is the spend guard (config `max_posts_per_round`).
+    max_posts_per_round: u32,
     client: reqwest::Client,
 }
 
@@ -41,6 +39,7 @@ impl XPoller {
             query: config.query.clone(),
             bearer_token: Secret::from_env(&config.bearer_token_env)?,
             base_url: config.base_url.trim_end_matches('/').to_string(),
+            max_posts_per_round: config.max_posts_per_round.max(1),
             client: http_client()?,
         })
     }
@@ -98,7 +97,6 @@ impl Fetcher for XPoller {
         let mut users: Vec<serde_json::Value> = Vec::new();
         let mut newest_id: Option<String> = None;
         let mut next_token: Option<String> = None;
-        let mut page = 0u32;
         loop {
             let response = self.fetch_page(cursor, next_token.as_deref()).await?;
             if let Some(batch) = response["data"].as_array() {
@@ -112,14 +110,14 @@ impl Fetcher for XPoller {
                 newest_id = response["meta"]["newest_id"].as_str().map(String::from);
             }
             next_token = response["meta"]["next_token"].as_str().map(String::from);
-            page += 1;
             if next_token.is_none() {
                 break;
             }
-            if page >= MAX_PAGES_PER_ROUND {
+            if data.len() as u32 >= self.max_posts_per_round {
                 tracing::warn!(
-                    fetched_pages = page,
-                    "x recent search capped this round; since_id resumes the rest"
+                    posts = data.len(),
+                    cap = self.max_posts_per_round,
+                    "x read cap hit this round (spend guard); since_id resumes the rest"
                 );
                 break;
             }

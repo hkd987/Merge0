@@ -134,6 +134,17 @@ impl TenantStore {
             t = self.table("signals")
         );
         let result = sqlx::query(&sql).bind(cutoff).execute(self.pool()).await?;
+        // Gate contexts quote signal text, so they age out on the same
+        // clock as the raw payloads they were assembled from.
+        let ctx_sql = format!(
+            "UPDATE {t} SET gate_context = NULL
+             WHERE created_at < $1 AND gate_context IS NOT NULL",
+            t = self.table("reports")
+        );
+        sqlx::query(&ctx_sql)
+            .bind(cutoff)
+            .execute(self.pool())
+            .await?;
         Ok(result.rows_affected())
     }
 
@@ -240,6 +251,37 @@ impl TenantStore {
         .await
     }
 
+    /// Dispatches whose PR is (as far as we know) still open — the
+    /// reconciliation sweep polls these against GitHub to repair outcomes
+    /// whose webhook delivery was missed. Filtered by the REPORT's status:
+    /// an outcome moves the report to a terminal state while the dispatch
+    /// row keeps its historical `pr_open`, so filtering on the dispatch
+    /// alone would re-poll finished PRs forever. Returns
+    /// `(report_id, pr_url)`.
+    pub async fn open_pr_dispatches(&self) -> Result<Vec<(Ulid, String)>> {
+        let sql = format!(
+            "SELECT d.report_id, d.pr_url FROM {d} d
+             JOIN {r} r ON r.id = d.report_id
+             WHERE d.status = $1 AND d.pr_url IS NOT NULL
+               AND r.status = $2",
+            d = self.table("dispatches"),
+            r = self.table("reports")
+        );
+        let rows = sqlx::query(&sql)
+            .bind(enum_str(&DispatchStatus::PrOpen))
+            .bind(enum_str(&merge0_signal::ReportStatus::PrOpen))
+            .fetch_all(self.pool())
+            .await?;
+        rows.into_iter()
+            .map(|row| {
+                Ok((
+                    parse_ulid(row.get("report_id"))?,
+                    row.get::<String, _>("pr_url"),
+                ))
+            })
+            .collect()
+    }
+
     pub async fn dispatch(&self, report_id: Ulid) -> Result<Option<DispatchRecord>> {
         let sql = format!(
             "SELECT * FROM {t} WHERE report_id = $1",
@@ -288,6 +330,17 @@ impl TenantStore {
             .execute(self.pool())
             .await?;
         Ok(())
+    }
+
+    /// Loop liveness: when the most recent triage run started. `None`
+    /// until the first run — the metric layer omits the series rather than
+    /// exporting a fake epoch that would mask a loop that never started.
+    pub async fn last_triage_run_at(&self) -> Result<Option<DateTime<Utc>>> {
+        let sql = format!(
+            "SELECT MAX(started_at) FROM {t}",
+            t = self.table("triage_runs")
+        );
+        Ok(sqlx::query_scalar(&sql).fetch_one(self.pool()).await?)
     }
 
     /// Whether the most recent triage run already hit the budget — the
@@ -465,6 +518,23 @@ impl TenantStore {
             .execute(self.pool())
             .await?;
         Ok(())
+    }
+
+    /// Per-source fetch freshness: every source the fetch layer has run,
+    /// with its last successful run time. Feeds the staleness metrics —
+    /// a source present here but old means its poller is failing or the
+    /// scheduler stopped.
+    pub async fn fetch_last_runs(&self) -> Result<Vec<(String, DateTime<Utc>)>> {
+        let sql = format!(
+            "SELECT source, last_run FROM {t}
+             WHERE last_run IS NOT NULL ORDER BY source",
+            t = self.table("fetch_state")
+        );
+        let rows = sqlx::query(&sql).fetch_all(self.pool()).await?;
+        Ok(rows
+            .into_iter()
+            .map(|r| (r.get("source"), r.get("last_run")))
+            .collect())
     }
 
     /// Outcome history for a fingerprint — "we tried this in March and it was

@@ -1,0 +1,97 @@
+# Prometheus alerting rules for a Merge0 install.
+#
+# Load via `rule_files: [alerts.yml]` in prometheus.yml (or import into
+# Grafana Alerting / Mimir / Cloud equivalents). Thresholds assume the
+# shipped defaults — a nightly triage interval (MERGE0_TRIAGE_INTERVAL_SECS
+# = 86400) and pollers that run with each triage pass. If you shorten the
+# interval, tighten the staleness windows to ~2x your interval.
+#
+# The philosophy: page on *silence*, not on volume. A wedged loop looks
+# exactly like a quiet one from the outside — every counter simply stops
+# moving — so the primary alerts are staleness of the liveness timestamps
+# that scripts/../crates/merge0-server exports on /metrics.
+
+groups:
+  - name: merge0-liveness
+    rules:
+      - alert: Merge0TriageLoopStalled
+        # 26h = one nightly interval plus slack. The series is absent until
+        # the first run ever, so absent() catches never-started installs.
+        expr: time() - merge0_last_triage_run_timestamp_seconds > 26 * 3600
+        for: 30m
+        labels:
+          severity: page
+        annotations:
+          summary: "Merge0 triage loop has not run in over 26h"
+          description: >-
+            The scheduler last completed a triage run more than 26 hours
+            ago. New signals are accumulating but nothing is being triaged.
+            Check the server logs for a wedged run or a crashed scheduler
+            task; POST /triage/run forces a pass.
+
+      - alert: Merge0TriageLoopNeverRan
+        expr: absent(merge0_last_triage_run_timestamp_seconds) and up{job="merge0"} == 1
+        for: 26h
+        labels:
+          severity: warn
+        annotations:
+          summary: "Merge0 is up but has never completed a triage run"
+          description: >-
+            The server is scraping but no triage run has ever been
+            recorded. Either MERGE0_TRIAGE_INTERVAL_SECS is 0 (scheduler
+            off) or every run has failed before recording its ledger row.
+
+      - alert: Merge0FetchSourceStale
+        expr: time() - merge0_fetch_last_run_timestamp_seconds > 26 * 3600
+        for: 30m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Merge0 poller for {{ $labels.source }} is stale"
+          description: >-
+            The {{ $labels.source }} poller has not completed in over 26
+            hours — expired credentials and vendor API changes are the
+            usual causes. Its signals are silently missing from triage.
+
+      - alert: Merge0FetchSourceFailing
+        # Repeated failures inside a day; single blips self-heal next round.
+        expr: increase(merge0_fetch_failures_total[24h]) >= 3
+        labels:
+          severity: warn
+        annotations:
+          summary: "Merge0 poller for {{ $labels.source }} failing repeatedly"
+          description: >-
+            {{ $value }} failed poll rounds for {{ $labels.source }} in the
+            last 24h. See server logs for the per-round error.
+
+  - name: merge0-spend
+    rules:
+      - alert: Merge0TokenBudgetExhausted
+        # Series only exists when a budget is configured (gate.toml
+        # [budget] max_tokens_per_day > 0).
+        expr: merge0_token_budget_remaining == 0
+        for: 15m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Merge0 daily token budget exhausted — gate paused"
+          description: >-
+            The rolling 24h token budget is spent; candidate reports stay
+            Pending until the window rolls. Raise max_tokens_per_day if
+            this is business as usual rather than a runaway.
+
+  - name: merge0-quality
+    rules:
+      - alert: Merge0FixesRecurring
+        # Fires only once there is real evidence (>= 2 recurred fixes) —
+        # a single recurrence is noise at small n.
+        expr: merge0_fix_efficacy_rate < 0.5 and merge0_fixes_recurred >= 2
+        for: 6h
+        labels:
+          severity: warn
+        annotations:
+          summary: "More Merge0 fixes are recurring than sticking"
+          description: >-
+            Under half of merged fixes stayed quiet past the grace period.
+            Review the recurred reports in the inbox before approving more
+            of the same class.

@@ -47,6 +47,7 @@ struct HarnessOptions {
     gate_toml: Option<&'static str>,
     delivery_mode: merge0_server::handlers::actions::DeliveryMode,
     tracker: Option<Arc<dyn merge0_tracker::Tracker>>,
+    fetch_failures: Arc<std::sync::Mutex<std::collections::HashMap<String, u64>>>,
 }
 
 impl Default for HarnessOptions {
@@ -60,6 +61,7 @@ impl Default for HarnessOptions {
             gate_toml: None,
             delivery_mode: merge0_server::handlers::actions::DeliveryMode::Pr,
             tracker: None,
+            fetch_failures: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
         }
     }
 }
@@ -114,6 +116,7 @@ impl Harness {
             slack_signing_secret: Some("slack-secret".into()),
             hardening_enabled: options.hardening,
             fetchers: Arc::new(Vec::new()),
+            fetch_failures: options.fetch_failures.clone(),
             vendor_webhooks: Arc::new(VendorWebhooks {
                 sentry_client_secret: Some("sentry-client-secret".into()),
                 posthog_shared_token: Some("posthog-token".into()),
@@ -944,8 +947,35 @@ async fn open_routes_rate_limit_bursts_with_429() {
 /// bearer token.
 #[tokio::test]
 async fn metrics_scrape_is_prometheus_text_over_real_counts() {
-    let h = Harness::start(HarnessOptions::default()).await;
+    let options = HarnessOptions::default();
+    // A poller that has failed twice this process — the scheduler's counter.
+    options
+        .fetch_failures
+        .lock()
+        .unwrap()
+        .insert("reddit".into(), 2);
+    let h = Harness::start(options).await;
+
+    // Before any triage run the liveness series is omitted — "never ran"
+    // must not masquerade as 1970.
+    let before = h.get("/metrics").await.text().await.unwrap();
+    assert!(!before.contains("merge0_last_triage_run_timestamp_seconds"));
+
     let report_id = h.seed_awaiting_report().await;
+
+    // Liveness + freshness state the schedulers would have written. The
+    // seed above already recorded a run at ~now, and the gauge is
+    // MAX(started_at) — so this row sits in the near future to be the one
+    // the scrape must carry.
+    let ran_at = chrono::Utc::now() + chrono::Duration::minutes(5);
+    h.tenant
+        .record_triage_run(ran_at, 1234, false)
+        .await
+        .unwrap();
+    h.tenant
+        .set_fetch_cursor("sentry", Some("cursor-1"), ran_at)
+        .await
+        .unwrap();
 
     let res = h.get("/metrics").await;
     assert_eq!(res.status(), 200);
@@ -964,8 +994,148 @@ async fn metrics_scrape_is_prometheus_text_over_real_counts() {
     );
     assert!(body.contains("merge0_phase0_gate_met 0"));
 
+    // Observability pack: loop liveness, per-source freshness, failures.
+    assert!(
+        body.contains(&format!(
+            "merge0_last_triage_run_timestamp_seconds {}",
+            ran_at.timestamp()
+        )),
+        "liveness gauge carries the run's unix time: {body}"
+    );
+    assert!(
+        body.contains(&format!(
+            "merge0_fetch_last_run_timestamp_seconds{{source=\"sentry\"}} {}",
+            ran_at.timestamp()
+        )),
+        "freshness gauge per source: {body}"
+    );
+    assert!(
+        body.contains("merge0_fetch_failures_total{source=\"reddit\"} 2"),
+        "failure counter per source: {body}"
+    );
+
     // Silence the unused-variable pedantry honestly: the report exists.
     assert!(!report_id.is_empty());
+    h.teardown().await;
+}
+
+/// The MCP surface: JSON-RPC over the shared bearer middleware,
+/// delegating to the same handler/action paths as the REST inbox — an
+/// agent client can review the queue and approve, and the audit trail
+/// records `mcp` (not `human`) as who pulled the trigger.
+#[tokio::test]
+async fn mcp_surface_reviews_and_approves_over_jsonrpc() {
+    let h = Harness::start(HarnessOptions::default()).await;
+    let report_id = h.seed_awaiting_report().await;
+
+    let rpc = |body: serde_json::Value| h.post("/mcp", Some("api-secret"), Some(body));
+
+    // No token → 401 before any JSON-RPC parsing (protected router).
+    let res = h
+        .post(
+            "/mcp",
+            None,
+            Some(serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize"})),
+        )
+        .await;
+    assert_eq!(res.status(), 401);
+
+    // initialize
+    let res = rpc(serde_json::json!({
+        "jsonrpc": "2.0", "id": 1, "method": "initialize",
+        "params": {"protocolVersion": "2025-06-18", "capabilities": {}}
+    }))
+    .await;
+    assert_eq!(res.status(), 200);
+    let body: serde_json::Value = res.json().await.unwrap();
+    assert_eq!(body["result"]["serverInfo"]["name"], "merge0");
+    assert!(body["result"]["capabilities"]["tools"].is_object());
+
+    // notifications/initialized: a notification, so 202 and no body.
+    let res = rpc(serde_json::json!({"jsonrpc":"2.0","method":"notifications/initialized"})).await;
+    assert_eq!(res.status(), 202);
+
+    // tools/list carries the full inbox verb set.
+    let res = rpc(serde_json::json!({"jsonrpc":"2.0","id":2,"method":"tools/list"})).await;
+    let body: serde_json::Value = res.json().await.unwrap();
+    let names: Vec<&str> = body["result"]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["name"].as_str().unwrap())
+        .collect();
+    for expected in [
+        "list_reports",
+        "get_report",
+        "approve_report",
+        "dismiss_report",
+        "get_telemetry",
+    ] {
+        assert!(
+            names.contains(&expected),
+            "missing tool {expected}: {names:?}"
+        );
+    }
+
+    // list_reports sees the seeded report.
+    let res = rpc(serde_json::json!({
+        "jsonrpc": "2.0", "id": 3, "method": "tools/call",
+        "params": {"name": "list_reports", "arguments": {"status": "awaiting_review"}}
+    }))
+    .await;
+    let body: serde_json::Value = res.json().await.unwrap();
+    assert_eq!(body["result"]["isError"], false);
+    let text = body["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(
+        text.contains(&report_id),
+        "list must carry the report: {text}"
+    );
+
+    // approve_report dispatches through the same action path as REST…
+    let res = rpc(serde_json::json!({
+        "jsonrpc": "2.0", "id": 4, "method": "tools/call",
+        "params": {"name": "approve_report", "arguments": {"id": report_id}}
+    }))
+    .await;
+    let body: serde_json::Value = res.json().await.unwrap();
+    assert_eq!(body["result"]["isError"], false, "approve failed: {body}");
+
+    // …and the audit trail says an agent did it, visible over MCP itself.
+    let res = rpc(serde_json::json!({
+        "jsonrpc": "2.0", "id": 5, "method": "tools/call",
+        "params": {"name": "get_report", "arguments": {"id": report_id}}
+    }))
+    .await;
+    let body: serde_json::Value = res.json().await.unwrap();
+    let detail: serde_json::Value =
+        serde_json::from_str(body["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+    assert_eq!(detail["dispatch"]["dispatched_by"], "mcp");
+
+    // A tool that ran and failed is a SUCCESSFUL call with isError — the
+    // model reads the failure; the transport stays clean.
+    let res = rpc(serde_json::json!({
+        "jsonrpc": "2.0", "id": 6, "method": "tools/call",
+        "params": {"name": "approve_report", "arguments": {"id": report_id}}
+    }))
+    .await;
+    let body: serde_json::Value = res.json().await.unwrap();
+    assert_eq!(
+        body["result"]["isError"], true,
+        "double-approve must fail: {body}"
+    );
+
+    // Protocol errors stay JSON-RPC errors: unknown tool and method.
+    let res = rpc(serde_json::json!({
+        "jsonrpc": "2.0", "id": 7, "method": "tools/call",
+        "params": {"name": "drop_all_tables", "arguments": {}}
+    }))
+    .await;
+    let body: serde_json::Value = res.json().await.unwrap();
+    assert_eq!(body["error"]["code"], -32602);
+    let res = rpc(serde_json::json!({"jsonrpc":"2.0","id":8,"method":"resources/list"})).await;
+    let body: serde_json::Value = res.json().await.unwrap();
+    assert_eq!(body["error"]["code"], -32601);
+
     h.teardown().await;
 }
 
@@ -1922,5 +2092,84 @@ async fn report_detail_routes_evidence_paths_to_code_owners() {
         .await
         .unwrap();
     assert!(detail["code_owners"].is_null());
+    h.teardown().await;
+}
+
+/// Outcome reconciliation: a merged PR whose webhook was MISSED is repaired
+/// on the next triage run by polling GitHub — the merge-rate history never
+/// silently drifts. An open PR is left alone.
+#[tokio::test]
+async fn missed_merge_webhook_is_reconciled_on_the_next_triage_run() {
+    let h = Harness::start(HarnessOptions::default()).await;
+    let report_id = h.seed_awaiting_report().await;
+    h.post(
+        &format!("/reports/{report_id}/approve"),
+        Some("api-secret"),
+        None,
+    )
+    .await;
+    let pr_url = "https://github.com/chalk/chalk/pull/7".to_string();
+    h.post(
+        "/runner/callback",
+        Some("runner-secret"),
+        Some(serde_json::json!({
+            "report_id": report_id,
+            "status": "opened",
+            "pr_url": pr_url,
+            "branch": "merge0/fix",
+            "tokens_spent": 90000,
+            "files_changed": 1,
+            "total_lines_changed": 10,
+        })),
+    )
+    .await;
+
+    // No webhook arrives. First: PR still open on GitHub → nothing changes.
+    h.post("/triage/run", Some("api-secret"), None).await;
+    let detail: serde_json::Value = h
+        .get(&format!("/reports/{report_id}"))
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(detail["report"]["status"], "pr_open");
+    assert_eq!(detail["outcomes"].as_array().unwrap().len(), 0);
+
+    // GitHub says the PR merged (webhook lost). The sweep repairs it.
+    h.github.state.lock().unwrap().pr_states.insert(
+        7,
+        merge0_github::PullState {
+            state: "closed".into(),
+            merged: true,
+            merged_at: Some(chrono::Utc::now()),
+            closed_at: Some(chrono::Utc::now()),
+            merge_commit_sha: Some("abc123def".into()),
+        },
+    );
+    h.post("/triage/run", Some("api-secret"), None).await;
+    let detail: serde_json::Value = h
+        .get(&format!("/reports/{report_id}"))
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(detail["report"]["status"], "completed");
+    let outcomes = detail["outcomes"].as_array().unwrap();
+    assert_eq!(outcomes.len(), 1);
+    assert_eq!(outcomes[0]["outcome"], "merged");
+    assert_eq!(
+        outcomes[0]["pr_url"],
+        "https://github.com/chalk/chalk/pull/7"
+    );
+
+    // Idempotent: another run must not double-record.
+    h.post("/triage/run", Some("api-secret"), None).await;
+    let detail: serde_json::Value = h
+        .get(&format!("/reports/{report_id}"))
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(detail["outcomes"].as_array().unwrap().len(), 1);
     h.teardown().await;
 }

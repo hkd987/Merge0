@@ -57,6 +57,13 @@ pub struct AppState {
     /// Fetch-layer pollers built from `config/sources.toml` (empty when no
     /// source is enabled); the scheduler runs them before each triage pass.
     pub fetchers: Arc<Vec<Box<dyn merge0_fetch::Fetcher>>>,
+    /// Per-source fetch failure counts since process start, incremented by
+    /// the scheduler and exported as Prometheus counters. In-memory on
+    /// purpose: counter resets on restart are normal Prometheus semantics
+    /// (`rate()`/`increase()` handle them), and a failing poller should
+    /// page on staleness (`merge0_fetch_last_run_timestamp_seconds`), not
+    /// on a persisted tally.
+    pub fetch_failures: Arc<std::sync::Mutex<std::collections::HashMap<String, u64>>>,
     /// Native vendor webhook verification + deep-link context.
     pub vendor_webhooks: Arc<VendorWebhooks>,
     /// Per-IP rate limiting on the OPEN routes (None = disabled).

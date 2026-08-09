@@ -174,7 +174,7 @@ pub async fn github(
 /// eligible fingerprint, each landing as a `[hardening]` PR + inbox report.
 /// Errors are logged, never surfaced to the webhook response (GitHub would
 /// just retry).
-fn spawn_hardening_pass(state: AppState) {
+pub(crate) fn spawn_hardening_pass(state: AppState) {
     tokio::spawn(async move {
         let now = Utc::now();
         let candidates = match merge0_hardening::find_candidates(&state.tenant).await {

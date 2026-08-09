@@ -21,6 +21,11 @@ pub struct TriageRun {
     /// The rolling 24h token budget was hit: gate evaluation stopped early
     /// and the remaining candidates stayed Pending for the next window.
     pub budget_exhausted: bool,
+    /// Reports whose gate call failed even after the model client's own
+    /// retries. They stay Pending and the next run tries again — one bad
+    /// call must not abort the run or lose the spend ledger.
+    #[serde(default)]
+    pub gate_failures: usize,
 }
 
 /// Run the full triage pass for one tenant/repo.
@@ -130,6 +135,7 @@ pub async fn run_triage(
         0
     };
 
+    let mut consecutive_failures = 0u32;
     for (report, _) in &maintenance_reports {
         if run.work_orders >= gate_config.max_work_orders_per_run as usize {
             break; // Remaining reports stay Pending for the next run.
@@ -145,14 +151,42 @@ pub async fn run_triage(
         }
         let prior =
             prior_attempts(store, &report.fingerprints, gate_config.prior_attempts_cap).await?;
-        let outcome = gate::evaluate(report, repo, intent_text, prior, gate_config, model).await?;
+        // Per-report isolation: a model failure (already retried inside the
+        // client on 429/5xx/timeout) leaves THIS report Pending and moves
+        // on — it must never abort the run, strand the remaining reports,
+        // or lose the budget ledger row recorded below. Three consecutive
+        // failures read as a provider outage: stop gating for this run
+        // rather than hammering a down API once per report.
+        let outcome =
+            match gate::evaluate(report, repo, intent_text, prior, gate_config, model).await {
+                Ok(outcome) => {
+                    consecutive_failures = 0;
+                    outcome
+                }
+                Err(e) => {
+                    run.gate_failures += 1;
+                    consecutive_failures += 1;
+                    tracing::warn!(
+                        report = %report.id,
+                        "gate call failed; report stays pending for the next run: {e}"
+                    );
+                    if consecutive_failures >= 3 {
+                        tracing::warn!(
+                            "3 consecutive gate failures — treating as a model outage and \
+                             halting gate evaluation for this run"
+                        );
+                        break;
+                    }
+                    continue;
+                }
+            };
         run.tokens_used += outcome.tokens_used;
         match &outcome.decision {
             GateDecision::Work { .. } => run.work_orders += 1,
             GateDecision::Skip { .. } => run.skips += 1,
         }
         store
-            .set_gate_decision(report.id, &outcome.decision)
+            .set_gate_decision(report.id, &outcome.decision, Some(&outcome.context))
             .await?;
     }
 

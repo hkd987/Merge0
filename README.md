@@ -80,7 +80,7 @@ screenshots, an animated tour of the loop, and the four-step quickstart.
   the gate's self-assessed confidence (`low`/`medium`/`high`,
   fail-conservative parsing). Auto-dispatch of high-confidence orders
   exists but **ships off** (`[autonomy]` in `config/gate.toml`); every
-  dispatch records its actor (`human`/`slack`/`auto`) for audit. And the
+  dispatch records its actor (`human`/`slack`/`auto`/`mcp`) for audit. And the
   confidence *acts*: below `[delivery] min_confidence_for_pr` a Work Order
   is filed as a story for a human instead of sent to an agent, so a
   borderline judgment produces a queued ticket rather than a gambled PR.
@@ -95,7 +95,16 @@ screenshots, an animated tour of the loop, and the four-step quickstart.
   dashboard, `/telemetry`, and `/metrics`.
 - **Cost caps**: an optional hard token budget per rolling 24h
   (`[budget]` in `config/gate.toml`); exceeded → the gate pauses,
-  candidates stay pending, a Slack warning fires once per window.
+  candidates stay pending, a Slack warning fires once per window. The X
+  poller additionally caps posts read per round (pay-as-you-go API).
+- **Operability**: `/metrics` exports the loop's heartbeat (last triage
+  run), per-source poller freshness, and failure counters alongside the
+  acceptance telemetry — with an importable Grafana dashboard and
+  Prometheus alert rules in `ops/` (`docs/observability.md`). Every
+  triage run also reconciles open-PR dispatches against GitHub's actual
+  PR state, so a missed merge webhook can't strand a report; and every
+  gate decision stores the exact context it saw, replayable from the
+  report detail.
 - **Escalation re-open**: dismissed reports return to the inbox when
   their impact multiplies past `MERGE0_REOPEN_FACTOR` (default 3×) or a
   member ticket gets delegated — with the prior dismissal noted.
@@ -119,14 +128,17 @@ screenshots, an animated tour of the loop, and the four-step quickstart.
   runner workflow, branch-protection verification before any dispatch,
   and configurable raw-payload retention.
 - **Evals** (`evals/`): the model judgments are measured, not assumed —
-  a 30-scenario gate corpus (hand-built controls, 13 real-world
-  GitHub-issue archetypes, and memory-retrieval canaries, with borderline
-  cases scored as pass rates over repeated runs) and six seeded-bug agent
-  fixtures, all run against a real model. Current baseline: 100% gate
-  decision accuracy with zero secret leaks, 5/5 agent fixes with the
-  policy-violation refusal held, and changes to what the gate sees are
-  measured as A/Bs against reconstructed prior behavior
-  (`evals/BASELINE.md`).
+  a 31-scenario gate corpus (hand-built controls, 13 real-world
+  GitHub-issue archetypes, memory-retrieval canaries, and redaction
+  canaries for secrets, exploit payloads, and reporter PII, with
+  borderline cases scored as pass rates over repeated runs) and six
+  seeded-bug agent fixtures, all run against a real model. Current
+  baseline: 100% gate decision accuracy with zero canary leaks, 5/5
+  agent fixes with the policy-violation refusal held, and changes to
+  what the gate sees are measured as A/Bs against reconstructed prior
+  behavior (`evals/BASELINE.md`). `scripts/eval-canary.sh` runs a
+  spend-capped five-scenario slice on a weekly cron so the measurement
+  doesn't decay between corpus runs.
 - **Commercial layer** (`ee/`, non-MIT): multi-tenant control plane —
   tenant lifecycle, RBAC, audit log, usage metering, cross-tenant priors.
 
@@ -157,6 +169,8 @@ full loop — inbox, agents, PRs, outcome memory.
 ```sh
 cp .env.example .env    # fill in tokens + GitHub App credentials
 docker compose up --build
+# or run the published image (tagged releases; see CHANGELOG.md):
+#   docker pull ghcr.io/hkd987/merge0:latest
 ```
 
 Or deploy without a server of your own —
@@ -206,7 +220,7 @@ live in `config/` as reviewed files. Server environment:
 | `ANTHROPIC_API_KEY` | ✅ | Model key for the triage gate (BYO) |
 | `MERGE0_GATE_MODEL` | — | Gate model id (default `claude-sonnet-5`) |
 | `MERGE0_AGENT` | — | Runner agent: `claude-code` (default), `codex-cli`, `gemini-cli`, `aider`, `opencode`, `cursor-cli`, `custom:<cmd>` — see “Bring your own agent” |
-| `MERGE0_TENANT` | — | Postgres schema name (default `default`) |
+| `MERGE0_TENANT` | — | Postgres schema name (default `tenant_default`) |
 | `MERGE0_PUBLIC_URL` | — | Public base URL (Slack links, defaults callbacks) |
 | `MERGE0_CALLBACK_URL` | — | Explicit runner-callback URL override |
 | `MERGE0_BIND` | — | Listen address (default `127.0.0.1:8080`; containers set `0.0.0.0:8080`) |
@@ -214,6 +228,10 @@ live in `config/` as reviewed files. Server environment:
 | `MERGE0_TRIAGE_INTERVAL_SECS` | — | Fetch+triage cadence (default nightly; `0` disables) |
 | `MERGE0_INTENT_FALLBACK` | — | Intent text used until `MERGE0.md` exists in the repo |
 | `MERGE0_SLACK_WEBHOOK_URL` / `MERGE0_SLACK_SIGNING_SECRET` | — | Slack digest + interactive approvals |
+| `MERGE0_SLACK_NOTIFY` | — | Notification classes: `reports,pr_ready` (default both when the webhook is set) |
+| `MERGE0_DELIVERY_MODE` | — | What approval delivers: `pr` (default), `story`, `story_and_pr` — story modes need `MERGE0_JIRA_BASE_URL`/`EMAIL`/`API_TOKEN`/`PROJECT` |
+| `MERGE0_REOPEN_FACTOR` | — | Escalation re-open multiplier for dismissed reports (default 3; `0` disables) |
+| `MERGE0_EFFICACY_GRACE_DAYS` | — | Days a merged fix must stay quiet to count as confirmed (default 3) |
 | `MERGE0_SENTRY_WEBHOOK_SECRET`, `MERGE0_POSTHOG_WEBHOOK_TOKEN`, `MERGE0_ZENDESK_WEBHOOK_SECRET`, `MERGE0_DATADOG_WEBHOOK_TOKEN`, `MERGE0_JIRA_WEBHOOK_TOKEN`, `MERGE0_LINEAR_WEBHOOK_SECRET` | — | Native vendor webhook verification (per vendor you point at `/webhooks/{vendor}`; Slack Events reuse `MERGE0_SLACK_SIGNING_SECRET`) |
 | `MERGE0_RATE_LIMIT_PER_SECOND` | — | Per-IP limit on open routes (default 10, burst 30; `0` disables) |
 | `MERGE0_HARDENING_ENABLED` | — | `1` enables post-merge prevention PRs (§5c) |
@@ -271,9 +289,29 @@ token entered once in the browser) · JSON: `GET /reports`,
 (DB-backed). All product routes require
 `Authorization: Bearer $MERGE0_API_TOKEN`.
 
+**MCP:** `POST /mcp` is a Model Context Protocol server over the same
+inbox (streamable HTTP, same bearer token) — point Claude Code, Claude
+Desktop, or any MCP client at it and the agent gets `list_reports`,
+`get_report`, `approve_report`, `dismiss_report`, and `get_telemetry`,
+delegating to exactly the REST code paths. Agent-pulled approvals are
+recorded as `dispatched_by: "mcp"` in the audit trail. Example client
+config:
+
+```json
+{
+  "mcpServers": {
+    "merge0": {
+      "type": "http",
+      "url": "https://your-merge0-host/mcp",
+      "headers": { "Authorization": "Bearer <MERGE0_API_TOKEN>" }
+    }
+  }
+}
+```
+
 ## Development
 
-~25-crate Rust workspace + a React UI. Layout highlights: `merge0-signal`
+~35-crate Rust workspace + a React UI. Layout highlights: `merge0-signal`
 (the schema — spec changes update `docs/signal-schema.md` in the same PR),
 `merge0-adapters` + `merge0-adapter-*` (golden-payload conformance,
 `MERGE0_BLESS=1` regenerates), `merge0-store` (Postgres,
@@ -302,13 +340,16 @@ cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings
   tokens in `ui/src/theme.css` per `docs/style-guide.md` — a lint test
   fails the build on color literals anywhere else.
 - **Manual e2e**: `scripts/e2e-manual.sh` drives the real binary over
-  HTTP end to end (34 checks: ingest → triage → Slack-interaction
+  HTTP end to end (88 checks: ingest → triage → Slack-interaction
   approve → callback → merge webhook → telemetry, plus auth,
-  idempotency, and signature negatives).
+  idempotency, signature negatives, story delivery, confidence routing,
+  CODEOWNERS routing, the hosted control plane, outcome reconciliation,
+  and the MCP surface).
 - **Model evals** (real model spend, never in CI):
   `cargo run -p merge0-evals --bin gate-eval` scores the gate against the
   scenario corpus; `scripts/agent-eval.sh` replays the runner workflow
-  against seeded-bug fixtures. See `evals/README.md` and the measured
+  against seeded-bug fixtures; `scripts/eval-canary.sh` is the weekly
+  spend-capped slice for a cron. See `evals/README.md` and the measured
   baseline in `evals/BASELINE.md`.
 - `CLAUDE.md` carries the architecture invariants (adapter isolation,
   schema-as-spec, no credentials anywhere, MIT/`ee` boundary, config-not-

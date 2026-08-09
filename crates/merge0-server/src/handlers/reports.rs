@@ -48,9 +48,11 @@ pub async fn detail(
     let story = state.tenant.report_story(id).await?;
     let code_owners =
         super::owners::code_owners_for_report(&state, &report, work_order.as_ref()).await;
+    let gate_context = state.tenant.gate_context(id).await?;
     Ok(Json(serde_json::json!({
         "report": report,
         "code_owners": code_owners,
+        "gate_context": gate_context,
         "gate_decision": gate_decision,
         "work_order": work_order,
         "dispatch": dispatch.map(|d| serde_json::json!({

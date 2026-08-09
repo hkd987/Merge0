@@ -19,6 +19,10 @@ pub enum DispatchedBy {
     Slack,
     /// The autonomy dial (auto-dispatch above the confidence threshold).
     Auto,
+    /// An MCP client (an agent acting for its operator). Recorded
+    /// distinctly so the audit trail never blurs "a person clicked" with
+    /// "a person's agent called".
+    Mcp,
 }
 
 impl DispatchedBy {
@@ -27,6 +31,7 @@ impl DispatchedBy {
             DispatchedBy::Human => "human",
             DispatchedBy::Slack => "slack",
             DispatchedBy::Auto => "auto",
+            DispatchedBy::Mcp => "mcp",
         }
     }
 }
