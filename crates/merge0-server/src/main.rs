@@ -72,6 +72,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 required_checks: true,
             },
         );
+        // A CODEOWNERS in the fake repo so owner routing is drivable in the
+        // manual e2e (report evidence mentioning src/districts/ paths routes
+        // to the data team).
+        fake_github.state.lock().unwrap().files.insert(
+            ".github/CODEOWNERS".into(),
+            "* @acme/platform\nsrc/districts/ @acme/data-team\n".into(),
+        );
         // Confidence is overridable so the confidence-routing path is
         // drivable end to end (dev fakes only — production reads the real
         // model's own self-assessment and nothing can override it).
