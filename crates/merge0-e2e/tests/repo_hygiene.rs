@@ -453,7 +453,10 @@ fn every_adapter_source_is_selectable_by_at_least_one_shipped_scout() {
 fn no_mit_crate_depends_on_the_ee_directory() {
     let root = repo_root();
     let mut offenders = Vec::new();
-    for entry in std::fs::read_dir(root.join("crates")).expect("crates dir").flatten() {
+    for entry in std::fs::read_dir(root.join("crates"))
+        .expect("crates dir")
+        .flatten()
+    {
         let manifest = entry.path().join("Cargo.toml");
         let Ok(text) = std::fs::read_to_string(&manifest) else {
             continue;
@@ -463,8 +466,7 @@ fn no_mit_crate_depends_on_the_ee_directory() {
             if trimmed.starts_with('#') {
                 continue;
             }
-            let names_ee_crate =
-                trimmed.contains("merge0-ee") || trimmed.contains("merge0-hosted");
+            let names_ee_crate = trimmed.contains("merge0-ee") || trimmed.contains("merge0-hosted");
             let ee_path_dep = trimmed.contains("path") && trimmed.contains("ee/");
             if names_ee_crate || ee_path_dep {
                 offenders.push(format!("{}:{}: {}", rel(&manifest), i + 1, trimmed));
