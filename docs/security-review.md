@@ -119,10 +119,12 @@ it.
 - No live-credential run has happened: GitHub App token refresh, real
   installation scoping, and the production model client's error paths are
   untested outside wiremock.
-- No `SECURITY.md` / disclosure contact exists yet. Add one with a real
-  address before publishing the repository.
-- Dependency and container-image vulnerability scanning is not wired into
-  CI.
+- ~~No `SECURITY.md` / disclosure contact exists yet.~~ Closed in the
+  open-sourcing pass: `SECURITY.md` routes reports through GitHub private
+  vulnerability reporting (no email dependency).
+- ~~Dependency vulnerability scanning is not wired into CI.~~ Closed:
+  `cargo-deny` (advisories + license compliance + source bans, policy in
+  `deny.toml`) runs as a CI job. Container-image scanning remains open.
 - Multi-tenant isolation in `ee/` was reviewed only where it touches the
   paths above; the hosted surface deserves its own pass before it serves
   more than one customer.

@@ -2,9 +2,9 @@
 
 **Status:** v1.1 — Ready for engineering review
 **Last updated:** August 6, 2026 (v1.1: self-improvement discipline §5d, meta-loop, Opportunity Reports, diff budget, failed-run salvage, external merge-rate calibration)
-**Owner:** Lundin Matthews
+**Owner:** AdminRemix LLC (founder)
 **Entity:** AdminRemix LLC (standalone venture)
-**Design Partner Zero:** Chalk
+**Design Partner Zero:** "Chalk" — the internal codename for the first design-partner SaaS (deliberately the same invented name used in this repo's test fixtures and example data)
 **Distribution:** Open-core — MIT core + `/ee` commercial directory, with a hosted version (see Distribution & Open Source Strategy)
 **Working name:** "Merge0" is a placeholder — see Open Questions.
 
@@ -436,11 +436,11 @@ identity is an `/ee` concern end to end.
 
 | Question | Owner | Blocking? |
 |---|---|---|
-| Product name ("Merge0" is a placeholder) | Lundin | **Blocking for public repo/launch** (Phase 1 end); trademark search before committing |
-| CLA tooling and terms (individual + corporate) | Lundin + counsel | Blocking for accepting external PRs (Phase 1 end) |
-| Pricing model for hosted (per-merged-PR vs. flat + pool) | Lundin | Non-blocking (Phase 2) |
-| Sentry cloud vs. self-hosted GlitchTip for Chalk's own instance | Lundin + eng | Non-blocking (adapter targets Sentry API either way; confirm GlitchTip API parity before committing) |
-| PostHog Cloud vs. self-hosted for Chalk hosted tier (data-residency story vs. ops burden) | Lundin | Non-blocking for Merge0; decide during Chalk instrumentation |
+| Product name ("Merge0" is a placeholder) | Founder | **Blocking for public repo/launch** (Phase 1 end); trademark search before committing |
+| CLA tooling and terms (individual + corporate) | Founder + counsel | Blocking for accepting external PRs (Phase 1 end) |
+| Pricing model for hosted (per-merged-PR vs. flat + pool) | Founder | Non-blocking (Phase 2) |
+| Sentry cloud vs. self-hosted GlitchTip for Chalk's own instance | Founder + eng | Non-blocking (adapter targets Sentry API either way; confirm GlitchTip API parity before committing) |
+| PostHog Cloud vs. self-hosted for Chalk hosted tier (data-residency story vs. ops burden) | Founder | Non-blocking for Merge0; decide during Chalk instrumentation |
 | Minimum intent-doc requirement — is MERGE0.md mandatory at onboarding or optional with degraded gate precision? | Eng | Resolve during Phase 0 |
 
 ---

@@ -438,3 +438,43 @@ fn every_adapter_source_is_selectable_by_at_least_one_shipped_scout() {
         dead.join("\n")
     );
 }
+
+/// **Boundary made law (CLAUDE.md invariant 5).** Nothing under `crates/`
+/// may depend on `ee/` — that line is what makes the MIT half of the repo
+/// genuinely MIT. It has always held by review; as of the open-sourcing
+/// pass it is enforced, because the cost of it silently breaking changes
+/// the day the repo is public: a leaked dependency wouldn't just be a
+/// layering bug, it would relicense someone's build.
+///
+/// Detection is at the manifest level, where the dependency would have to
+/// be declared: any `crates/*/Cargo.toml` naming an ee crate or an `ee/`
+/// path. Comments are skipped; `ee/` appearing in prose stays legal.
+#[test]
+fn no_mit_crate_depends_on_the_ee_directory() {
+    let root = repo_root();
+    let mut offenders = Vec::new();
+    for entry in std::fs::read_dir(root.join("crates")).expect("crates dir").flatten() {
+        let manifest = entry.path().join("Cargo.toml");
+        let Ok(text) = std::fs::read_to_string(&manifest) else {
+            continue;
+        };
+        for (i, line) in text.lines().enumerate() {
+            let trimmed = line.trim_start();
+            if trimmed.starts_with('#') {
+                continue;
+            }
+            let names_ee_crate =
+                trimmed.contains("merge0-ee") || trimmed.contains("merge0-hosted");
+            let ee_path_dep = trimmed.contains("path") && trimmed.contains("ee/");
+            if names_ee_crate || ee_path_dep {
+                offenders.push(format!("{}:{}: {}", rel(&manifest), i + 1, trimmed));
+            }
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "crates/ is MIT and ee/ is not — a dependency across that boundary \
+         relicenses the build. Move the code, not the dependency:\n{}",
+        offenders.join("\n")
+    );
+}

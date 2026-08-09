@@ -106,12 +106,13 @@ change. No red PRs, no auto-merge, ever.
   runner workflow, branch-protection verification before any dispatch,
   and configurable raw-payload retention.
 - **Evals** (`evals/`): the model judgments are measured, not assumed —
-  a 27-scenario gate corpus (14 hand-built cases plus 13 modeled on
-  real-world GitHub-issue archetypes — flaky tests, perf regressions,
-  memory leaks, CVEs, XSS reports, can't-reproduce threads, by-design
-  closures) and seeded-bug agent fixtures run against the real Claude
-  Code CLI. Current baseline: 100% gate decision accuracy, zero secret
-  leaks across three consecutive runs, 10/10 agent checks
+  a 30-scenario gate corpus (hand-built controls, 13 real-world
+  GitHub-issue archetypes, and memory-retrieval canaries, with borderline
+  cases scored as pass rates over repeated runs) and six seeded-bug agent
+  fixtures, all run against a real model. Current baseline: 100% gate
+  decision accuracy with zero secret leaks, 5/5 agent fixes with the
+  policy-violation refusal held, and changes to what the gate sees are
+  measured as A/Bs against reconstructed prior behavior
   (`evals/BASELINE.md`).
 - **Commercial layer** (`ee/`, non-MIT): multi-tenant control plane —
   tenant lifecycle, RBAC, audit log, usage metering, cross-tenant priors.
@@ -259,6 +260,13 @@ cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings
   busy inbox that's sometimes right; the gate fails closed.
 - **Self-improvement lands in artifacts, never the executor.** Hardening
   and meta-loop changes arrive as evidence-linked, human-merged PRs.
+
+## Contributing & security
+
+`CONTRIBUTING.md` covers the four CI gates, the adapter contribution path,
+and the CLA. Security reports go through GitHub private vulnerability
+reporting — see `SECURITY.md`; the current threat model and review live in
+`docs/security-review.md`.
 
 ## License
 

@@ -49,6 +49,17 @@ jobs:
       - name: Test
         run: cargo test --workspace
 
+  # Dependency advisories + license compliance (security review gap, closed
+  # in the open-sourcing pass). Policy lives in deny.toml.
+  deny:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          rust-version: stable
+          command: check
+
   image:
     runs-on: ubuntu-latest
     steps:
