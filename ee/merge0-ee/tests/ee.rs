@@ -507,16 +507,28 @@ async fn usage_meters_the_tenant_telemetry_and_prices_both_models() {
     let flat = Pricing::try_new_flat_plus_pool(9900, 2, 400).unwrap();
     assert_eq!(invoice(&flat, metered.merged_prs).total_cents, 9900 + 400);
 
-    // Metering a suspended tenant is refused like everything else.
+    // Metering DELIBERATELY survives suspension (changed in the hosted
+    // deploy-readiness pass): the invoice that justifies suspending an org
+    // for non-payment must remain computable after the freeze. The data
+    // plane stays locked — `tenant_store` still refuses — but the
+    // control-plane billing read does not go through that door.
     manager
         .suspend_tenant(tenant.id, ACTOR, ts(15, 0))
         .await
         .unwrap();
     let suspended = must_get(&manager, &tenant).await;
-    assert!(matches!(
-        usage(&manager, &suspended, 30, now).await,
-        Err(EeError::TenantSuspended(_))
-    ));
+    let frozen = usage(&manager, &suspended, 30, now).await.unwrap();
+    assert_eq!(
+        frozen.merged_prs, metered.merged_prs,
+        "suspension must not change what the org owes"
+    );
+    assert!(
+        matches!(
+            manager.tenant_store(&suspended).await,
+            Err(EeError::TenantSuspended(_))
+        ),
+        "the data-plane door stays shut"
+    );
 
     wipe(&manager, &pool).await;
 }

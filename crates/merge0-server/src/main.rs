@@ -34,11 +34,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let scouts =
         triage_config::load_scouts(std::path::Path::new(&config_dir).join("scouts").as_path())?;
+    // MERGE0_GATE_CONTEXT_EXTRA: operator-supplied background context
+    // appended to the gate prompt (hosted deployments wire the ee control
+    // plane's cross-tenant priors block through this; self-hosters can carry
+    // site conventions). Unset or blank is a no-op.
     let gate = triage_config::load_gate(
         std::path::Path::new(&config_dir)
             .join("gate.toml")
             .as_path(),
-    )?;
+    )?
+    .with_extra_context(std::env::var("MERGE0_GATE_CONTEXT_EXTRA").ok().as_deref());
     let pr_body_template =
         std::fs::read_to_string(std::path::Path::new(&config_dir).join("pr-body-template.md"))
             .map_err(|e| format!("config/pr-body-template.md unreadable: {e}"))?;

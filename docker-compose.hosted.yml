@@ -1,0 +1,72 @@
+# Hosted (multi-tenant) deployment shape: one Postgres, one control plane,
+# one merge0-server per tenant. The same image carries both binaries; each
+# service picks its command.
+#
+# This file is the PATTERN, runnable as-is for a two-service start:
+#   docker compose -f docker-compose.hosted.yml up --build
+# Provision a tenant through the control plane, read its
+# /ee/tenants/{id}/runtime manifest, and add one `tenant-*` service per
+# tenant following the template below. Full runbook: docs/hosted-deploy.md.
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: merge0
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+      POSTGRES_DB: merge0
+    volumes:
+      - merge0-hosted-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U merge0"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # The ee control plane: tenant lifecycle, RBAC, metering, priors, and the
+  # per-tenant runtime manifests this file's tenant services are built from.
+  control-plane:
+    build: .
+    entrypoint: ["/usr/local/bin/merge0-hosted"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      MERGE0_DATABASE_URL: postgres://merge0:${POSTGRES_PASSWORD:?}@db:5432/merge0
+      MERGE0_EE_ADMIN_TOKEN: ${MERGE0_EE_ADMIN_TOKEN:?set in .env}
+      MERGE0_EE_BIND: 0.0.0.0:8090
+    ports:
+      - "8090:8090"
+
+  # ---- Per-tenant data planes ------------------------------------------
+  # One block per tenant. MERGE0_TENANT comes from the tenant's runtime
+  # manifest (GET /ee/tenants/{id}/runtime → env.MERGE0_TENANT); the
+  # remaining values are that tenant's own credentials, provided here by
+  # you and never stored in the control plane. NEVER point two services at
+  # the same MERGE0_TENANT schema.
+  #
+  # tenant-example:
+  #   build: .
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+  #   environment:
+  #     MERGE0_DATABASE_URL: postgres://merge0:${POSTGRES_PASSWORD:?}@db:5432/merge0
+  #     MERGE0_TENANT: tenant_01xxxxxxxxxxxxxxxxxxxxxxxx   # from the runtime manifest
+  #     MERGE0_REPO: acme/acme-app
+  #     MERGE0_PUBLIC_URL: https://acme.merge0.example.com
+  #     MERGE0_API_TOKEN: ${TENANT_EXAMPLE_API_TOKEN:?}
+  #     MERGE0_RUNNER_TOKEN: ${TENANT_EXAMPLE_RUNNER_TOKEN:?}
+  #     MERGE0_GITHUB_WEBHOOK_SECRET: ${TENANT_EXAMPLE_WEBHOOK_SECRET:?}
+  #     MERGE0_GITHUB_APP_ID: ${TENANT_EXAMPLE_GH_APP_ID:?}
+  #     MERGE0_GITHUB_INSTALLATION_ID: ${TENANT_EXAMPLE_GH_INSTALLATION_ID:?}
+  #     MERGE0_GITHUB_APP_PRIVATE_KEY: ${TENANT_EXAMPLE_GH_APP_KEY:?}
+  #     ANTHROPIC_API_KEY: ${TENANT_EXAMPLE_ANTHROPIC_KEY:?}
+  #     # Optional: cross-tenant priors from GET /ee/priors (gate_context);
+  #     # refresh on deploys.
+  #     # MERGE0_GATE_CONTEXT_EXTRA: "historical priors: ..."
+  #   ports:
+  #     - "8081:8080"
+
+volumes:
+  merge0-hosted-pg:

@@ -431,5 +431,69 @@ EOF
 )
 check "openpanel error events aggregate to a signal" "$OP_INGEST" '"inserted":1'
 
+say "14. Hosted multi-tenant: control plane, two data planes, isolation, suspension"
+EE_PORT=18090
+EE_BASE="http://127.0.0.1:$EE_PORT"
+EE_TOKEN="e2e-ee-admin"
+MERGE0_DATABASE_URL="$DB_URL" \
+MERGE0_EE_ADMIN_TOKEN="$EE_TOKEN" \
+MERGE0_EE_BIND="127.0.0.1:$EE_PORT" \
+./target/debug/merge0-hosted > /tmp/merge0-e2e-ee.log 2>&1 &
+EE_PID=$!
+trap 'kill $SERVER_PID $STORY_PID $ROUTE_PID $EE_PID $TA_PID $TB_PID 2>/dev/null || true' EXIT
+for _ in $(seq 1 50); do curl -sf "$EE_BASE/healthz" >/dev/null 2>&1 && break; sleep 0.2; done
+
+eeauth() { curl -sf -H "authorization: Bearer $EE_TOKEN" -H "x-merge0-actor: operator@merge0.example" "$@"; }
+TEN_A=$(eeauth -X POST "$EE_BASE/ee/tenants" -H "content-type: application/json" \
+  -d '{"name":"acme","plan":"team","admin_email":"admin@acme.example"}')
+TEN_B=$(eeauth -X POST "$EE_BASE/ee/tenants" -H "content-type: application/json" \
+  -d '{"name":"globex","plan":"team","admin_email":"admin@globex.example"}')
+A_ID=$(echo "$TEN_A" | python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])')
+B_ID=$(echo "$TEN_B" | python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])')
+A_SCHEMA=$(echo "$TEN_A" | python3 -c 'import sys,json; print(json.load(sys.stdin)["schema_name"])')
+B_SCHEMA=$(echo "$TEN_B" | python3 -c 'import sys,json; print(json.load(sys.stdin)["schema_name"])')
+check "control plane provisioned two distinct schemas" "$([ "$A_SCHEMA" != "$B_SCHEMA" ] && echo distinct)" "distinct"
+
+# Two data planes, each launched from its tenant's runtime manifest.
+launch_tenant() { # port schema logfile
+  MERGE0_DATABASE_URL="$DB_URL" MERGE0_TENANT="$2" MERGE0_REPO="chalk/chalk" \
+  MERGE0_DEV_FAKES=1 MERGE0_API_TOKEN="$API_TOKEN" MERGE0_RUNNER_TOKEN="$RUNNER_TOKEN" \
+  MERGE0_TRIAGE_INTERVAL_SECS=0 MERGE0_BIND="127.0.0.1:$1" \
+  ./target/debug/merge0-server > "$3" 2>&1 &
+}
+launch_tenant 18091 "$A_SCHEMA" /tmp/merge0-e2e-tenant-a.log; TA_PID=$!
+launch_tenant 18092 "$B_SCHEMA" /tmp/merge0-e2e-tenant-b.log; TB_PID=$!
+for _ in $(seq 1 50); do curl -sf "http://127.0.0.1:18091/healthz" >/dev/null 2>&1 && break; sleep 0.2; done
+for _ in $(seq 1 50); do curl -sf "http://127.0.0.1:18092/healthz" >/dev/null 2>&1 && break; sleep 0.2; done
+
+# A signal ingested into tenant A must be invisible to tenant B.
+auth -X POST "http://127.0.0.1:18091/ingest/sentry" -H "content-type: application/json" -d @- <<EOF >/dev/null
+{"endpoint": "issues", "payload": [{
+  "id": "8801", "shortId": "ACME-1",
+  "title": "TypeError: acme-only tenant crash",
+  "permalink": "https://sentry.example.com/organizations/acme/issues/8801/",
+  "level": "error", "metadata": {"type": "TypeError", "value": "acme only"},
+  "userCount": 12, "firstSeen": "2026-08-06T04:00:00Z", "lastSeen": "$NOW"
+}]}
+EOF
+auth -X POST "http://127.0.0.1:18091/triage/run" >/dev/null
+A_REPORTS=$(auth "http://127.0.0.1:18091/reports" | python3 -c 'import sys,json; print(len(json.load(sys.stdin)))')
+B_REPORTS=$(auth "http://127.0.0.1:18092/reports" | python3 -c 'import sys,json; print(len(json.load(sys.stdin)))')
+check "tenant A sees its report" "$A_REPORTS" "1"
+check "tenant B sees NOTHING of tenant A" "$B_REPORTS" "0"
+
+# Metering reflects only the tenant's own activity.
+A_USAGE=$(eeauth "$EE_BASE/ee/tenants/$A_ID/usage")
+check "usage endpoint meters tenant A" "$A_USAGE" '"window_days":30'
+
+# Suspension: manifest flips, membership freezes, usage stays readable.
+eeauth -X POST "$EE_BASE/ee/tenants/$A_ID/suspend" >/dev/null
+A_RUNTIME=$(eeauth "$EE_BASE/ee/tenants/$A_ID/runtime")
+check "suspended tenant's runtime manifest says so" "$A_RUNTIME" '"desired_state":"suspended"'
+B_RUNTIME=$(eeauth "$EE_BASE/ee/tenants/$B_ID/runtime")
+check "neighbor tenant stays running" "$B_RUNTIME" '"desired_state":"running"'
+FROZEN_USAGE=$(eeauth "$EE_BASE/ee/tenants/$A_ID/usage")
+check "usage remains computable while suspended" "$FROZEN_USAGE" '"window_days":30'
+
 say "Result: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

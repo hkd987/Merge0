@@ -125,6 +125,56 @@ it.
 - ~~Dependency vulnerability scanning is not wired into CI.~~ Closed:
   `cargo-deny` (advisories + license compliance + source bans, policy in
   `deny.toml`) runs as a CI job. Container-image scanning remains open.
-- Multi-tenant isolation in `ee/` was reviewed only where it touches the
-  paths above; the hosted surface deserves its own pass before it serves
-  more than one customer.
+- ~~Multi-tenant isolation in `ee/` was reviewed only where it touches the
+  paths above.~~ Closed by the hosted deploy-readiness pass (2026-08-09),
+  below.
+
+## Hosted surface pass (2026-08-09)
+
+Scope: the `ee/` control plane (`merge0-hosted`) and the multi-tenant
+deployment shape (`docs/hosted-deploy.md`).
+
+Verified, with tests:
+
+- **Tenant isolation is structural and observed.** Schema-per-tenant at
+  the database, process-per-tenant at runtime; the two-tenant HTTP test
+  seeds data into one schema and proves the neighbor sees nothing, and the
+  manual e2e drives two live data planes to the same conclusion. The only
+  injection boundary for tenant-controlled names remains `merge0-store`'s
+  schema-name validation — the control plane derives schema names from
+  ULIDs and never hand-rolls tenant DDL.
+- **Every control route authenticates before parsing** (operator token,
+  constant-time compare), swept with garbage bodies across the full route
+  table; `/healthz` is the only open route. Body limit (1 MB) and a 30s
+  request deadline match the core server's posture.
+- **RBAC applies to the human, not just the token**: membership mutations
+  additionally check the acting user's role; a non-member actor is 403'd
+  even with the operator token. All lifecycle actions are audited with the
+  actor.
+- **Suspension semantics are deliberate and tested**: the runtime manifest
+  flips to `suspended` (for orchestrator reconciliation), the schema
+  refuses to open, membership freezes (409) — while metering and audit
+  stay readable, because the invoice justifying a suspension must remain
+  computable after it.
+- **The runtime manifest carries secret NAMES only.** The control plane
+  never stores or serves tenant credential values; the test asserts the
+  rendered manifest contains no key material.
+- **Cross-tenant priors are aggregate-only** (severity/source-mix buckets;
+  serialization tested to contain no tenant identifiers), exclude
+  suspended tenants, and enter a tenant's gate only through the generic
+  `MERGE0_GATE_CONTEXT_EXTRA` hook, where the prompt labels them
+  background evidence rather than instructions.
+
+Accepted risks, stated:
+
+- **`MERGE0_EE_ADMIN_TOKEN` is a root credential** with no per-operator
+  identity of its own (the actor header is attribution, authenticated only
+  by possession of the token). Acceptable for an operator-count of one;
+  revisit alongside SSO. The runbook says to keep the control plane off
+  the public internet.
+- **No rate limiting on the control plane** — it is admin-token-gated and
+  documented as internal-network-only; its one open route returns a
+  constant.
+- **Offboarding (`drop_tenant`) is destructive and gated only by operator
+  change control**, stated in the runbook.
+
