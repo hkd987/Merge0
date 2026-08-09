@@ -12,7 +12,7 @@ use axum::Json;
 use merge0_adapters::Adapter;
 use merge0_store::IngestOutcome;
 
-pub(crate) fn adapter_for(source: &str) -> Option<Box<dyn Adapter>> {
+pub fn adapter_for(source: &str) -> Option<Box<dyn Adapter>> {
     Some(match source {
         "posthog" => Box::new(merge0_adapter_posthog::PosthogAdapter),
         "sentry" => Box::new(merge0_adapter_sentry::SentryAdapter),

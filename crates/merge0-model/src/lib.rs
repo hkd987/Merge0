@@ -8,6 +8,9 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
+pub mod cli;
+pub use cli::CliModel;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ModelRequest {
     pub system: String,

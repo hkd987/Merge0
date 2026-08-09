@@ -11,10 +11,9 @@
 //! Everything in this library is deterministic and unit-tested; model
 //! calls happen only in the `gate-eval` binary.
 
-pub mod cli_model;
 pub mod scenario;
 pub mod scoring;
 
-pub use cli_model::CliModel;
+pub use merge0_model::CliModel;
 pub use scenario::{load_scenarios, Scenario};
 pub use scoring::{score, summarize, ScenarioResult, Summary};

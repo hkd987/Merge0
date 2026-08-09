@@ -127,6 +127,26 @@ screenshots, an animated tour of the loop, and the four-step quickstart.
 
 ![Acceptance telemetry](docs/screenshots/dashboard-light.png)
 
+## Try the triage in two minutes (no server, no database)
+
+Point the one-shot CLI at a vendor export and watch the same adapters,
+clustering, and gate the full loop runs decide what deserves work — using
+the Claude Code CLI you already have as the model, so your existing login
+is the only credential involved:
+
+```sh
+# A Sentry issues export (the API's JSON array, verbatim) — or any
+# source via its adapter envelope shape:
+cargo run -p merge0-server --bin merge0 -- \
+  triage --source sentry --file issues.json
+```
+
+Each cluster prints its evidence-backed verdict: a Work Order (summary,
+repro, testable success criteria, confidence) or a SKIP with the reason.
+`--json` for machine output, `--help` for the full flag list. When the
+verdicts look right, the sections below wire the same judgment into the
+full loop — inbox, agents, PRs, outcome memory.
+
 ## Quick start (Docker)
 
 ```sh
