@@ -604,5 +604,20 @@ RC_AFTER=$(auth "$BASE/reports/$RC_ID")
 check "reconciliation completed the report without any webhook" "$RC_AFTER" '"status":"completed"'
 check "the missed merged outcome is recorded" "$RC_AFTER" '"outcome":"merged"'
 
+say "17. MCP surface: an agent client speaks JSON-RPC to the same inbox"
+MCP_INIT=$(auth -X POST "$BASE/mcp" -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}')
+check "mcp initialize identifies the server" "$MCP_INIT" '"name":"merge0"'
+MCP_TOOLS=$(auth -X POST "$BASE/mcp" -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}')
+check "mcp lists the approve verb" "$MCP_TOOLS" '"approve_report"'
+check "mcp lists the telemetry verb" "$MCP_TOOLS" '"get_telemetry"'
+MCP_LIST=$(auth -X POST "$BASE/mcp" -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_reports","arguments":{}}}')
+check "mcp tools/call reads the report queue" "$MCP_LIST" '"isError":false'
+MCP_401=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/mcp" \
+  -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":4,"method":"tools/list"}')
+check "mcp without the bearer token is rejected" "$MCP_401" '401'
+
 say "Result: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

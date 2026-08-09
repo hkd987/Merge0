@@ -1019,6 +1019,126 @@ async fn metrics_scrape_is_prometheus_text_over_real_counts() {
     h.teardown().await;
 }
 
+/// The MCP surface: JSON-RPC over the shared bearer middleware,
+/// delegating to the same handler/action paths as the REST inbox — an
+/// agent client can review the queue and approve, and the audit trail
+/// records `mcp` (not `human`) as who pulled the trigger.
+#[tokio::test]
+async fn mcp_surface_reviews_and_approves_over_jsonrpc() {
+    let h = Harness::start(HarnessOptions::default()).await;
+    let report_id = h.seed_awaiting_report().await;
+
+    let rpc = |body: serde_json::Value| h.post("/mcp", Some("api-secret"), Some(body));
+
+    // No token → 401 before any JSON-RPC parsing (protected router).
+    let res = h
+        .post(
+            "/mcp",
+            None,
+            Some(serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize"})),
+        )
+        .await;
+    assert_eq!(res.status(), 401);
+
+    // initialize
+    let res = rpc(serde_json::json!({
+        "jsonrpc": "2.0", "id": 1, "method": "initialize",
+        "params": {"protocolVersion": "2025-06-18", "capabilities": {}}
+    }))
+    .await;
+    assert_eq!(res.status(), 200);
+    let body: serde_json::Value = res.json().await.unwrap();
+    assert_eq!(body["result"]["serverInfo"]["name"], "merge0");
+    assert!(body["result"]["capabilities"]["tools"].is_object());
+
+    // notifications/initialized: a notification, so 202 and no body.
+    let res = rpc(serde_json::json!({"jsonrpc":"2.0","method":"notifications/initialized"})).await;
+    assert_eq!(res.status(), 202);
+
+    // tools/list carries the full inbox verb set.
+    let res = rpc(serde_json::json!({"jsonrpc":"2.0","id":2,"method":"tools/list"})).await;
+    let body: serde_json::Value = res.json().await.unwrap();
+    let names: Vec<&str> = body["result"]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["name"].as_str().unwrap())
+        .collect();
+    for expected in [
+        "list_reports",
+        "get_report",
+        "approve_report",
+        "dismiss_report",
+        "get_telemetry",
+    ] {
+        assert!(
+            names.contains(&expected),
+            "missing tool {expected}: {names:?}"
+        );
+    }
+
+    // list_reports sees the seeded report.
+    let res = rpc(serde_json::json!({
+        "jsonrpc": "2.0", "id": 3, "method": "tools/call",
+        "params": {"name": "list_reports", "arguments": {"status": "awaiting_review"}}
+    }))
+    .await;
+    let body: serde_json::Value = res.json().await.unwrap();
+    assert_eq!(body["result"]["isError"], false);
+    let text = body["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(
+        text.contains(&report_id),
+        "list must carry the report: {text}"
+    );
+
+    // approve_report dispatches through the same action path as REST…
+    let res = rpc(serde_json::json!({
+        "jsonrpc": "2.0", "id": 4, "method": "tools/call",
+        "params": {"name": "approve_report", "arguments": {"id": report_id}}
+    }))
+    .await;
+    let body: serde_json::Value = res.json().await.unwrap();
+    assert_eq!(body["result"]["isError"], false, "approve failed: {body}");
+
+    // …and the audit trail says an agent did it, visible over MCP itself.
+    let res = rpc(serde_json::json!({
+        "jsonrpc": "2.0", "id": 5, "method": "tools/call",
+        "params": {"name": "get_report", "arguments": {"id": report_id}}
+    }))
+    .await;
+    let body: serde_json::Value = res.json().await.unwrap();
+    let detail: serde_json::Value =
+        serde_json::from_str(body["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+    assert_eq!(detail["dispatch"]["dispatched_by"], "mcp");
+
+    // A tool that ran and failed is a SUCCESSFUL call with isError — the
+    // model reads the failure; the transport stays clean.
+    let res = rpc(serde_json::json!({
+        "jsonrpc": "2.0", "id": 6, "method": "tools/call",
+        "params": {"name": "approve_report", "arguments": {"id": report_id}}
+    }))
+    .await;
+    let body: serde_json::Value = res.json().await.unwrap();
+    assert_eq!(
+        body["result"]["isError"], true,
+        "double-approve must fail: {body}"
+    );
+
+    // Protocol errors stay JSON-RPC errors: unknown tool and method.
+    let res = rpc(serde_json::json!({
+        "jsonrpc": "2.0", "id": 7, "method": "tools/call",
+        "params": {"name": "drop_all_tables", "arguments": {}}
+    }))
+    .await;
+    let body: serde_json::Value = res.json().await.unwrap();
+    assert_eq!(body["error"]["code"], -32602);
+    let res = rpc(serde_json::json!({"jsonrpc":"2.0","id":8,"method":"resources/list"})).await;
+    let body: serde_json::Value = res.json().await.unwrap();
+    assert_eq!(body["error"]["code"], -32601);
+
+    h.teardown().await;
+}
+
 /// The ticket-source webhooks: Jira (shared token), Linear (HMAC
 /// signature), and Slack Events (v0 signature + URL-verification
 /// handshake) all verify, normalize, and store.

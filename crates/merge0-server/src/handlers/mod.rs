@@ -4,6 +4,7 @@ pub mod actions;
 pub mod broker;
 pub mod health;
 pub mod ingest;
+pub mod mcp;
 pub mod metrics;
 pub mod onboarding;
 pub mod owners;

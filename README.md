@@ -273,6 +273,26 @@ token entered once in the browser) · JSON: `GET /reports`,
 (DB-backed). All product routes require
 `Authorization: Bearer $MERGE0_API_TOKEN`.
 
+**MCP:** `POST /mcp` is a Model Context Protocol server over the same
+inbox (streamable HTTP, same bearer token) — point Claude Code, Claude
+Desktop, or any MCP client at it and the agent gets `list_reports`,
+`get_report`, `approve_report`, `dismiss_report`, and `get_telemetry`,
+delegating to exactly the REST code paths. Agent-pulled approvals are
+recorded as `dispatched_by: "mcp"` in the audit trail. Example client
+config:
+
+```json
+{
+  "mcpServers": {
+    "merge0": {
+      "type": "http",
+      "url": "https://your-merge0-host/mcp",
+      "headers": { "Authorization": "Bearer <MERGE0_API_TOKEN>" }
+    }
+  }
+}
+```
+
 ## Development
 
 ~25-crate Rust workspace + a React UI. Layout highlights: `merge0-signal`

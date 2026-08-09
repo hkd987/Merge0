@@ -91,7 +91,7 @@ export type GateConfidence = "low" | "medium" | "high";
 export type FixEfficacy = "pending" | "confirmed" | "recurred";
 
 /** Who pulled the dispatch trigger (the autonomy dial's audit trail). */
-export type DispatchedBy = "human" | "slack" | "auto";
+export type DispatchedBy = "human" | "slack" | "auto" | "mcp";
 
 export interface WorkOrder {
   report_id: string;
