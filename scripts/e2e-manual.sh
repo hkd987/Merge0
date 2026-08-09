@@ -285,6 +285,7 @@ check "spend ledger counts gate + runner tokens" "$TELEMETRY" '"tokens_spent_24h
 METRICS=$(auth "$BASE/metrics")
 check "prometheus metrics render" "$METRICS" "# TYPE merge0_prs_merged gauge"
 check "prometheus merge count" "$METRICS" "merge0_prs_merged 1"
+check "loop liveness gauge present after the triage run" "$METRICS" "merge0_last_triage_run_timestamp_seconds"
 
 say "9. Revert detection: push reverting the merge -> hard negative"
 PUSH_BODY=$(cat <<EOF

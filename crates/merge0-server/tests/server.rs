@@ -47,6 +47,7 @@ struct HarnessOptions {
     gate_toml: Option<&'static str>,
     delivery_mode: merge0_server::handlers::actions::DeliveryMode,
     tracker: Option<Arc<dyn merge0_tracker::Tracker>>,
+    fetch_failures: Arc<std::sync::Mutex<std::collections::HashMap<String, u64>>>,
 }
 
 impl Default for HarnessOptions {
@@ -60,6 +61,7 @@ impl Default for HarnessOptions {
             gate_toml: None,
             delivery_mode: merge0_server::handlers::actions::DeliveryMode::Pr,
             tracker: None,
+            fetch_failures: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
         }
     }
 }
@@ -114,6 +116,7 @@ impl Harness {
             slack_signing_secret: Some("slack-secret".into()),
             hardening_enabled: options.hardening,
             fetchers: Arc::new(Vec::new()),
+            fetch_failures: options.fetch_failures.clone(),
             vendor_webhooks: Arc::new(VendorWebhooks {
                 sentry_client_secret: Some("sentry-client-secret".into()),
                 posthog_shared_token: Some("posthog-token".into()),
@@ -944,8 +947,35 @@ async fn open_routes_rate_limit_bursts_with_429() {
 /// bearer token.
 #[tokio::test]
 async fn metrics_scrape_is_prometheus_text_over_real_counts() {
-    let h = Harness::start(HarnessOptions::default()).await;
+    let options = HarnessOptions::default();
+    // A poller that has failed twice this process — the scheduler's counter.
+    options
+        .fetch_failures
+        .lock()
+        .unwrap()
+        .insert("reddit".into(), 2);
+    let h = Harness::start(options).await;
+
+    // Before any triage run the liveness series is omitted — "never ran"
+    // must not masquerade as 1970.
+    let before = h.get("/metrics").await.text().await.unwrap();
+    assert!(!before.contains("merge0_last_triage_run_timestamp_seconds"));
+
     let report_id = h.seed_awaiting_report().await;
+
+    // Liveness + freshness state the schedulers would have written. The
+    // seed above already recorded a run at ~now, and the gauge is
+    // MAX(started_at) — so this row sits in the near future to be the one
+    // the scrape must carry.
+    let ran_at = chrono::Utc::now() + chrono::Duration::minutes(5);
+    h.tenant
+        .record_triage_run(ran_at, 1234, false)
+        .await
+        .unwrap();
+    h.tenant
+        .set_fetch_cursor("sentry", Some("cursor-1"), ran_at)
+        .await
+        .unwrap();
 
     let res = h.get("/metrics").await;
     assert_eq!(res.status(), 200);
@@ -963,6 +993,26 @@ async fn metrics_scrape_is_prometheus_text_over_real_counts() {
         "queue gauge reflects the seeded report: {body}"
     );
     assert!(body.contains("merge0_phase0_gate_met 0"));
+
+    // Observability pack: loop liveness, per-source freshness, failures.
+    assert!(
+        body.contains(&format!(
+            "merge0_last_triage_run_timestamp_seconds {}",
+            ran_at.timestamp()
+        )),
+        "liveness gauge carries the run's unix time: {body}"
+    );
+    assert!(
+        body.contains(&format!(
+            "merge0_fetch_last_run_timestamp_seconds{{source=\"sentry\"}} {}",
+            ran_at.timestamp()
+        )),
+        "freshness gauge per source: {body}"
+    );
+    assert!(
+        body.contains("merge0_fetch_failures_total{source=\"reddit\"} 2"),
+        "failure counter per source: {body}"
+    );
 
     // Silence the unused-variable pedantry honestly: the report exists.
     assert!(!report_id.is_empty());

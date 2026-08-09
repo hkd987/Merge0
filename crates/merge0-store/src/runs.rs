@@ -141,7 +141,10 @@ impl TenantStore {
              WHERE created_at < $1 AND gate_context IS NOT NULL",
             t = self.table("reports")
         );
-        sqlx::query(&ctx_sql).bind(cutoff).execute(self.pool()).await?;
+        sqlx::query(&ctx_sql)
+            .bind(cutoff)
+            .execute(self.pool())
+            .await?;
         Ok(result.rows_affected())
     }
 
@@ -329,6 +332,17 @@ impl TenantStore {
         Ok(())
     }
 
+    /// Loop liveness: when the most recent triage run started. `None`
+    /// until the first run — the metric layer omits the series rather than
+    /// exporting a fake epoch that would mask a loop that never started.
+    pub async fn last_triage_run_at(&self) -> Result<Option<DateTime<Utc>>> {
+        let sql = format!(
+            "SELECT MAX(started_at) FROM {t}",
+            t = self.table("triage_runs")
+        );
+        Ok(sqlx::query_scalar(&sql).fetch_one(self.pool()).await?)
+    }
+
     /// Whether the most recent triage run already hit the budget — the
     /// dedupe key for "warn once per exhausted window", not once per run.
     pub async fn last_run_budget_exhausted(&self) -> Result<bool> {
@@ -504,6 +518,23 @@ impl TenantStore {
             .execute(self.pool())
             .await?;
         Ok(())
+    }
+
+    /// Per-source fetch freshness: every source the fetch layer has run,
+    /// with its last successful run time. Feeds the staleness metrics —
+    /// a source present here but old means its poller is failing or the
+    /// scheduler stopped.
+    pub async fn fetch_last_runs(&self) -> Result<Vec<(String, DateTime<Utc>)>> {
+        let sql = format!(
+            "SELECT source, last_run FROM {t}
+             WHERE last_run IS NOT NULL ORDER BY source",
+            t = self.table("fetch_state")
+        );
+        let rows = sqlx::query(&sql).fetch_all(self.pool()).await?;
+        Ok(rows
+            .into_iter()
+            .map(|r| (r.get("source"), r.get("last_run")))
+            .collect())
     }
 
     /// Outcome history for a fingerprint — "we tried this in March and it was

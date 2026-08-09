@@ -252,6 +252,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             slack_signing_secret: std::env::var("MERGE0_SLACK_SIGNING_SECRET").ok(),
             hardening_enabled: std::env::var("MERGE0_HARDENING_ENABLED").as_deref() == Ok("1"),
             fetchers: Arc::new(fetchers),
+            fetch_failures: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
             vendor_webhooks: Arc::new(vendor_webhooks),
             // Open-route flood control: default 10 req/s per IP (burst 30);
             // MERGE0_RATE_LIMIT_PER_SECOND=0 disables.
@@ -379,7 +380,13 @@ fn spawn_schedulers(state: &AppState) {
                 {
                     match result {
                         Ok(outcome) => tracing::info!(?outcome, "fetched {source}"),
-                        Err(e) => tracing::error!("fetch {source} failed: {e}"),
+                        Err(e) => {
+                            tracing::error!("fetch {source} failed: {e}");
+                            // Guard dropped at arm end, before the loop's
+                            // next await (clippy: await_holding_lock).
+                            let mut failures = state.fetch_failures.lock().expect("not poisoned");
+                            *failures.entry(source.clone()).or_insert(0) += 1;
+                        }
                     }
                 }
                 match merge0_server::handlers::triage::run_once(&state).await {
