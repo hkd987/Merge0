@@ -1414,6 +1414,7 @@ async fn x_poller_searches_mentions_pages_and_advances_since_id() {
         query: "@acmeapp OR #acmeapp".into(),
         bearer_token_env: "MERGE0_TEST_X_BEARER_A".into(),
         base_url: server.uri(),
+        max_posts_per_round: 200,
     })
     .unwrap();
     let (store, tenant, schema) = fresh_tenant().await;
@@ -1486,8 +1487,59 @@ fn x_without_a_query_fails_at_construction_not_silently() {
         query: "  ".into(),
         bearer_token_env: "MERGE0_TEST_X_BEARER_B".into(),
         base_url: "https://api.x.example.com".into(),
+        max_posts_per_round: 200,
     })
     .err()
     .expect("an enabled source that can never signal must not construct");
     assert!(error.to_string().contains("query"), "{error}");
+}
+
+#[tokio::test]
+async fn x_read_cap_stops_paging_mid_spike_and_since_id_resumes() {
+    let server = MockServer::start().await;
+    set_secret("MERGE0_TEST_X_BEARER_C", "x-bearer-token");
+    let poller = XPoller::from_config(&merge0_fetch::config::XConfig {
+        enabled: true,
+        query: "@acmeapp".into(),
+        bearer_token_env: "MERGE0_TEST_X_BEARER_C".into(),
+        base_url: server.uri(),
+        // The golden page carries 2 posts and a next_token; a cap of 2
+        // means the spend guard must stop BEFORE following it.
+        max_posts_per_round: 2,
+    })
+    .unwrap();
+    let (store, tenant, schema) = fresh_tenant().await;
+
+    Mock::given(method("GET"))
+        .and(path("/2/tweets/search/recent"))
+        .and(query_param_is_missing("next_token"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(fixture_payload(include_str!(
+                "../../merge0-adapter-x/tests/fixtures/typical.json"
+            ))),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    // Following the next_token would be a billed read past the cap — the
+    // absence of this call IS the assertion.
+    Mock::given(method("GET"))
+        .and(path("/2/tweets/search/recent"))
+        .and(query_param("next_token", "b26v89c19zqg8o3fpds8xample"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "meta": { "result_count": 0 }
+        })))
+        .expect(0)
+        .mount(&server)
+        .await;
+
+    let outcome = run_fetch(&poller, &tenant, now()).await.unwrap();
+    assert_eq!(outcome.inserted, 2, "capped round still ingests page one");
+    assert_eq!(
+        tenant.fetch_cursor("x").await.unwrap().as_deref(),
+        Some("1821094444555566677"),
+        "since_id cursor still advances so the spike drains next round"
+    );
+    server.verify().await;
+    store.drop_tenant(&schema).await.unwrap();
 }

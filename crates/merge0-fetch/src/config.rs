@@ -98,14 +98,24 @@ pub struct XConfig {
     pub query: String,
     /// Env var *name* holding the app-only Bearer token.
     pub bearer_token_env: String,
-    /// API host (v2 recent search requires at minimum Basic tier access).
+    /// API host.
     #[serde(default = "XConfig::default_base_url")]
     pub base_url: String,
+    /// Hard cap on posts read per polling round. X's API bills per post
+    /// read (pay-as-you-go), so this bounds worst-case spend: a viral
+    /// spike drains across rounds via since_id instead of being read in
+    /// one expensive burst. Cost ceiling per day ≈
+    /// max_posts_per_round × rounds/day × per-read price.
+    #[serde(default = "XConfig::default_max_posts_per_round")]
+    pub max_posts_per_round: u32,
 }
 
 impl XConfig {
     fn default_base_url() -> String {
         "https://api.x.com".into()
+    }
+    fn default_max_posts_per_round() -> u32 {
+        200
     }
 }
 
