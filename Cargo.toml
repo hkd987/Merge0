@@ -60,7 +60,7 @@ axum = "0.8"
 sqlx = { version = "0.8", default-features = false, features = ["postgres", "runtime-tokio", "tls-rustls", "chrono", "json", "migrate"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 jsonwebtoken = "9"
-hmac = "0.12"
+hmac = "0.13"
 hex = "0.4"
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 rand = "0.8"
