@@ -125,6 +125,20 @@ export function ReportDetail({ onUnauthorized }: { onUnauthorized: () => void })
             )}
           </article>
 
+          {detail.code_owners != null && detail.code_owners.length > 0 && (
+            <div className="section">
+              <h2>Code owners</h2>
+              <div className="card">
+                {detail.code_owners.map((entry) => (
+                  <div className="meta" key={entry.path} style={{ marginTop: 0 }}>
+                    <span className="mono">{entry.path}</span>
+                    <span>{entry.owners.join(" ")}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {detail.gate_decision !== null && (
             <div className="section">
               <h2>Gate decision</h2>

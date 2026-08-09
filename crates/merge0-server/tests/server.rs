@@ -1853,3 +1853,74 @@ async fn unauthenticated_callers_are_rejected_before_the_body_is_parsed() {
 
     h.teardown().await;
 }
+
+/// CODEOWNERS routing: a report whose evidence mentions owned paths names
+/// the owning team on the detail endpoint; a repo without CODEOWNERS
+/// yields null rather than an error (best-effort by design).
+#[tokio::test]
+async fn report_detail_routes_evidence_paths_to_code_owners() {
+    let h = Harness::start(HarnessOptions::default()).await;
+    h.github.state.lock().unwrap().files.insert(
+        ".github/CODEOWNERS".into(),
+        "* @chalk/platform\nsrc/districts/ @chalk/data-team\n".into(),
+    );
+    // Same shape as the default envelope, with the crash location in the
+    // title the way Sentry renders culprits.
+    h.post(
+        "/ingest/sentry",
+        Some("api-secret"),
+        Some(serde_json::json!({
+            "endpoint": "issues",
+            "payload": [{
+                "id": "42",
+                "shortId": "CHALK-1",
+                "title": "TypeError: districtId undefined in src/districts/summary.ts",
+                "permalink": "https://sentry.example.com/organizations/chalk/issues/42/",
+                "level": "error",
+                "metadata": {"type": "TypeError", "value": "districtId undefined"},
+                "userCount": 30,
+                "firstSeen": "2026-08-06T00:00:00Z",
+                "lastSeen": chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+            }]
+        })),
+    )
+    .await;
+    h.post("/triage/run", Some("api-secret"), None).await;
+    let reports: serde_json::Value = h
+        .get("/reports?status=awaiting_review")
+        .await
+        .json()
+        .await
+        .unwrap();
+    let report_id = reports[0]["id"].as_str().unwrap().to_string();
+
+    let detail: serde_json::Value = h
+        .get(&format!("/reports/{report_id}"))
+        .await
+        .json()
+        .await
+        .unwrap();
+    let routed = detail["code_owners"]
+        .as_array()
+        .expect("code_owners present when CODEOWNERS exists");
+    assert!(
+        routed
+            .iter()
+            .any(|entry| entry["path"] == "src/districts/summary.ts"
+                && entry["owners"][0] == "@chalk/data-team"),
+        "expected src/districts/summary.ts routed to @chalk/data-team, got {routed:?}"
+    );
+    h.teardown().await;
+
+    // No CODEOWNERS in the repo → null, never an error.
+    let h = Harness::start(HarnessOptions::default()).await;
+    let report_id = h.seed_awaiting_report().await;
+    let detail: serde_json::Value = h
+        .get(&format!("/reports/{report_id}"))
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert!(detail["code_owners"].is_null());
+    h.teardown().await;
+}

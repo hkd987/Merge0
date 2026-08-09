@@ -46,8 +46,11 @@ pub async fn detail(
         .fix_efficacy(id, state.efficacy_grace_days, chrono::Utc::now())
         .await?;
     let story = state.tenant.report_story(id).await?;
+    let code_owners =
+        super::owners::code_owners_for_report(&state, &report, work_order.as_ref()).await;
     Ok(Json(serde_json::json!({
         "report": report,
+        "code_owners": code_owners,
         "gate_decision": gate_decision,
         "work_order": work_order,
         "dispatch": dispatch.map(|d| serde_json::json!({

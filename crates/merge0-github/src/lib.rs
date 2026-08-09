@@ -11,6 +11,7 @@
 
 pub mod api;
 pub mod auth;
+pub mod codeowners;
 pub mod safety;
 pub mod webhook;
 

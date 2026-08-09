@@ -6,6 +6,7 @@ pub mod health;
 pub mod ingest;
 pub mod metrics;
 pub mod onboarding;
+pub mod owners;
 pub mod registry;
 pub mod reports;
 pub mod runner;
