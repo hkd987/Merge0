@@ -149,3 +149,26 @@ project_base_url = "https://dashboard.openpanel.dev/example-org/example-project"
 error_events = []
 # First-round trailing window; later rounds are incremental.
 lookback_days = 7
+
+[reddit]
+enabled = false
+# Subreddits whose new posts are polled (owned communities or watched
+# ones), without the r/ prefix. An enabled section with an empty list
+# fails at startup rather than running dead.
+subreddits = []
+# A Reddit "script" app's credentials (create at reddit.com/prefs/apps);
+# OAuth2 client-credentials exchange.
+client_id_env = "MERGE0_REDDIT_CLIENT_ID"
+client_secret_env = "MERGE0_REDDIT_CLIENT_SECRET"
+# Reddit requires a descriptive User-Agent and throttles generic ones —
+# include your app name and a contact.
+user_agent = "merge0-fetch:0.1 (signal poller; contact ops@example.com)"
+
+[x]
+enabled = false
+# v2 recent-search query: mentions of your handle, watched hashtags, or
+# both. An enabled section with an empty query fails at startup rather
+# than running dead.
+query = ""
+# App-only Bearer token (developer.x.com; recent search needs Basic tier+).
+bearer_token_env = "MERGE0_X_BEARER_TOKEN"

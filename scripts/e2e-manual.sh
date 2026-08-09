@@ -431,6 +431,38 @@ EOF
 )
 check "openpanel error events aggregate to a signal" "$OP_INGEST" '"inserted":1'
 
+RD_INGEST=$(auth -X POST "$BASE/ingest/reddit" -H "content-type: application/json" -d @- <<EOF
+{"endpoint": "subreddit_new",
+ "context": {"base_url": "https://www.reddit.com"},
+ "payload": {"kind": "Listing", "data": {"after": null, "children": [{
+   "kind": "t3", "data": {
+     "id": "1kz9aa", "name": "t3_1kz9aa",
+     "title": "Gradebook exports have been broken for our whole district since Tuesday",
+     "selftext": "Every export comes back empty. 60 teachers affected.",
+     "author": "concerned_teacher", "subreddit": "chalkapp",
+     "permalink": "/r/chalkapp/comments/1kz9aa/gradebook_exports_broken/",
+     "url": "https://www.reddit.com/r/chalkapp/comments/1kz9aa/",
+     "score": 47, "num_comments": 18, "created_utc": $EPOCH_NOW.0, "upvote_ratio": 0.97
+   }}]}}}
+EOF
+)
+check "reddit subreddit post normalizes to a ticket signal" "$RD_INGEST" '"inserted":1'
+
+X_INGEST=$(auth -X POST "$BASE/ingest/x" -H "content-type: application/json" -d @- <<EOF
+{"endpoint": "recent_search",
+ "context": {"query": "@chalkapp"},
+ "payload": {"data": [{
+   "id": "1821099887766554433", "author_id": "9001",
+   "text": "@chalkapp attendance sync has eaten this morning's records for our whole school. Again.",
+   "created_at": "$NOW",
+   "public_metrics": {"retweet_count": 12, "reply_count": 9, "like_count": 41, "quote_count": 3}
+ }],
+ "includes": {"users": [{"id": "9001", "name": "Ms. Alvarez", "username": "msalvarez_teach"}]},
+ "meta": {"newest_id": "1821099887766554433", "result_count": 1}}}
+EOF
+)
+check "x mention normalizes to a ticket signal" "$X_INGEST" '"inserted":1'
+
 say "14. Hosted multi-tenant: control plane, two data planes, isolation, suspension"
 EE_PORT=18090
 EE_BASE="http://127.0.0.1:$EE_PORT"

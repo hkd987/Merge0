@@ -10,8 +10,8 @@
 
 use crate::pollers::{
     AsanaPoller, DatadogPoller, GithubIssuesPoller, IntercomPoller, JiraPoller, LinearPoller,
-    MixpanelPoller, OpenpanelPoller, PosthogPoller, SentryPoller, SlackChannelsPoller,
-    TrelloPoller, ZendeskPoller,
+    MixpanelPoller, OpenpanelPoller, PosthogPoller, RedditPoller, SentryPoller,
+    SlackChannelsPoller, TrelloPoller, XPoller, ZendeskPoller,
 };
 use crate::{FetchError, Fetcher};
 use merge0_github::GitHubApi;
@@ -37,6 +37,76 @@ pub struct SourcesConfig {
     pub intercom: Option<IntercomConfig>,
     pub mixpanel: Option<MixpanelConfig>,
     pub openpanel: Option<OpenpanelConfig>,
+    pub reddit: Option<RedditConfig>,
+    pub x: Option<XConfig>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RedditConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Subreddits whose new posts are polled (owned communities or watched
+    /// ones), without the `r/` prefix. An enabled section with an empty
+    /// list fails at startup rather than running dead.
+    #[serde(default)]
+    pub subreddits: Vec<String>,
+    /// Env var *names* holding a Reddit "script" app's client id and
+    /// secret (OAuth2 client-credentials; create one at
+    /// reddit.com/prefs/apps).
+    pub client_id_env: String,
+    pub client_secret_env: String,
+    /// Descriptive User-Agent — Reddit requires one and throttles generic
+    /// agents. Include your app name and contact.
+    #[serde(default = "RedditConfig::default_user_agent")]
+    pub user_agent: String,
+    /// OAuth API host (listing reads once authenticated).
+    #[serde(default = "RedditConfig::default_base_url")]
+    pub base_url: String,
+    /// Token endpoint host (www — Basic-auth client-credentials exchange).
+    #[serde(default = "RedditConfig::default_auth_base_url")]
+    pub auth_base_url: String,
+    /// Public site base for permalink deep links (envelope context).
+    #[serde(default = "RedditConfig::default_public_base_url")]
+    pub public_base_url: String,
+}
+
+impl RedditConfig {
+    fn default_user_agent() -> String {
+        "merge0-fetch:0.1 (signal poller)".into()
+    }
+    fn default_base_url() -> String {
+        "https://oauth.reddit.com".into()
+    }
+    fn default_auth_base_url() -> String {
+        "https://www.reddit.com".into()
+    }
+    fn default_public_base_url() -> String {
+        "https://www.reddit.com".into()
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct XConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// The v2 recent-search query — mentions of your handle, watched
+    /// hashtags, or both (e.g. "@acmeapp OR #acmeapp"). An enabled section
+    /// with an empty query fails at startup rather than running dead.
+    #[serde(default)]
+    pub query: String,
+    /// Env var *name* holding the app-only Bearer token.
+    pub bearer_token_env: String,
+    /// API host (v2 recent search requires at minimum Basic tier access).
+    #[serde(default = "XConfig::default_base_url")]
+    pub base_url: String,
+}
+
+impl XConfig {
+    fn default_base_url() -> String {
+        "https://api.x.com".into()
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -428,6 +498,16 @@ pub fn build_fetchers(
     if let Some(c) = &config.openpanel {
         if c.enabled {
             fetchers.push(Box::new(OpenpanelPoller::from_config(c)?));
+        }
+    }
+    if let Some(c) = &config.reddit {
+        if c.enabled {
+            fetchers.push(Box::new(RedditPoller::from_config(c)?));
+        }
+    }
+    if let Some(c) = &config.x {
+        if c.enabled {
+            fetchers.push(Box::new(XPoller::from_config(c)?));
         }
     }
     Ok(fetchers)

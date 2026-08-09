@@ -30,6 +30,8 @@ pub fn adapter_for(source: &str) -> Option<Box<dyn Adapter>> {
         "intercom" => Box::new(merge0_adapter_intercom::IntercomAdapter),
         "mixpanel" => Box::new(merge0_adapter_mixpanel::MixpanelAdapter),
         "openpanel" => Box::new(merge0_adapter_openpanel::OpenpanelAdapter),
+        "reddit" => Box::new(merge0_adapter_reddit::RedditAdapter),
+        "x" => Box::new(merge0_adapter_x::XAdapter),
         "meta" => Box::new(merge0_meta::MetaAdapter),
         _ => return None,
     })
