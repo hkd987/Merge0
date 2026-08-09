@@ -11,6 +11,9 @@ change. No red PRs, no auto-merge, ever.
 > placeholder. The repo goes public after the Phase 0 gate is met: ≥60%
 > merge rate across ≥10 decided PRs (`docs/PRD.md`).
 
+**Website:** [hkd987.github.io/Merge0](https://hkd987.github.io/Merge0/) —
+screenshots, an animated tour of the loop, and the four-step quickstart.
+
 ![The Merge0 inbox](docs/screenshots/inbox-dark.png)
 
 ## How the loop works
