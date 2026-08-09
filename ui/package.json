@@ -12,7 +12,7 @@
   "dependencies": {
     "@fontsource/ibm-plex-mono": "^5.1.0",
     "@fontsource/ibm-plex-sans": "^5.1.0",
-    "react": "^18.3.1",
+    "react": "^19.2.8",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.28.0"
   },
@@ -20,7 +20,7 @@
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
     "@types/node": "^26.2.0",
-    "@types/react": "^18.3.12",
+    "@types/react": "^19.2.18",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
     "jsdom": "^25.0.1",
