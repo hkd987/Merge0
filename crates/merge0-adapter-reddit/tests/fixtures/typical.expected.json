@@ -1,0 +1,102 @@
+[
+  {
+    "affected_count": 88,
+    "body": "Posted in r/chalkapp by u/example_district_admin; score 88, 41 comments.\n\nSince Tuesday's update the sync status page for our whole district is just a white screen. The browser console shows a TypeError about a missing district id. Half the teachers at Lincoln Elementary can't tell whether rosters synced before report cards are due. Is anyone else seeing this? We've filed a ticket (#48211) and heard nothing back.",
+    "evidence": [
+      {
+        "kind": "other",
+        "label": "r/chalkapp post",
+        "url": "https://www.reddit.com/r/chalkapp/comments/1kw3ah/sync_status_page_has_been_blank_for_two_days_and/"
+      }
+    ],
+    "fingerprint": "reddit:489820268436c6b442ff04f2b1c48141",
+    "first_seen": "2024-08-08T06:53:20Z",
+    "id": "<ulid>",
+    "join_keys": {
+      "account_id": "example_district_admin"
+    },
+    "kind": "ticket",
+    "last_seen": "2024-08-08T06:53:20Z",
+    "raw": {
+      "data": {
+        "author": "example_district_admin",
+        "author_fullname": "t2_9example1",
+        "created": 1723128600.0,
+        "created_utc": 1723100000.0,
+        "downs": 0,
+        "id": "1kw3ah",
+        "is_self": true,
+        "link_flair_text": "Bug",
+        "name": "t3_1kw3ah",
+        "num_comments": 41,
+        "num_crossposts": 0,
+        "over_18": false,
+        "permalink": "/r/chalkapp/comments/1kw3ah/sync_status_page_has_been_blank_for_two_days_and/",
+        "score": 88,
+        "selftext": "Since Tuesday's update the sync status page for our whole district is just a white screen. The browser console shows a TypeError about a missing district id. Half the teachers at Lincoln Elementary can't tell whether rosters synced before report cards are due. Is anyone else seeing this? We've filed a ticket (#48211) and heard nothing back.",
+        "stickied": false,
+        "subreddit": "chalkapp",
+        "subreddit_id": "t5_2example",
+        "title": "Sync status page has been blank for two days and support is silent",
+        "ups": 91,
+        "upvote_ratio": 0.94,
+        "url": "https://www.reddit.com/r/chalkapp/comments/1kw3ah/sync_status_page_has_been_blank_for_two_days_and/"
+      },
+      "kind": "t3"
+    },
+    "severity": "high",
+    "source": "reddit",
+    "source_ref": "1kw3ah",
+    "title": "Sync status page has been blank for two days and support is silent"
+  },
+  {
+    "affected_count": 3,
+    "body": "Posted in r/chalkapp by u/example_parent_042; score 3, 1 comment.\n\nWould save me a weekly email round-trip with the front office.",
+    "evidence": [
+      {
+        "kind": "other",
+        "label": "r/chalkapp post",
+        "url": "https://www.reddit.com/r/chalkapp/comments/1kw2c9/feature_idea_let_parents_export_the_grade_band/"
+      }
+    ],
+    "fingerprint": "reddit:89d16a37df994aa0f8a6f13a190d4329",
+    "first_seen": "2024-08-08T04:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {
+      "account_id": "example_parent_042"
+    },
+    "kind": "ticket",
+    "last_seen": "2024-08-08T04:00:00Z",
+    "raw": {
+      "data": {
+        "author": "example_parent_042",
+        "author_fullname": "t2_7example4",
+        "created": 1723118200.0,
+        "created_utc": 1723089600.0,
+        "downs": 0,
+        "id": "1kw2c9",
+        "is_self": true,
+        "link_flair_text": null,
+        "name": "t3_1kw2c9",
+        "num_comments": 1,
+        "num_crossposts": 0,
+        "over_18": false,
+        "permalink": "/r/chalkapp/comments/1kw2c9/feature_idea_let_parents_export_the_grade_band/",
+        "score": 3,
+        "selftext": "Would save me a weekly email round-trip with the front office.",
+        "stickied": false,
+        "subreddit": "chalkapp",
+        "subreddit_id": "t5_2example",
+        "title": "Feature idea: let parents export the grade band report themselves",
+        "ups": 4,
+        "upvote_ratio": 0.81,
+        "url": "https://www.reddit.com/r/chalkapp/comments/1kw2c9/feature_idea_let_parents_export_the_grade_band/"
+      },
+      "kind": "t3"
+    },
+    "severity": "low",
+    "source": "reddit",
+    "source_ref": "1kw2c9",
+    "title": "Feature idea: let parents export the grade band report themselves"
+  }
+]

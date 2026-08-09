@@ -1,0 +1,44 @@
+{
+  "endpoint": "recent_search",
+  "context": { "query": "@acmeapp OR #acmeapp" },
+  "payload": {
+    "data": [
+      {
+        "id": "1821091234567890123",
+        "text": "AcmeApp のロースター同期がまた失敗した😩 今月4回目。生徒の出席データが丸ごと消えるのは本当に困る。#acmeapp サポートに3回問い合わせたのに返事が無い。他のツールへの移行を真剣に検討中です。",
+        "author_id": "4402987651",
+        "created_at": "2026-08-08T09:14:03.000Z",
+        "public_metrics": {
+          "retweet_count": 42,
+          "reply_count": 65,
+          "like_count": 180,
+          "quote_count": 9
+        }
+      },
+      {
+        "id": "1821094444555566677",
+        "text": "Trying out @acmeapp for our tutoring co-op this fall — setup was smooth so far. Curious how the gradebook export handles CSV.",
+        "author_id": "8810234567",
+        "created_at": "2026-08-08T11:47:56.000Z",
+        "public_metrics": {
+          "retweet_count": 0,
+          "reply_count": 1,
+          "like_count": 2,
+          "quote_count": 0
+        }
+      }
+    ],
+    "includes": {
+      "users": [
+        { "id": "4402987651", "name": "Yuki Tanaka", "username": "yuki_teaches" },
+        { "id": "8810234567", "name": "Marcus Webb", "username": "marcuswebb_edu" }
+      ]
+    },
+    "meta": {
+      "newest_id": "1821094444555566677",
+      "oldest_id": "1821091234567890123",
+      "result_count": 2,
+      "next_token": "b26v89c19zqg8o3fpds8xample"
+    }
+  }
+}

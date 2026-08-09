@@ -28,36 +28,131 @@ pub const DISPATCH_EVENT: &str = "merge0-work-order";
 pub const DEFAULT_REPAIR_BUDGET: u32 = 3;
 
 /// Which coding agent the customer workflow runs (PRD P2: agent-agnostic
-/// runner configs — the interface exists now, `ClaudeCode` is v1).
+/// runner configs). Every preset invokes the harness's documented headless
+/// mode with the sanitized work-order JSON as the entire prompt; the run
+/// executes in the customer's own ephemeral CI job with a job-scoped token,
+/// which is the actual security boundary — per-CLI sandbox flags are
+/// defense in depth on top of it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "kind", content = "command")]
 pub enum AgentKind {
-    /// Headless Claude Code (`claude -p`).
+    /// Headless Claude Code (`claude -p`), with a scoped tool allowlist.
     ClaudeCode,
-    /// Codex CLI.
+    /// OpenAI Codex CLI (`codex exec`), workspace-write sandbox.
     CodexCli,
+    /// Google Gemini CLI (`gemini -p`), yolo approval (CI-trusted).
+    GeminiCli,
+    /// Aider (`--message` single-pass). Auto-commits are disabled because
+    /// the workflow measures the diff against the base commit and makes
+    /// the commit itself — an agent that commits breaks both.
+    Aider,
+    /// OpenCode (`opencode run`). Model comes from the customer's own
+    /// OpenCode config or the `OPENCODE_MODEL` repo variable.
+    Opencode,
+    /// Cursor CLI (`cursor-agent -p`), print mode.
+    CursorCli,
     /// Any other headless agent; the command receives the work-order file
     /// path as `$MERGE0_WORK_ORDER`.
     Custom(String),
 }
+
+/// Labels accepted by `MERGE0_AGENT`, kept in sync with [`AgentKind::label`].
+pub const AGENT_LABELS: &[&str] = &[
+    "claude-code",
+    "codex-cli",
+    "gemini-cli",
+    "aider",
+    "opencode",
+    "cursor-cli",
+];
 
 impl AgentKind {
     pub fn label(&self) -> &str {
         match self {
             AgentKind::ClaudeCode => "claude-code",
             AgentKind::CodexCli => "codex-cli",
+            AgentKind::GeminiCli => "gemini-cli",
+            AgentKind::Aider => "aider",
+            AgentKind::Opencode => "opencode",
+            AgentKind::CursorCli => "cursor-cli",
             AgentKind::Custom(_) => "custom",
         }
     }
 
-    /// The shell command the workflow template embeds.
-    pub fn command(&self) -> String {
-        match self {
-            AgentKind::ClaudeCode => {
-                "claude -p \"$(cat \"$MERGE0_WORK_ORDER\")\" --allowedTools \"Edit,Write,Bash(git *),Bash(cargo *),Bash(npm *),Bash(npx *)\"".to_string()
+    /// Parse the `MERGE0_AGENT` env value. `None`/empty means the default
+    /// (Claude Code); an unrecognized value is an ERROR, not a silent
+    /// fallback — a typo'd agent must fail startup loudly, never dispatch
+    /// work to a different harness than the operator intended.
+    pub fn from_env_value(value: Option<&str>) -> Result<AgentKind, String> {
+        match value.map(str::trim) {
+            None | Some("") | Some("claude-code") => Ok(AgentKind::ClaudeCode),
+            Some("codex-cli") => Ok(AgentKind::CodexCli),
+            Some("gemini-cli") => Ok(AgentKind::GeminiCli),
+            Some("aider") => Ok(AgentKind::Aider),
+            Some("opencode") => Ok(AgentKind::Opencode),
+            Some("cursor-cli") => Ok(AgentKind::CursorCli),
+            Some(custom) if custom.starts_with("custom:") => {
+                let command = custom.trim_start_matches("custom:").trim();
+                if command.is_empty() {
+                    return Err("MERGE0_AGENT=custom: requires a command after the colon".into());
+                }
+                Ok(AgentKind::Custom(command.to_string()))
             }
-            AgentKind::CodexCli => "codex exec \"$(cat \"$MERGE0_WORK_ORDER\")\"".to_string(),
+            Some(other) => Err(format!(
+                "unknown MERGE0_AGENT {other:?}; expected one of {AGENT_LABELS:?} or custom:<command>"
+            )),
+        }
+    }
+
+    /// The shell command the workflow template embeds. Each preset is the
+    /// harness's documented non-interactive form.
+    pub fn command(&self) -> String {
+        const PROMPT: &str = "\"$(cat \"$MERGE0_WORK_ORDER\")\"";
+        match self {
+            AgentKind::ClaudeCode => format!(
+                "claude -p {PROMPT} --allowedTools \"Edit,Write,Bash(git *),Bash(cargo *),Bash(npm *)\""
+            ),
+            AgentKind::CodexCli => {
+                format!("codex exec --sandbox workspace-write {PROMPT}")
+            }
+            AgentKind::GeminiCli => format!("gemini -p {PROMPT} --approval-mode=yolo"),
+            AgentKind::Aider => {
+                format!("aider --message {PROMPT} --yes-always --no-auto-commits")
+            }
+            AgentKind::Opencode => format!("opencode run {PROMPT}"),
+            AgentKind::CursorCli => format!("cursor-agent -p {PROMPT}"),
             AgentKind::Custom(command) => command.clone(),
+        }
+    }
+
+    /// The CI secret NAMES the generated workflow maps into the agent
+    /// step's environment — resolved from the customer repo's own Actions
+    /// secrets; values never transit Merge0. Multi-provider harnesses map
+    /// both common keys (an unset secret resolves to empty, which the
+    /// harness ignores).
+    pub fn auth_env_names(&self) -> &'static [&'static str] {
+        match self {
+            AgentKind::ClaudeCode => &["ANTHROPIC_API_KEY"],
+            AgentKind::CodexCli => &["OPENAI_API_KEY"],
+            AgentKind::GeminiCli => &["GEMINI_API_KEY"],
+            AgentKind::Aider | AgentKind::Opencode => &["ANTHROPIC_API_KEY", "OPENAI_API_KEY"],
+            AgentKind::CursorCli => &["CURSOR_API_KEY"],
+            // Unknown harness: map the common pair so most custom commands
+            // work; anything else is added via the manifest's auth_env.
+            AgentKind::Custom(_) => &["ANTHROPIC_API_KEY", "OPENAI_API_KEY"],
+        }
+    }
+
+    /// Model-provider hosts the egress allowlist must keep reachable for
+    /// this agent (joined with the GitHub infra hosts in the workflow).
+    pub fn api_hosts(&self) -> &'static [&'static str] {
+        match self {
+            AgentKind::ClaudeCode => &["api.anthropic.com"],
+            AgentKind::CodexCli => &["api.openai.com"],
+            AgentKind::GeminiCli => &["generativelanguage.googleapis.com"],
+            AgentKind::Aider | AgentKind::Opencode => &["api.anthropic.com", "api.openai.com"],
+            AgentKind::CursorCli => &["api.cursor.com"],
+            AgentKind::Custom(_) => &["api.anthropic.com", "api.openai.com"],
         }
     }
 }
@@ -233,5 +328,31 @@ mod tests {
             serde_json::to_value(AgentKind::ClaudeCode).unwrap()["kind"],
             "claude_code"
         );
+    }
+
+    #[test]
+    fn every_label_parses_back_to_its_kind_and_typos_fail_loudly() {
+        for label in AGENT_LABELS {
+            let kind = AgentKind::from_env_value(Some(label)).unwrap();
+            assert_eq!(kind.label(), *label, "label round-trip");
+            assert!(!kind.auth_env_names().is_empty());
+            assert!(!kind.api_hosts().is_empty());
+        }
+        assert_eq!(
+            AgentKind::from_env_value(None).unwrap(),
+            AgentKind::ClaudeCode
+        );
+        assert_eq!(
+            AgentKind::from_env_value(Some("custom:./agent.sh")).unwrap(),
+            AgentKind::Custom("./agent.sh".into())
+        );
+        // A typo must be a startup error, never a silent fallback to a
+        // different harness than the operator intended.
+        for bad in ["claud-code", "codex", "gemini", "custom:"] {
+            assert!(
+                AgentKind::from_env_value(Some(bad)).is_err(),
+                "{bad:?} accepted"
+            );
+        }
     }
 }

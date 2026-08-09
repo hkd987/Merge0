@@ -6,7 +6,7 @@
 name = "ticket-triage"
 description = "Actionable defect reports arriving as tickets/tasks/threads?"
 schedule = "nightly"
-sources = ["zendesk", "intercom", "github", "jira", "linear", "slack", "asana", "trello"]
+sources = ["zendesk", "intercom", "github", "jira", "linear", "slack", "asana", "trello", "reddit", "x"]
 query_template = "kind = 'ticket' AND last_seen >= {{period_start}} ORDER BY severity DESC"
 prompt = """
 You are reviewing ticket-shaped Signals: support tickets, tracker issues,

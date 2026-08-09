@@ -1,0 +1,7 @@
+{
+  "endpoint": "recent_search",
+  "context": { "query": "@acmeapp" },
+  "payload": {
+    "meta": { "result_count": 0 }
+  }
+}

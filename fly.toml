@@ -1,0 +1,37 @@
+# Fly.io launch config for Merge0. Quick start:
+#
+#   fly launch --from https://github.com/hkd987/Merge0   # reads this file
+#   fly postgres create && fly postgres attach            # sets DATABASE_URL
+#   fly secrets set MERGE0_DATABASE_URL=... MERGE0_REPO=owner/name \
+#     MERGE0_API_TOKEN=... MERGE0_RUNNER_TOKEN=... \
+#     MERGE0_GITHUB_WEBHOOK_SECRET=... MERGE0_GITHUB_APP_ID=... \
+#     MERGE0_GITHUB_INSTALLATION_ID=... ANTHROPIC_API_KEY=...
+#   fly secrets set MERGE0_GITHUB_APP_PRIVATE_KEY=- < your-app.private-key.pem
+#
+# Full notes: docs/one-click-deploy.md. Secrets go through `fly secrets`,
+# never this file.
+
+app = "merge0"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  MERGE0_BIND = "0.0.0.0:8080"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # The scheduler needs the machine alive to poll vendors on its interval —
+  # keep one machine running rather than scale-to-zero.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "20s"
+    method = "GET"
+    path = "/healthz"

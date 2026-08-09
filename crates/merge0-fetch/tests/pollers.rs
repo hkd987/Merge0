@@ -16,8 +16,8 @@ use merge0_fetch::config::{
 };
 use merge0_fetch::pollers::{
     AsanaPoller, DatadogPoller, GithubIssuesPoller, IntercomPoller, JiraPoller, LinearPoller,
-    MixpanelPoller, OpenpanelPoller, PosthogPoller, SentryPoller, SlackChannelsPoller,
-    TrelloPoller, ZendeskPoller,
+    MixpanelPoller, OpenpanelPoller, PosthogPoller, RedditPoller, SentryPoller,
+    SlackChannelsPoller, TrelloPoller, XPoller, ZendeskPoller,
 };
 use merge0_fetch::{run_all, run_fetch, FetchError, Fetcher};
 use merge0_github::{FakeGitHub, GitHubApi};
@@ -1283,4 +1283,204 @@ fn openpanel_without_error_events_fails_at_construction_not_silently() {
     .err()
     .expect("an enabled source that can never signal must not construct");
     assert!(error.to_string().contains("error_events"), "{error}");
+}
+
+// ---- Reddit ----
+
+#[tokio::test]
+async fn reddit_poller_authenticates_then_reads_new_posts_with_before_cursor() {
+    let server = MockServer::start().await;
+    set_secret("MERGE0_TEST_REDDIT_ID_A", "reddit-app-id");
+    set_secret("MERGE0_TEST_REDDIT_SECRET_A", "reddit-app-secret");
+    let poller = RedditPoller::from_config(&merge0_fetch::config::RedditConfig {
+        enabled: true,
+        subreddits: vec!["chalkapp".into(), "edtech".into()],
+        client_id_env: "MERGE0_TEST_REDDIT_ID_A".into(),
+        client_secret_env: "MERGE0_TEST_REDDIT_SECRET_A".into(),
+        user_agent: "merge0-fetch:test (integration)".into(),
+        base_url: server.uri(),
+        auth_base_url: server.uri(),
+        public_base_url: "https://www.reddit.com".into(),
+    })
+    .unwrap();
+    let (store, tenant, schema) = fresh_tenant().await;
+
+    // Client-credentials exchange: Basic auth + the configured UA.
+    Mock::given(method("POST"))
+        .and(path("/api/v1/access_token"))
+        .and(header("user-agent", "merge0-fetch:test (integration)"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "access_token": "reddit-bearer-token",
+            "token_type": "bearer",
+            "expires_in": 86400,
+            "scope": "*"
+        })))
+        .expect(2)
+        .mount(&server)
+        .await;
+
+    // First round: no cursor → plain newest page over the multireddit.
+    Mock::given(method("GET"))
+        .and(path("/r/chalkapp+edtech/new"))
+        .and(query_param("limit", "100"))
+        .and(query_param_is_missing("before"))
+        .and(header("authorization", "Bearer reddit-bearer-token"))
+        .and(header("user-agent", "merge0-fetch:test (integration)"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(fixture_payload(include_str!(
+                "../../merge0-adapter-reddit/tests/fixtures/typical.json"
+            ))),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let outcome = run_fetch(&poller, &tenant, now()).await.unwrap();
+    // The golden listing carries two t3 posts → two ticket signals.
+    assert_eq!(
+        (outcome.envelopes, outcome.inserted, outcome.updated),
+        (1, 2, 0)
+    );
+    // Cursor = the NEWEST post's fullname, replayed as `before`.
+    assert_eq!(
+        tenant.fetch_cursor("reddit").await.unwrap().as_deref(),
+        Some("t3_1kw3ah")
+    );
+
+    // Second round: `before` sent; an empty page keeps the cursor.
+    server.reset().await;
+    Mock::given(method("POST"))
+        .and(path("/api/v1/access_token"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "access_token": "reddit-bearer-token-2"
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/r/chalkapp+edtech/new"))
+        .and(query_param("before", "t3_1kw3ah"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "kind": "Listing",
+            "data": { "after": null, "children": [] }
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let later = Utc.with_ymd_and_hms(2026, 8, 7, 13, 0, 0).unwrap();
+    run_fetch(&poller, &tenant, later).await.unwrap();
+    assert_eq!(
+        tenant.fetch_cursor("reddit").await.unwrap().as_deref(),
+        Some("t3_1kw3ah")
+    );
+    server.verify().await;
+    store.drop_tenant(&schema).await.unwrap();
+}
+
+#[test]
+fn reddit_without_subreddits_fails_at_construction_not_silently() {
+    set_secret("MERGE0_TEST_REDDIT_ID_B", "id");
+    set_secret("MERGE0_TEST_REDDIT_SECRET_B", "secret");
+    let error = RedditPoller::from_config(&merge0_fetch::config::RedditConfig {
+        enabled: true,
+        subreddits: vec![],
+        client_id_env: "MERGE0_TEST_REDDIT_ID_B".into(),
+        client_secret_env: "MERGE0_TEST_REDDIT_SECRET_B".into(),
+        user_agent: "merge0-fetch:test".into(),
+        base_url: "https://oauth.reddit.example.com".into(),
+        auth_base_url: "https://www.reddit.example.com".into(),
+        public_base_url: "https://www.reddit.example.com".into(),
+    })
+    .err()
+    .expect("an enabled source that can never signal must not construct");
+    assert!(error.to_string().contains("subreddits"), "{error}");
+}
+
+// ---- X (Twitter) ----
+
+#[tokio::test]
+async fn x_poller_searches_mentions_pages_and_advances_since_id() {
+    let server = MockServer::start().await;
+    set_secret("MERGE0_TEST_X_BEARER_A", "x-bearer-token");
+    let poller = XPoller::from_config(&merge0_fetch::config::XConfig {
+        enabled: true,
+        query: "@acmeapp OR #acmeapp".into(),
+        bearer_token_env: "MERGE0_TEST_X_BEARER_A".into(),
+        base_url: server.uri(),
+    })
+    .unwrap();
+    let (store, tenant, schema) = fresh_tenant().await;
+
+    // Page 1: the golden response (its meta carries a next_token).
+    Mock::given(method("GET"))
+        .and(path("/2/tweets/search/recent"))
+        .and(query_param("query", "@acmeapp OR #acmeapp"))
+        .and(query_param("expansions", "author_id"))
+        .and(query_param_is_missing("since_id"))
+        .and(query_param_is_missing("next_token"))
+        .and(header("authorization", "Bearer x-bearer-token"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(fixture_payload(include_str!(
+                "../../merge0-adapter-x/tests/fixtures/typical.json"
+            ))),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    // Page 2: the next_token is followed once, then the round ends.
+    Mock::given(method("GET"))
+        .and(path("/2/tweets/search/recent"))
+        .and(query_param("next_token", "b26v89c19zqg8o3fpds8xample"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "meta": { "result_count": 0 }
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let outcome = run_fetch(&poller, &tenant, now()).await.unwrap();
+    // Two posts in the golden page → two ticket signals.
+    assert_eq!(
+        (outcome.envelopes, outcome.inserted, outcome.updated),
+        (1, 2, 0)
+    );
+    // Cursor = the round's newest id, replayed as since_id.
+    assert_eq!(
+        tenant.fetch_cursor("x").await.unwrap().as_deref(),
+        Some("1821094444555566677")
+    );
+
+    // Second round: since_id sent; an empty round keeps the cursor.
+    server.reset().await;
+    Mock::given(method("GET"))
+        .and(path("/2/tweets/search/recent"))
+        .and(query_param("since_id", "1821094444555566677"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "meta": { "result_count": 0 }
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let later = Utc.with_ymd_and_hms(2026, 8, 7, 13, 0, 0).unwrap();
+    run_fetch(&poller, &tenant, later).await.unwrap();
+    assert_eq!(
+        tenant.fetch_cursor("x").await.unwrap().as_deref(),
+        Some("1821094444555566677")
+    );
+    server.verify().await;
+    store.drop_tenant(&schema).await.unwrap();
+}
+
+#[test]
+fn x_without_a_query_fails_at_construction_not_silently() {
+    set_secret("MERGE0_TEST_X_BEARER_B", "token");
+    let error = XPoller::from_config(&merge0_fetch::config::XConfig {
+        enabled: true,
+        query: "  ".into(),
+        bearer_token_env: "MERGE0_TEST_X_BEARER_B".into(),
+        base_url: "https://api.x.example.com".into(),
+    })
+    .err()
+    .expect("an enabled source that can never signal must not construct");
+    assert!(error.to_string().contains("query"), "{error}");
 }

@@ -1,0 +1,15 @@
+[package]
+name = "merge0-adapter-x"
+description = "X (Twitter) → Signals (v2 recent-search mentions as ticket signals)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+merge0-signal.workspace = true
+merge0-adapters.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+ulid.workspace = true

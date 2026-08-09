@@ -47,9 +47,18 @@ the same `--allowedTools` discipline, the same repair loop and git-based
 diff-budget measurement.
 
 ```sh
-scripts/agent-eval.sh              # all fixtures
-scripts/agent-eval.sh districts    # one fixture
+scripts/agent-eval.sh                        # all fixtures, claude-code
+scripts/agent-eval.sh districts              # one fixture
+scripts/agent-eval.sh --agent aider          # a different harness
 ```
+
+`--agent` evaluates any supported harness (`claude-code`, `codex-cli`,
+`gemini-cli`, `aider`, `opencode`, `cursor-cli`) using the exact command
+shape the generated workflow embeds — the CLI must be installed and
+authenticated locally, and each harness run costs that provider's money.
+A harness has an evidence-backed quality claim only after its fixtures
+have been run; record per-harness results in `BASELINE.md` before
+recommending one.
 
 Fixtures in `evals/fixtures/*/`. Five expect **fix** (tests green, diff
 within budget, tests untouched): a null-handling crash, an off-by-one, a

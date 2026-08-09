@@ -16,9 +16,11 @@ mod linear;
 mod mixpanel;
 mod openpanel;
 mod posthog;
+mod reddit;
 mod sentry;
 mod slack_channels;
 mod trello;
+mod x;
 mod zendesk;
 
 pub use asana::AsanaPoller;
@@ -30,9 +32,11 @@ pub use linear::LinearPoller;
 pub use mixpanel::MixpanelPoller;
 pub use openpanel::OpenpanelPoller;
 pub use posthog::PosthogPoller;
+pub use reddit::RedditPoller;
 pub use sentry::SentryPoller;
 pub use slack_channels::SlackChannelsPoller;
 pub use trello::TrelloPoller;
+pub use x::XPoller;
 pub use zendesk::ZendeskPoller;
 
 /// Shared HTTP client: 30s request timeout, nothing vendor-specific.

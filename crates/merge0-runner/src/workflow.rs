@@ -9,9 +9,10 @@
 //!
 //! - `permissions:` grants exactly `contents: write` + `pull-requests:
 //!   write`; the job's `GITHUB_TOKEN` dies with the job.
-//! - The agent runs with the customer's own keys — `ANTHROPIC_API_KEY` and
-//!   any manifest `auth_env` names are resolved from the repo's Actions
-//!   secrets; values never transit Merge0.
+//! - The agent runs with the customer's own keys — the selected harness's
+//!   provider key names ([`AgentKind::auth_env_names`]) and any manifest
+//!   `auth_env` names are resolved from the repo's Actions secrets; values
+//!   never transit Merge0.
 //! - Test command comes from the manifest (`[test] command`); repair loop
 //!   up to the dispatched budget, then self-discard. No red PRs escape.
 //! - Diff budget measured and enforced before the PR opens.
@@ -27,13 +28,14 @@
 use crate::manifest::AgentManifest;
 use crate::AgentKind;
 
-/// Infra hosts the job itself needs even under the strictest allowlist.
+/// Infra hosts the job itself needs even under the strictest allowlist;
+/// the agent's own model-provider hosts ([`AgentKind::api_hosts`]) are
+/// appended per agent.
 const REQUIRED_EGRESS: &[&str] = &[
     "github.com",
     "api.github.com",
     "codeload.github.com",
     "objects.githubusercontent.com",
-    "api.anthropic.com",
 ];
 
 /// Render the workflow YAML.
@@ -46,8 +48,8 @@ pub fn workflow_yaml(
     let agent_command = agent_command(agent, manifest);
     let agent_label = agent.label();
     let allowed_tools = allowed_tools(test_command);
-    let secret_env = secret_env_block(manifest);
-    let egress_step = egress_step(manifest);
+    let secret_env = secret_env_block(agent, manifest);
+    let egress_step = egress_step(agent, manifest);
     let mcp_step = mcp_step(agent, manifest);
 
     format!(
@@ -84,7 +86,6 @@ jobs:
       - name: Run agent with repair budget ({agent_label})
         id: agent
         env:
-          ANTHROPIC_API_KEY: ${{{{ secrets.ANTHROPIC_API_KEY }}}}
           REPAIR_BUDGET: ${{{{ github.event.client_payload.repair_budget }}}}
 {secret_env}        run: |
           set +e
@@ -219,26 +220,31 @@ fn allowed_tools(test_command: &str) -> String {
     format!("Edit,Write,Bash(git *),Bash({test_word} *)")
 }
 
-/// Manifest `auth_env` names become secret mappings on the agent step —
-/// name-only references resolved by the customer's own CI (PRD §5b).
-fn secret_env_block(manifest: &AgentManifest) -> String {
-    manifest
+/// The agent's own provider keys plus manifest `auth_env` names become
+/// secret mappings on the agent step — name-only references resolved by
+/// the customer's own CI (PRD §5b).
+fn secret_env_block(agent: &AgentKind, manifest: &AgentManifest) -> String {
+    agent
         .auth_env_names()
         .iter()
+        .copied()
+        .chain(manifest.auth_env_names())
         .map(|name| format!("          {name}: ${{{{ secrets.{name} }}}}\n"))
         .collect()
 }
 
 /// Egress allowlist enforcement (PRD §5b): default-deny outbound with
-/// explicit holes for the manifest hosts + required infra. Only generated
-/// when the manifest declares an allowlist.
-fn egress_step(manifest: &AgentManifest) -> String {
+/// explicit holes for the manifest hosts + required infra + the agent's
+/// own model-provider hosts. Only generated when the manifest declares an
+/// allowlist.
+fn egress_step(agent: &AgentKind, manifest: &AgentManifest) -> String {
     let allow = manifest.egress_allow();
     if allow.is_empty() {
         return String::new();
     }
     let hosts: Vec<String> = REQUIRED_EGRESS
         .iter()
+        .chain(agent.api_hosts())
         .map(|h| h.to_string())
         .chain(allow.iter().cloned())
         .collect();
@@ -445,5 +451,85 @@ mod tests {
             template()
         )
         .contains("./my-agent.sh"));
+    }
+
+    #[test]
+    fn every_preset_embeds_its_headless_command_and_provider_secrets() {
+        // (agent, command fragment, secret that must be mapped on the step)
+        let cases: &[(AgentKind, &str, &str)] = &[
+            (AgentKind::ClaudeCode, "claude -p", "ANTHROPIC_API_KEY"),
+            (
+                AgentKind::CodexCli,
+                "codex exec --sandbox workspace-write",
+                "OPENAI_API_KEY",
+            ),
+            (
+                AgentKind::GeminiCli,
+                "gemini -p \"$(cat \"$MERGE0_WORK_ORDER\")\" --approval-mode=yolo",
+                "GEMINI_API_KEY",
+            ),
+            (
+                AgentKind::Aider,
+                "aider --message \"$(cat \"$MERGE0_WORK_ORDER\")\" --yes-always --no-auto-commits",
+                "ANTHROPIC_API_KEY",
+            ),
+            (
+                AgentKind::Opencode,
+                "opencode run \"$(cat \"$MERGE0_WORK_ORDER\")\"",
+                "OPENAI_API_KEY",
+            ),
+            (
+                AgentKind::CursorCli,
+                "cursor-agent -p \"$(cat \"$MERGE0_WORK_ORDER\")\"",
+                "CURSOR_API_KEY",
+            ),
+        ];
+        for (agent, fragment, secret) in cases {
+            let yaml = workflow_yaml(agent, &AgentManifest::default(), template());
+            assert!(
+                yaml.contains(fragment),
+                "{} missing command fragment {fragment:?}",
+                agent.label()
+            );
+            assert!(
+                yaml.contains(&format!("{secret}: ${{{{ secrets.{secret} }}}}")),
+                "{} missing secret mapping for {secret}",
+                agent.label()
+            );
+            // Every mapped secret is a name reference, never a value.
+            assert!(!yaml.to_lowercase().contains("sk-ant"));
+        }
+    }
+
+    #[test]
+    fn egress_allowlist_includes_the_agents_own_provider_hosts() {
+        let cases: &[(AgentKind, &str)] = &[
+            (AgentKind::ClaudeCode, "api.anthropic.com"),
+            (AgentKind::CodexCli, "api.openai.com"),
+            (AgentKind::GeminiCli, "generativelanguage.googleapis.com"),
+            (AgentKind::CursorCli, "api.cursor.com"),
+        ];
+        for (agent, host) in cases {
+            let yaml = workflow_yaml(agent, &full_manifest(), template());
+            assert!(
+                yaml.contains(host),
+                "{} egress missing provider host {host}",
+                agent.label()
+            );
+            assert!(yaml.contains("api.internal.example.com"));
+        }
+        // An agent that doesn't use Anthropic must not open a hole to it.
+        let codex = workflow_yaml(&AgentKind::CodexCli, &full_manifest(), template());
+        assert!(!codex.contains("api.anthropic.com"));
+    }
+
+    #[test]
+    fn aider_never_auto_commits_because_the_workflow_owns_the_commit() {
+        // The diff step measures `git diff --cached` against the base
+        // commit and the PR step makes the commit; an agent that commits
+        // on its own breaks both. This pins the flag that prevents it.
+        let yaml = workflow_yaml(&AgentKind::Aider, &AgentManifest::default(), template());
+        assert!(yaml.contains("--no-auto-commits"));
+        assert!(yaml.contains("--yes-always"));
     }
 }

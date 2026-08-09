@@ -1,0 +1,38 @@
+[
+  {
+    "body": "Posted in r/chalkapp by [deleted]; score 0, 2 comments.",
+    "evidence": [
+      {
+        "kind": "other",
+        "label": "r/chalkapp post",
+        "url": "https://www.reddit.com/r/chalkapp/comments/1kx9q2/attendance_kiosk_logs_everyone_out_at_midnight/"
+      }
+    ],
+    "fingerprint": "reddit:d54d835684274d7892da6e003868992e",
+    "first_seen": "2024-08-09T00:06:40Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "ticket",
+    "last_seen": "2024-08-09T00:06:40Z",
+    "raw": {
+      "data": {
+        "author": "[deleted]",
+        "created_utc": 1723162000.0,
+        "id": "1kx9q2",
+        "name": "t3_1kx9q2",
+        "num_comments": 2,
+        "permalink": "/r/chalkapp/comments/1kx9q2/attendance_kiosk_logs_everyone_out_at_midnight/",
+        "score": 0,
+        "selftext": "",
+        "subreddit": "chalkapp",
+        "title": "Attendance kiosk logs everyone out at midnight",
+        "url": "https://www.reddit.com/r/chalkapp/comments/1kx9q2/attendance_kiosk_logs_everyone_out_at_midnight/"
+      },
+      "kind": "t3"
+    },
+    "severity": "low",
+    "source": "reddit",
+    "source_ref": "1kx9q2",
+    "title": "Attendance kiosk logs everyone out at midnight"
+  }
+]

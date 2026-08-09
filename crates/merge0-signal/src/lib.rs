@@ -40,6 +40,12 @@ pub enum Source {
     Trello,
     Mixpanel,
     Openpanel,
+    /// Posts from operator-designated subreddits (owned communities or
+    /// watched ones) — social feedback as `ticket` signals.
+    Reddit,
+    /// X (Twitter) posts mentioning the operator's handle or watched
+    /// hashtags — social feedback as `ticket` signals.
+    X,
     /// Merge0's own operational telemetry, ingested as just another source
     /// (the meta-loop, PRD §5d).
     Meta,
@@ -65,6 +71,8 @@ impl Source {
             Source::Trello => "trello",
             Source::Mixpanel => "mixpanel",
             Source::Openpanel => "openpanel",
+            Source::Reddit => "reddit",
+            Source::X => "x",
             Source::Meta => "meta",
         }
     }

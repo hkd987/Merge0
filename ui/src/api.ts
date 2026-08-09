@@ -137,6 +137,12 @@ export interface ReportDetail {
   dispatch: Dispatch | null;
   outcomes: OutcomeRef[];
   handoff_brief: string | null;
+  /**
+   * Evidence file paths routed to their CODEOWNERS entries. Null when the
+   * repo has no CODEOWNERS (or it was unreachable); empty when no
+   * evidence path matched an owned pattern.
+   */
+  code_owners: { path: string; owners: string[] }[] | null;
   fix_efficacy: FixEfficacy | null;
   /**
    * Tracker story filed on approval (delivery modes "story" and

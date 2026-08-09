@@ -293,7 +293,7 @@ The moat analysis already in this document survives open-sourcing untouched: out
 
 ### Growth motion
 
-1. **Launch with proof, not promise:** the repo goes public *after* the Phase 0 gate is met, so the README leads with "ran against our own production SaaS for N days, X% of PRs merged" and links the actual merged PRs — the same credibility device as PostHog's merged-PR wall.
+1. **Launch with proof, not promise:** the original plan held the repo private until the Phase 0 gate was met. (Revised 2026-08: the repo went public ahead of the gate — the README says so plainly — but the credibility device stands: once the merge-rate history exists, the README leads with "ran against our own production SaaS for N days, X% of PRs merged" and links the actual merged PRs, the same device as PostHog's merged-PR wall.)
 2. **Adapters are the contribution surface:** the Signal schema + golden-payload conformance tests make a community adapter a well-defined, testable PR. Each merged adapter is also a GTM page ("Datadog → PRs"), reusing the Chalk competitor-page playbook.
 3. **Content flywheel:** building in public — Chalk as the living case study ("how two people support N school districts"), gate-precision write-ups, the hardening/extinction metric.
 4. **Conversion path:** self-hosters convert on multi-tenant/SSO needs, cross-tenant gate intelligence, and not wanting to operate another service — never on artificial core limitations.
@@ -420,6 +420,20 @@ forge-specific job trigger (GitLab: pipeline trigger tokens). Everything
 above `merge0-github` — triage, store, server, UI — already speaks in
 forge-neutral types (`RepoRef`, `PrInfo`, Work Orders), so the trait
 extraction is the bulk of the work, not a rewrite.
+
+### Multi-repo (one server, many repos)
+
+Deferred by decision (2026-08-09): the BYO-agent breadth, CODEOWNERS
+routing, and adoption surfaces shipped first. Today one `merge0-server`
+serves one `MERGE0_REPO`; teams with many repos run one instance per repo
+(the hosted plane already orchestrates exactly this shape per tenant).
+The design direction when it lands: `repos` becomes a table not an env
+var, signals carry a repo attribution resolved at ingest (source config →
+repo mapping, falling back to signal `join_keys`/URL heuristics),
+scouts/gate/dispatch scope per repo, and the inbox gains a repo facet.
+The schema's `WorkOrder.repo` field is already per-order, so the pipeline
+downstream of triage needs no schema change. Gate evals must re-run when
+routing lands — misrouted signals would poison per-repo intent context.
 
 ### SSO / SAML (ee)
 

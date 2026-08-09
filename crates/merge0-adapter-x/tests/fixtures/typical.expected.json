@@ -1,0 +1,72 @@
+[
+  {
+    "affected_count": 296,
+    "body": "X post by @yuki_teaches matching search query \"@acmeapp OR #acmeapp\": 180 likes, 42 reposts, 65 replies, 9 quotes.\n\nAcmeApp のロースター同期がまた失敗した😩 今月4回目。生徒の出席データが丸ごと消えるのは本当に困る。#acmeapp サポートに3回問い合わせたのに返事が無い。他のツールへの移行を真剣に検討中です。",
+    "evidence": [
+      {
+        "kind": "other",
+        "label": "X post by @yuki_teaches",
+        "url": "https://x.com/i/web/status/1821091234567890123"
+      }
+    ],
+    "fingerprint": "x:a72b95867795740563123a5d15010374",
+    "first_seen": "2026-08-08T09:14:03Z",
+    "id": "<ulid>",
+    "join_keys": {
+      "account_id": "yuki_teaches"
+    },
+    "kind": "ticket",
+    "last_seen": "2026-08-08T09:14:03Z",
+    "raw": {
+      "author_id": "4402987651",
+      "created_at": "2026-08-08T09:14:03.000Z",
+      "id": "1821091234567890123",
+      "public_metrics": {
+        "like_count": 180,
+        "quote_count": 9,
+        "reply_count": 65,
+        "retweet_count": 42
+      },
+      "text": "AcmeApp のロースター同期がまた失敗した😩 今月4回目。生徒の出席データが丸ごと消えるのは本当に困る。#acmeapp サポートに3回問い合わせたのに返事が無い。他のツールへの移行を真剣に検討中です。"
+    },
+    "severity": "high",
+    "source": "x",
+    "source_ref": "1821091234567890123",
+    "title": "AcmeApp のロースター同期がまた失敗した😩 今月4回目。生徒の出席データが丸ごと消えるのは本当に困る。#acmeapp サポートに3回問い合わせたのに返…"
+  },
+  {
+    "affected_count": 3,
+    "body": "X post by @marcuswebb_edu matching search query \"@acmeapp OR #acmeapp\": 2 likes, 0 reposts, 1 replies, 0 quotes.\n\nTrying out @acmeapp for our tutoring co-op this fall — setup was smooth so far. Curious how the gradebook export handles CSV.",
+    "evidence": [
+      {
+        "kind": "other",
+        "label": "X post by @marcuswebb_edu",
+        "url": "https://x.com/i/web/status/1821094444555566677"
+      }
+    ],
+    "fingerprint": "x:0e1af272060a2dbfd51a758023bdca25",
+    "first_seen": "2026-08-08T11:47:56Z",
+    "id": "<ulid>",
+    "join_keys": {
+      "account_id": "marcuswebb_edu"
+    },
+    "kind": "ticket",
+    "last_seen": "2026-08-08T11:47:56Z",
+    "raw": {
+      "author_id": "8810234567",
+      "created_at": "2026-08-08T11:47:56.000Z",
+      "id": "1821094444555566677",
+      "public_metrics": {
+        "like_count": 2,
+        "quote_count": 0,
+        "reply_count": 1,
+        "retweet_count": 0
+      },
+      "text": "Trying out @acmeapp for our tutoring co-op this fall — setup was smooth so far. Curious how the gradebook export handles CSV."
+    },
+    "severity": "low",
+    "source": "x",
+    "source_ref": "1821094444555566677",
+    "title": "Trying out @acmeapp for our tutoring co-op this fall — setup was smooth so far.…"
+  }
+]

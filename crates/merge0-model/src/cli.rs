@@ -3,8 +3,8 @@
 //! the operator's CLI already holds. The binary is configurable so tests
 //! can substitute a stub script.
 
+use crate::{Model, ModelError, ModelRequest, ModelResponse};
 use async_trait::async_trait;
-use merge0_model::{Model, ModelError, ModelRequest, ModelResponse};
 use serde::Deserialize;
 use std::process::Stdio;
 use tokio::io::AsyncWriteExt;
@@ -50,6 +50,12 @@ impl CliModel {
             binary: binary.into(),
             model: None,
         }
+    }
+
+    /// Override the `--model` passthrough (None keeps the CLI's default).
+    pub fn model(mut self, model: Option<String>) -> CliModel {
+        self.model = model;
+        self
     }
 }
 

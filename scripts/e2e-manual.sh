@@ -431,6 +431,38 @@ EOF
 )
 check "openpanel error events aggregate to a signal" "$OP_INGEST" '"inserted":1'
 
+RD_INGEST=$(auth -X POST "$BASE/ingest/reddit" -H "content-type: application/json" -d @- <<EOF
+{"endpoint": "subreddit_new",
+ "context": {"base_url": "https://www.reddit.com"},
+ "payload": {"kind": "Listing", "data": {"after": null, "children": [{
+   "kind": "t3", "data": {
+     "id": "1kz9aa", "name": "t3_1kz9aa",
+     "title": "Gradebook exports have been broken for our whole district since Tuesday",
+     "selftext": "Every export comes back empty. 60 teachers affected.",
+     "author": "concerned_teacher", "subreddit": "chalkapp",
+     "permalink": "/r/chalkapp/comments/1kz9aa/gradebook_exports_broken/",
+     "url": "https://www.reddit.com/r/chalkapp/comments/1kz9aa/",
+     "score": 47, "num_comments": 18, "created_utc": $EPOCH_NOW.0, "upvote_ratio": 0.97
+   }}]}}}
+EOF
+)
+check "reddit subreddit post normalizes to a ticket signal" "$RD_INGEST" '"inserted":1'
+
+X_INGEST=$(auth -X POST "$BASE/ingest/x" -H "content-type: application/json" -d @- <<EOF
+{"endpoint": "recent_search",
+ "context": {"query": "@chalkapp"},
+ "payload": {"data": [{
+   "id": "1821099887766554433", "author_id": "9001",
+   "text": "@chalkapp attendance sync has eaten this morning's records for our whole school. Again.",
+   "created_at": "$NOW",
+   "public_metrics": {"retweet_count": 12, "reply_count": 9, "like_count": 41, "quote_count": 3}
+ }],
+ "includes": {"users": [{"id": "9001", "name": "Ms. Alvarez", "username": "msalvarez_teach"}]},
+ "meta": {"newest_id": "1821099887766554433", "result_count": 1}}}
+EOF
+)
+check "x mention normalizes to a ticket signal" "$X_INGEST" '"inserted":1'
+
 say "14. Hosted multi-tenant: control plane, two data planes, isolation, suspension"
 EE_PORT=18090
 EE_BASE="http://127.0.0.1:$EE_PORT"
@@ -494,6 +526,52 @@ B_RUNTIME=$(eeauth "$EE_BASE/ee/tenants/$B_ID/runtime")
 check "neighbor tenant stays running" "$B_RUNTIME" '"desired_state":"running"'
 FROZEN_USAGE=$(eeauth "$EE_BASE/ee/tenants/$A_ID/usage")
 check "usage remains computable while suspended" "$FROZEN_USAGE" '"window_days":30'
+
+say "15. Growth features: CODEOWNERS routing + one-shot CLI quickstart"
+# CODEOWNERS: a crash whose title carries an owned path routes to the
+# owning team from the dev fake's CODEOWNERS. Runs AFTER every counted
+# section — the fresh signal + triage must not disturb earlier arithmetic.
+CO_RES=$(auth -X POST "$BASE/ingest/sentry" -H "content-type: application/json" -d @- <<EOF
+{"endpoint": "issues", "payload": [{
+  "id": "9101", "shortId": "CHALK-91",
+  "title": "TypeError: roster.filter is not a function in src/districts/roster.ts",
+  "permalink": "https://sentry.example.com/organizations/chalk/issues/9101/",
+  "level": "error",
+  "metadata": {"type": "TypeError", "value": "roster.filter is not a function"},
+  "userCount": 41, "firstSeen": "2026-08-06T04:00:00Z", "lastSeen": "$NOW"
+}]}
+EOF
+)
+check "owned-path crash ingests" "$CO_RES" '"inserted":1'
+auth -X POST "$BASE/triage/run" > /dev/null
+CO_ID=$(auth "$BASE/reports?status=awaiting_review" | python3 -c "import json,sys; print([r['id'] for r in json.load(sys.stdin) if 'roster.ts' in r['title']][0])")
+CO_DETAIL=$(auth "$BASE/reports/$CO_ID")
+check "report detail routes the evidence path to its CODEOWNERS team" "$CO_DETAIL" '"@acme/data-team"'
+check "routed entry names the path itself" "$CO_DETAIL" 'src/districts/roster.ts'
+
+# CLI quickstart: the real merge0 binary end to end with a stub model CLI
+# (no spend, deterministic) — a bare Sentry array in, a work order out.
+CLI_STUB=/tmp/merge0-e2e-cli-stub.sh
+cat > "$CLI_STUB" <<'STUB'
+#!/bin/sh
+cat > /dev/null
+echo '{"result":"{\"decision\":\"work\",\"summary\":\"Guard null plan in BillingSummary\",\"repro\":\"open billing as a downgraded user\",\"success_criteria\":\"regression test passes\",\"confidence\":\"high\"}","is_error":false,"usage":{"input_tokens":10,"output_tokens":5}}'
+STUB
+chmod +x "$CLI_STUB"
+cat > /tmp/merge0-e2e-export.json <<EOF
+[{"id": "9102", "shortId": "CHALK-92",
+  "title": "TypeError: Cannot read properties of null (reading 'planId')",
+  "permalink": "https://sentry.example.com/organizations/chalk/issues/9102/",
+  "level": "error", "metadata": {"type": "TypeError", "value": "null planId"},
+  "userCount": 12, "firstSeen": "2026-08-06T04:00:00Z", "lastSeen": "$NOW"}]
+EOF
+CLI_OUT=$(./target/debug/merge0 triage --source sentry --file /tmp/merge0-e2e-export.json --cli "$CLI_STUB" 2>&1)
+check "merge0 triage quickstart emits a work order" "$CLI_OUT" "WORK ORDER"
+check "quickstart shows the gate confidence" "$CLI_OUT" "High confidence"
+
+# Onboarding names the selected agent's provider secret (name only).
+ONBOARD_SECRETS=$(auth "$BASE/onboarding")
+check "onboarding names the agent's provider secret" "$ONBOARD_SECRETS" '"ANTHROPIC_API_KEY"'
 
 say "Result: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
