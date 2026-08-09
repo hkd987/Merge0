@@ -19,15 +19,31 @@ Read `CLAUDE.md` before non-trivial work: its architecture invariants
 (adapter isolation, schema-changes-are-spec-changes, the MIT/`ee` boundary,
 config-not-code for prompts) are enforced by tests in
 `crates/merge0-e2e/tests/repo_hygiene.rs`, and a PR that fights them will
-fail CI before it fights a reviewer.
+fail CI before it fights a reviewer. The *reasoning* behind the invariants
+— and the bugs that earned them — is in `docs/decision-log.md`.
+
+## Helper scripts (and Claude Code skills)
+
+`scripts/` carries speed-ups for the common workflows; each has a matching
+skill in `.claude/skills/` that Claude Code picks up automatically, but
+the scripts are plain bash and work for everyone:
+
+| Script | What it does |
+|---|---|
+| `scripts/verify.sh` | All four gates in CI order, explicit `GATE <x>: OK` marker per gate; `-p <crate>` to scope, `--check` for CI parity |
+| `scripts/dev-pg.sh` | Throwaway Postgres on 55432 for the test suite (`start`/`stop`/`status`/`destroy`) — no system Postgres touched |
+| `scripts/new-adapter.sh <vendor>` | Scaffold an adapter crate + golden harness + workspace registration, then print the schema/reachability/fetch checklist |
+| `scripts/e2e-manual.sh` | Drive the real server binary through the whole loop over HTTP with dev fakes (~70 checks) |
+| `scripts/agent-eval.sh` | Live agent-fixture evals (maintainers; costs money) |
 
 ## The most wanted contribution: adapters
 
 Merge0's growth thesis is community adapters ("your tool → PRs"). An
 adapter is a small, well-tested crate:
 
-1. Copy the shape of an existing one (`crates/merge0-adapter-datadog` is a
-   good minimal example; `merge0-adapter-posthog` a rich one).
+1. Scaffold with `scripts/new-adapter.sh <vendor>`, then study the shape
+   of an existing one (`crates/merge0-adapter-datadog` is a good minimal
+   example; `merge0-adapter-posthog` a rich one).
 2. Ground your payload shapes in vendor truth — link the vendor doc or
    source you derived them from in the module doc. Do not invent fields.
 3. Golden fixtures through the shared harness in `crates/merge0-adapters`
