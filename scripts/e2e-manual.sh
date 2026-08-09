@@ -573,5 +573,34 @@ check "quickstart shows the gate confidence" "$CLI_OUT" "High confidence"
 ONBOARD_SECRETS=$(auth "$BASE/onboarding")
 check "onboarding names the agent's provider secret" "$ONBOARD_SECRETS" '"ANTHROPIC_API_KEY"'
 
+say "16. Outcome reconciliation: a merged PR whose webhook was lost is repaired"
+# Fresh report -> approve -> runner opens PR #424242 (which the dev fake
+# reports as already merged on GitHub) -> NO webhook arrives -> the next
+# triage run's reconciliation sweep records the merge anyway.
+auth -X POST "$BASE/ingest/sentry" -H "content-type: application/json" -d @- > /dev/null <<EOF2
+{"endpoint": "issues", "payload": [{
+  "id": "9201", "shortId": "CHALK-92R",
+  "title": "ReferenceError: sortRoster is not defined after refactor",
+  "permalink": "https://sentry.example.com/organizations/chalk/issues/9201/",
+  "level": "error",
+  "metadata": {"type": "ReferenceError", "value": "sortRoster is not defined"},
+  "userCount": 22, "firstSeen": "2026-08-06T04:00:00Z", "lastSeen": "$NOW"
+}]}
+EOF2
+auth -X POST "$BASE/triage/run" > /dev/null
+RC_ID=$(auth "$BASE/reports?status=awaiting_review" | python3 -c "import json,sys; print([r['id'] for r in json.load(sys.stdin) if 'sortRoster' in r['title']][0])")
+auth -X POST "$BASE/reports/$RC_ID/approve" > /dev/null
+curl -sf -X POST "$BASE/runner/callback" -H "authorization: Bearer $RUNNER_TOKEN" -H "content-type: application/json" -d "{
+  \"report_id\": \"$RC_ID\", \"status\": \"opened\",
+  \"pr_url\": \"https://github.com/chalk/chalk/pull/424242\",
+  \"branch\": \"merge0/fix-$RC_ID\", \"tokens_spent\": 80000,
+  \"files_changed\": 1, \"total_lines_changed\": 9}" > /dev/null
+RC_BEFORE=$(auth "$BASE/reports/$RC_ID")
+check "report waits as pr_open with no outcome" "$RC_BEFORE" '"status":"pr_open"'
+auth -X POST "$BASE/triage/run" > /dev/null
+RC_AFTER=$(auth "$BASE/reports/$RC_ID")
+check "reconciliation completed the report without any webhook" "$RC_AFTER" '"status":"completed"'
+check "the missed merged outcome is recorded" "$RC_AFTER" '"outcome":"merged"'
+
 say "Result: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

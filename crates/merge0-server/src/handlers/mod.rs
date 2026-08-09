@@ -7,6 +7,7 @@ pub mod ingest;
 pub mod metrics;
 pub mod onboarding;
 pub mod owners;
+pub mod reconcile;
 pub mod registry;
 pub mod reports;
 pub mod runner;

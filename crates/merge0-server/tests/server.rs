@@ -1924,3 +1924,82 @@ async fn report_detail_routes_evidence_paths_to_code_owners() {
     assert!(detail["code_owners"].is_null());
     h.teardown().await;
 }
+
+/// Outcome reconciliation: a merged PR whose webhook was MISSED is repaired
+/// on the next triage run by polling GitHub — the merge-rate history never
+/// silently drifts. An open PR is left alone.
+#[tokio::test]
+async fn missed_merge_webhook_is_reconciled_on_the_next_triage_run() {
+    let h = Harness::start(HarnessOptions::default()).await;
+    let report_id = h.seed_awaiting_report().await;
+    h.post(
+        &format!("/reports/{report_id}/approve"),
+        Some("api-secret"),
+        None,
+    )
+    .await;
+    let pr_url = "https://github.com/chalk/chalk/pull/7".to_string();
+    h.post(
+        "/runner/callback",
+        Some("runner-secret"),
+        Some(serde_json::json!({
+            "report_id": report_id,
+            "status": "opened",
+            "pr_url": pr_url,
+            "branch": "merge0/fix",
+            "tokens_spent": 90000,
+            "files_changed": 1,
+            "total_lines_changed": 10,
+        })),
+    )
+    .await;
+
+    // No webhook arrives. First: PR still open on GitHub → nothing changes.
+    h.post("/triage/run", Some("api-secret"), None).await;
+    let detail: serde_json::Value = h
+        .get(&format!("/reports/{report_id}"))
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(detail["report"]["status"], "pr_open");
+    assert_eq!(detail["outcomes"].as_array().unwrap().len(), 0);
+
+    // GitHub says the PR merged (webhook lost). The sweep repairs it.
+    h.github.state.lock().unwrap().pr_states.insert(
+        7,
+        merge0_github::PullState {
+            state: "closed".into(),
+            merged: true,
+            merged_at: Some(chrono::Utc::now()),
+            closed_at: Some(chrono::Utc::now()),
+            merge_commit_sha: Some("abc123def".into()),
+        },
+    );
+    h.post("/triage/run", Some("api-secret"), None).await;
+    let detail: serde_json::Value = h
+        .get(&format!("/reports/{report_id}"))
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(detail["report"]["status"], "completed");
+    let outcomes = detail["outcomes"].as_array().unwrap();
+    assert_eq!(outcomes.len(), 1);
+    assert_eq!(outcomes[0]["outcome"], "merged");
+    assert_eq!(
+        outcomes[0]["pr_url"],
+        "https://github.com/chalk/chalk/pull/7"
+    );
+
+    // Idempotent: another run must not double-record.
+    h.post("/triage/run", Some("api-secret"), None).await;
+    let detail: serde_json::Value = h
+        .get(&format!("/reports/{report_id}"))
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(detail["outcomes"].as_array().unwrap().len(), 1);
+    h.teardown().await;
+}

@@ -558,6 +558,13 @@ impl GitHubApi for RecordingGitHub {
     ) -> Result<merge0_github::PrInfo, merge0_github::GitHubError> {
         unreachable!("not used by the issues poller")
     }
+    async fn get_pull_request(
+        &self,
+        _: &merge0_github::RepoRef,
+        _: u64,
+    ) -> Result<merge0_github::PullState, merge0_github::GitHubError> {
+        unreachable!("not used by the issues poller")
+    }
     async fn list_releases(
         &self,
         _: &merge0_github::RepoRef,

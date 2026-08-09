@@ -50,6 +50,18 @@ pub struct PrInfo {
     pub head_branch: String,
 }
 
+/// A pull request's fate as GitHub reports it — the reconciliation sweep's
+/// source of truth when a webhook delivery was missed.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct PullState {
+    /// `"open"` or `"closed"` (GitHub's own state field).
+    pub state: String,
+    pub merged: bool,
+    pub merged_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub closed_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub merge_commit_sha: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ReleaseInfo {
     pub tag: String,
@@ -119,6 +131,11 @@ pub trait GitHubApi: Send + Sync {
         repo: &RepoRef,
         since: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<Vec<serde_json::Value>, GitHubError>;
+
+    /// A pull request's current state — used by the outcome-reconciliation
+    /// sweep to repair merged/closed outcomes whose webhook was missed.
+    async fn get_pull_request(&self, repo: &RepoRef, number: u64)
+        -> Result<PullState, GitHubError>;
 }
 
 /// Trait objects behind `Arc` are first-class API handles (the server holds
@@ -191,6 +208,14 @@ impl<T: GitHubApi + ?Sized> GitHubApi for std::sync::Arc<T> {
         since: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<Vec<serde_json::Value>, GitHubError> {
         (**self).list_issues(repo, since).await
+    }
+
+    async fn get_pull_request(
+        &self,
+        repo: &RepoRef,
+        number: u64,
+    ) -> Result<PullState, GitHubError> {
+        (**self).get_pull_request(repo, number).await
     }
 }
 
@@ -525,6 +550,27 @@ impl<T: crate::auth::TokenSource> GitHubApi for RestGitHub<T> {
             .collect();
         Ok(releases)
     }
+
+    async fn get_pull_request(
+        &self,
+        repo: &RepoRef,
+        number: u64,
+    ) -> Result<PullState, GitHubError> {
+        let value = self
+            .request(
+                reqwest::Method::GET,
+                &format!("/repos/{}/{}/pulls/{number}", repo.owner, repo.name),
+                None,
+            )
+            .await?;
+        Ok(PullState {
+            state: value["state"].as_str().unwrap_or("open").to_string(),
+            merged: value["merged"].as_bool().unwrap_or(false),
+            merged_at: value["merged_at"].as_str().and_then(|s| s.parse().ok()),
+            closed_at: value["closed_at"].as_str().and_then(|s| s.parse().ok()),
+            merge_commit_sha: value["merge_commit_sha"].as_str().map(String::from),
+        })
+    }
 }
 
 /// Minimal base64 (standard alphabet, padded) — avoids a dependency for the
@@ -609,6 +655,9 @@ pub struct FakeState {
     pub files: std::collections::HashMap<String, String>,
     /// Raw issue JSON served by `list_issues`.
     pub issues: Vec<serde_json::Value>,
+    /// PR states served by `get_pull_request` (number → state); unknown
+    /// numbers report as open, like a PR nobody has touched.
+    pub pr_states: std::collections::HashMap<u64, PullState>,
 }
 
 impl FakeGitHub {
@@ -715,6 +764,24 @@ impl GitHubApi for FakeGitHub {
         _since: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<Vec<serde_json::Value>, GitHubError> {
         Ok(self.state.lock().unwrap().issues.clone())
+    }
+
+    async fn get_pull_request(
+        &self,
+        _repo: &RepoRef,
+        number: u64,
+    ) -> Result<PullState, GitHubError> {
+        Ok(self
+            .state
+            .lock()
+            .unwrap()
+            .pr_states
+            .get(&number)
+            .cloned()
+            .unwrap_or(PullState {
+                state: "open".into(),
+                ..PullState::default()
+            }))
     }
 }
 

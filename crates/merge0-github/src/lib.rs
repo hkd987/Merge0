@@ -15,6 +15,6 @@ pub mod codeowners;
 pub mod safety;
 pub mod webhook;
 
-pub use api::{FakeGitHub, GitHubApi, GitHubError, PrInfo, ReleaseInfo, RepoRef};
+pub use api::{FakeGitHub, GitHubApi, GitHubError, PrInfo, PullState, ReleaseInfo, RepoRef};
 
 pub type Result<T> = std::result::Result<T, GitHubError>;

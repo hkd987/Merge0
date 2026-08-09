@@ -79,6 +79,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             ".github/CODEOWNERS".into(),
             "* @acme/platform\nsrc/districts/ @acme/data-team\n".into(),
         );
+        // PR #424242 reads as already merged, so the outcome-reconciliation
+        // sweep (missed-webhook repair) is drivable in the manual e2e.
+        fake_github.state.lock().unwrap().pr_states.insert(
+            424242,
+            merge0_github::PullState {
+                state: "closed".into(),
+                merged: true,
+                merged_at: Some(chrono::Utc::now()),
+                closed_at: Some(chrono::Utc::now()),
+                merge_commit_sha: Some("fadedfacade0000".into()),
+            },
+        );
         // Confidence is overridable so the confidence-routing path is
         // drivable end to end (dev fakes only — production reads the real
         // model's own self-assessment and nothing can override it).
