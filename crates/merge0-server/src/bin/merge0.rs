@@ -188,7 +188,7 @@ async fn run(argv: Vec<String>) -> Result<(), String> {
         results.push((report, outcome));
     }
     // Highest severity first — same ordering instinct as the inbox.
-    results.sort_by(|a, b| b.0.severity.cmp(&a.0.severity));
+    results.sort_by_key(|entry| std::cmp::Reverse(entry.0.severity));
 
     if args.json {
         let out: Vec<serde_json::Value> = results
