@@ -221,7 +221,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             gate: Arc::new(gate),
             repo,
             intent_fallback: Arc::new(intent_fallback),
-            agent: agent_kind_from_env(),
+            agent: agent_kind_from_env()?,
             pr_body_template: Arc::new(pr_body_template),
             callback_url: std::env::var("MERGE0_CALLBACK_URL")
                 .unwrap_or_else(|_| "http://localhost:8080/runner/callback".into()),
@@ -492,12 +492,6 @@ fn slack_notify_enabled(class: &str) -> bool {
     }
 }
 
-fn agent_kind_from_env() -> AgentKind {
-    match std::env::var("MERGE0_AGENT").as_deref() {
-        Ok("codex-cli") => AgentKind::CodexCli,
-        Ok(custom) if custom.starts_with("custom:") => {
-            AgentKind::Custom(custom.trim_start_matches("custom:").to_string())
-        }
-        _ => AgentKind::ClaudeCode,
-    }
+fn agent_kind_from_env() -> Result<AgentKind, String> {
+    AgentKind::from_env_value(std::env::var("MERGE0_AGENT").ok().as_deref())
 }

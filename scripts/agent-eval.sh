@@ -7,11 +7,19 @@
 # git-based diff-budget measurement. Runs the REAL Claude Code CLI — model
 # spend, run manually, never in CI.
 #
-# Usage: scripts/agent-eval.sh [fixture ...]   (default: all fixtures)
+# Usage: scripts/agent-eval.sh [--agent <label>] [fixture ...]
+#   --agent: which harness to eval — claude-code (default), codex-cli,
+#            gemini-cli, aider, opencode, cursor-cli. The command shapes
+#            mirror the generated workflow's presets exactly
+#            (crates/merge0-runner/src/lib.rs AgentKind::command), so a
+#            fixture pass here predicts the harness's behavior in CI.
+#            The chosen CLI must be installed and authenticated locally.
 
 set -uo pipefail
 cd "$(dirname "$0")/.."
 REPO_ROOT=$PWD
+AGENT="claude-code"
+if [ "${1:-}" = "--agent" ]; then AGENT="$2"; shift 2; fi
 FIXTURES=("${@:-districts offby1 error-swallow utf8-truncate stale-cache conflict}")
 # Word-split the default list when invoked without args.
 if [ $# -eq 0 ]; then FIXTURES=(districts offby1 error-swallow utf8-truncate stale-cache conflict); fi
@@ -21,6 +29,31 @@ trap 'rm -rf "${WORKDIRS[@]}"' EXIT
 export RUSTUP_TOOLCHAIN="$(grep '^channel' rust-toolchain.toml | cut -d'"' -f2)"
 ALLOWED_TOOLS='Edit,Write,Bash(git *),Bash(cargo *)'
 PASS=0; FAIL=0
+
+# Per-harness headless invocation — keep in lockstep with AgentKind::command.
+agent_cmd() { # agent_cmd <work-order-file>
+  case "$AGENT" in
+    claude-code) claude -p "$(cat "$1")" --allowedTools "$ALLOWED_TOOLS" ;;
+    codex-cli)   codex exec --sandbox workspace-write "$(cat "$1")" ;;
+    gemini-cli)  gemini -p "$(cat "$1")" --approval-mode=yolo ;;
+    aider)       aider --message "$(cat "$1")" --yes-always --no-auto-commits ;;
+    opencode)    opencode run "$(cat "$1")" ;;
+    cursor-cli)  cursor-agent -p "$(cat "$1")" ;;
+    *) echo "unknown --agent '$AGENT'" >&2; exit 2 ;;
+  esac
+}
+AGENT_BIN=$(case "$AGENT" in
+  claude-code) echo claude ;; codex-cli) echo codex ;; gemini-cli) echo gemini ;;
+  aider) echo aider ;; opencode) echo opencode ;; cursor-cli) echo cursor-agent ;; esac)
+[ -n "$AGENT_BIN" ] || {
+  echo "error: unknown --agent '$AGENT' (claude-code|codex-cli|gemini-cli|aider|opencode|cursor-cli)" >&2
+  exit 2
+}
+command -v "$AGENT_BIN" >/dev/null 2>&1 || {
+  echo "error: '$AGENT_BIN' not installed/on PATH — install and authenticate it, then re-run" >&2
+  exit 2
+}
+echo "Evaluating agent harness: $AGENT ($AGENT_BIN)"
 
 say()  { printf '\n\033[1m== %s\033[0m\n' "$*"; }
 ok()   { printf '   \033[32mPASS\033[0m %s\n' "$*"; PASS=$((PASS+1)); }
@@ -58,8 +91,7 @@ for fixture in "${FIXTURES[@]}"; do
 
   # The workflow's agent step, verbatim in shape.
   run_agent() {
-    claude -p "$(cat merge0-work-order.json)" --allowedTools "$ALLOWED_TOOLS" \
-      > /tmp/merge0-eval-agent.txt 2>&1
+    agent_cmd merge0-work-order.json > /tmp/merge0-eval-agent.txt 2>&1
   }
   run_agent
   tests_green=false

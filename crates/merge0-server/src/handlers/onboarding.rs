@@ -29,13 +29,10 @@ pub async fn bundle(State(state): State<AppState>) -> Result<Json<serde_json::Va
             "MERGE0.md": merge0_context::intent::MERGE0_TEMPLATE,
             ".merge0/agent.toml": merge0_runner::manifest::AGENT_TOML_TEMPLATE,
         },
-        "secrets_to_configure": {
-            "ANTHROPIC_API_KEY": "your Anthropic key — the agent runs on YOUR account",
-            "MERGE0_RUNNER_TOKEN": "must match this server's MERGE0_RUNNER_TOKEN",
-        },
+        "secrets_to_configure": secrets_to_configure(&state),
         "checklist": [
             "Commit the three files above via a normal PR (review them — they run in YOUR CI)",
-            "Add the two Actions secrets listed in secrets_to_configure",
+            "Add the Actions secrets listed in secrets_to_configure",
             "Set [test] command in .merge0/agent.toml to your real test entrypoint",
             "Enable branch protection + required status checks on the default branch (Merge0 refuses to dispatch until verified)",
             "Connect vendor credentials for the fetch layer (see config/sources.toml on the server)",
@@ -47,4 +44,25 @@ pub async fn bundle(State(state): State<AppState>) -> Result<Json<serde_json::Va
             "report": safety,
         },
     })))
+}
+
+/// The Actions secrets this repo must configure: the selected agent's own
+/// provider key names (BYO agent = BYO account) plus the runner callback
+/// token. Names only — values never transit Merge0.
+fn secrets_to_configure(state: &AppState) -> serde_json::Value {
+    let agent_label = state.agent.label();
+    let mut secrets = serde_json::Map::new();
+    for name in state.agent.auth_env_names() {
+        secrets.insert(
+            (*name).to_string(),
+            serde_json::json!(format!(
+                "model-provider key for the {agent_label} agent — runs on YOUR account (leave unset if this provider is unused)"
+            )),
+        );
+    }
+    secrets.insert(
+        "MERGE0_RUNNER_TOKEN".into(),
+        serde_json::json!("must match this server's MERGE0_RUNNER_TOKEN"),
+    );
+    serde_json::Value::Object(secrets)
 }

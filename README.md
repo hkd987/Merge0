@@ -79,6 +79,11 @@ screenshots, an animated tour of the loop, and the four-step quickstart.
   confidence *acts*: below `[delivery] min_confidence_for_pr` a Work Order
   is filed as a story for a human instead of sent to an agent, so a
   borderline judgment produces a queued ticket rather than a gambled PR.
+- **CODEOWNERS routing**: the file paths a report's evidence mentions
+  (stack traces, work-order repro) are matched against your repo's
+  CODEOWNERS — GitHub's exact last-match-wins semantics — and the owning
+  teams appear on the report detail, so triage lands in front of the
+  right humans without anyone reading the trace first.
 - **Close-the-loop telemetry**: after a PR merges, Merge0 watches
   whether the originating signals actually stop — fixes are
   `pending`/`confirmed`/`recurred` and the fix-efficacy rate rides the
@@ -170,7 +175,7 @@ live in `config/` as reviewed files. Server environment:
 | `MERGE0_GITHUB_APP_ID` / `MERGE0_GITHUB_APP_PRIVATE_KEY` / `MERGE0_GITHUB_INSTALLATION_ID` | ✅ | GitHub App auth (installation tokens only) |
 | `ANTHROPIC_API_KEY` | ✅ | Model key for the triage gate (BYO) |
 | `MERGE0_GATE_MODEL` | — | Gate model id (default `claude-sonnet-5`) |
-| `MERGE0_AGENT` | — | Runner agent: `claude-code` (default), `codex-cli`, `custom:<cmd>` |
+| `MERGE0_AGENT` | — | Runner agent: `claude-code` (default), `codex-cli`, `gemini-cli`, `aider`, `opencode`, `cursor-cli`, `custom:<cmd>` — see “Bring your own agent” |
 | `MERGE0_TENANT` | — | Postgres schema name (default `default`) |
 | `MERGE0_PUBLIC_URL` | — | Public base URL (Slack links, defaults callbacks) |
 | `MERGE0_CALLBACK_URL` | — | Explicit runner-callback URL override |
@@ -193,6 +198,34 @@ Hosted control plane (`merge0-hosted`): `MERGE0_DATABASE_URL`,
 `MERGE0_EE_ADMIN_TOKEN`, `MERGE0_EE_BIND` (default `127.0.0.1:8090`).
 Tests: `MERGE0_TEST_DATABASE_URL`. Evals: `MERGE0_EVAL_CLI`,
 `MERGE0_EVAL_MODEL`, `MERGE0_EVAL_SCENARIOS`, `MERGE0_EVAL_RESULTS`.
+
+## Bring your own agent
+
+The runner is harness-agnostic: `MERGE0_AGENT` selects which coding agent
+the generated workflow invokes, each in its documented headless mode with
+the sanitized Work Order as the entire prompt. The agent runs in **your**
+CI job with **your** provider key (never transiting Merge0); the
+job-scoped token and the workflow's diff/repair budgets are the security
+boundary regardless of harness.
+
+| `MERGE0_AGENT` | Invocation | Actions secret(s) |
+|---|---|---|
+| `claude-code` (default) | `claude -p … --allowedTools <scoped>` | `ANTHROPIC_API_KEY` |
+| `codex-cli` | `codex exec --sandbox workspace-write …` | `OPENAI_API_KEY` |
+| `gemini-cli` | `gemini -p … --approval-mode=yolo` | `GEMINI_API_KEY` |
+| `aider` | `aider --message … --yes-always --no-auto-commits` | `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` |
+| `opencode` | `opencode run …` | `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` |
+| `cursor-cli` | `cursor-agent -p …` | `CURSOR_API_KEY` |
+| `custom:<cmd>` | your command; work order at `$MERGE0_WORK_ORDER` | whatever it needs (declare via the manifest's `auth_env`) |
+
+Change `MERGE0_AGENT`, re-download the workflow from `/setup`, and commit
+it — the egress allowlist, secret mappings, and invocation all follow the
+selected harness. Notes: Claude Code is the only harness with per-tool
+allowlisting, so the others rely on their own sandbox flags plus the job
+boundary; aider runs with auto-commits disabled because the workflow owns
+the commit and the diff measurement. Fixture-level quality per harness is
+measurable with `scripts/agent-eval.sh --agent <label>` (requires that
+CLI installed and authenticated; see `evals/README.md`).
 
 ## API surface
 
