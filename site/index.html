@@ -154,7 +154,7 @@ footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px}
       <div class="stage" data-stage="0">
         <span class="n">01</span>
         <h3>Ingest</h3>
-        <p>15 sources normalize into one Signal schema, deep links intact.</p>
+        <p>18 sources normalize into one Signal schema, deep links intact.</p>
       </div>
       <div class="stage" data-stage="1">
         <span class="n">02</span>
@@ -246,7 +246,7 @@ footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px}
       <div class="step">
         <h3>Enable sources</h3>
         <p>Flip the tools you use in <code>config/sources.toml</code> — Sentry, PostHog, Datadog,
-        Mixpanel, Zendesk, Jira, and ten more. Or push via signature-verified webhooks.</p>
+        Mixpanel, Zendesk, Jira, Reddit, X, and ten more. Or push via signature-verified webhooks.</p>
       </div>
       <div class="step">
         <h3>Review, merge, repeat</h3>
@@ -261,8 +261,8 @@ footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px}
   <div class="wrap">
     <h2>Measured, not promised</h2>
     <div class="numgrid">
-      <div class="num"><div class="big">100%</div><p>gate decision accuracy on a 30-scenario corpus of real-world defect shapes</p></div>
-      <div class="num"><div class="big">0</div><p>secret or exploit-payload leaks into work orders, enforced by eval canaries</p></div>
+      <div class="num"><div class="big">100%</div><p>gate decision accuracy on a 31-scenario corpus of real-world defect shapes</p></div>
+      <div class="num"><div class="big">0</div><p>secret, exploit-payload, or reporter-identity leaks into work orders, enforced by eval canaries</p></div>
       <div class="num"><div class="big">5/5</div><p>seeded-bug fixtures fixed by the agent — and 1/1 policy-violating orders refused</p></div>
       <div class="num"><div class="big">≤150</div><p>lines per PR by enforced diff budget: small scoped fixes that actually merge</p></div>
     </div>
@@ -279,6 +279,7 @@ footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px}
     <div class="srcgrid">
       <span class="src">Sentry</span><span class="src">PostHog</span><span class="src">Datadog</span>
       <span class="src">Mixpanel</span><span class="src">OpenPanel</span><span class="src">OTel</span>
+      <span class="src">LoopForge</span>
       <span class="src">Zendesk</span><span class="src">Intercom</span><span class="src">GitHub Issues</span>
       <span class="src">Jira</span><span class="src">Linear</span><span class="src">Asana</span>
       <span class="src">Trello</span><span class="src">Slack channels</span><span class="src">Reddit</span>
@@ -291,6 +292,10 @@ footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px}
       <span class="src">Aider</span><span class="src">OpenCode</span><span class="src">Cursor CLI</span>
       <span class="src">custom:&lt;your command&gt;</span>
     </div>
+    <p class="lede" style="margin-top:2rem">Agents can review, too: the server speaks
+    <strong>Model Context Protocol</strong> at <code>/mcp</code>, so Claude Code or Claude Desktop
+    can read the queue, pull telemetry, and approve on your say-so — every agent action
+    audit-tagged separately from human clicks.</p>
   </div>
 </section>
 
