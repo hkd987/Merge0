@@ -1,0 +1,70 @@
+{
+  "endpoint": "subreddit_new",
+  "context": { "base_url": "https://www.reddit.com" },
+  "payload": {
+    "kind": "Listing",
+    "data": {
+      "after": "t3_1kw2c9",
+      "dist": 2,
+      "modhash": "",
+      "geo_filter": "",
+      "before": null,
+      "children": [
+        {
+          "kind": "t3",
+          "data": {
+            "id": "1kw3ah",
+            "name": "t3_1kw3ah",
+            "title": "Sync status page has been blank for two days and support is silent",
+            "selftext": "Since Tuesday's update the sync status page for our whole district is just a white screen. The browser console shows a TypeError about a missing district id. Half the teachers at Lincoln Elementary can't tell whether rosters synced before report cards are due. Is anyone else seeing this? We've filed a ticket (#48211) and heard nothing back.",
+            "author": "example_district_admin",
+            "author_fullname": "t2_9example1",
+            "subreddit": "chalkapp",
+            "subreddit_id": "t5_2example",
+            "permalink": "/r/chalkapp/comments/1kw3ah/sync_status_page_has_been_blank_for_two_days_and/",
+            "url": "https://www.reddit.com/r/chalkapp/comments/1kw3ah/sync_status_page_has_been_blank_for_two_days_and/",
+            "score": 88,
+            "ups": 91,
+            "downs": 0,
+            "upvote_ratio": 0.94,
+            "num_comments": 41,
+            "num_crossposts": 0,
+            "over_18": false,
+            "stickied": false,
+            "is_self": true,
+            "link_flair_text": "Bug",
+            "created": 1723128600.0,
+            "created_utc": 1723100000.0
+          }
+        },
+        {
+          "kind": "t3",
+          "data": {
+            "id": "1kw2c9",
+            "name": "t3_1kw2c9",
+            "title": "Feature idea: let parents export the grade band report themselves",
+            "selftext": "Would save me a weekly email round-trip with the front office.",
+            "author": "example_parent_042",
+            "author_fullname": "t2_7example4",
+            "subreddit": "chalkapp",
+            "subreddit_id": "t5_2example",
+            "permalink": "/r/chalkapp/comments/1kw2c9/feature_idea_let_parents_export_the_grade_band/",
+            "url": "https://www.reddit.com/r/chalkapp/comments/1kw2c9/feature_idea_let_parents_export_the_grade_band/",
+            "score": 3,
+            "ups": 4,
+            "downs": 0,
+            "upvote_ratio": 0.81,
+            "num_comments": 1,
+            "num_crossposts": 0,
+            "over_18": false,
+            "stickied": false,
+            "is_self": true,
+            "link_flair_text": null,
+            "created": 1723118200.0,
+            "created_utc": 1723089600.0
+          }
+        }
+      ]
+    }
+  }
+}

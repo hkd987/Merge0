@@ -1,0 +1,53 @@
+{
+  "endpoint": "subreddit_new",
+  "context": { "base_url": "https://www.reddit.com" },
+  "payload": {
+    "kind": "Listing",
+    "data": {
+      "after": null,
+      "dist": 3,
+      "before": null,
+      "children": [
+        {
+          "kind": "t3",
+          "data": {
+            "id": "1kx9q2",
+            "name": "t3_1kx9q2",
+            "title": "Attendance kiosk logs everyone out at midnight",
+            "selftext": "",
+            "author": "[deleted]",
+            "subreddit": "chalkapp",
+            "permalink": "/r/chalkapp/comments/1kx9q2/attendance_kiosk_logs_everyone_out_at_midnight/",
+            "url": "https://www.reddit.com/r/chalkapp/comments/1kx9q2/attendance_kiosk_logs_everyone_out_at_midnight/",
+            "score": 0,
+            "num_comments": 2,
+            "created_utc": 1723162000.0
+          }
+        },
+        {
+          "kind": "t3",
+          "data": {
+            "name": "t3_1kx8corrupt",
+            "selftext": "a row the vendor served without id/title/created_utc",
+            "author": "example_user_9",
+            "subreddit": "chalkapp",
+            "score": 12
+          }
+        },
+        {
+          "kind": "t1",
+          "data": {
+            "id": "lm4com1",
+            "name": "t1_lm4com1",
+            "body": "Happens at our school too, every night.",
+            "author": "example_teacher_77",
+            "subreddit": "chalkapp",
+            "permalink": "/r/chalkapp/comments/1kx9q2/comment/lm4com1/",
+            "score": 4,
+            "created_utc": 1723165000.0
+          }
+        }
+      ]
+    }
+  }
+}

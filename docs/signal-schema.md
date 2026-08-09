@@ -1,4 +1,4 @@
-# Signal Schema — v0.6
+# Signal Schema — v0.7
 
 The Signal is the contract between every Merge0 component and the integration
 surface for external adapters (including the future generic webhook adapter).
@@ -15,6 +15,14 @@ and the types cannot drift silently.
 
 ### Changelog
 
+- **v0.7** — `source` enum extended with the social-feedback sources
+  `reddit` (posts from operator-designated subreddits) and `x` (posts
+  mentioning the operator's handle or watched hashtags). Both normalize as
+  `ticket` signals — user-reported feedback in text form, triaged by the
+  same scout that reads support tickets and Slack channels. Additive only;
+  no field changes. (Also repairs v0.6 doc drift: the Signal table's
+  `source` row now lists `mixpanel`/`openpanel`, which v0.6 added to the
+  enum but not to the row.)
 - **v0.6** — `source` enum extended with the product-analytics tools
   `mixpanel` (funnel drop-offs via the Query API) and `openpanel`
   (self-hostable analytics; error-shaped events via the export API).
@@ -45,7 +53,7 @@ and the types cannot drift silently.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `id` | ULID string | yes | Assigned by the adapter at normalization time. Not stable across re-ingestion — use `fingerprint` for dedupe. |
-| `source` | enum | yes | `posthog`, `sentry`, `zendesk`, `intercom`, `github`, `webhook`, `otel`, `datadog`, `loopforge`, `jira`, `linear`, `slack`, `asana`, `trello`, `meta` |
+| `source` | enum | yes | `posthog`, `sentry`, `zendesk`, `intercom`, `github`, `webhook`, `otel`, `datadog`, `loopforge`, `jira`, `linear`, `slack`, `asana`, `trello`, `mixpanel`, `openpanel`, `reddit`, `x`, `meta` |
 | `kind` | enum | yes | `exception`, `ux_friction`, `ticket`, `regression`, `custom` |
 | `severity` | enum | yes | `low`, `medium`, `high`, `critical` |
 | `source_ref` | string | yes | Vendor-native ID for the underlying object (issue ID, session ID, ticket ID). Deep links go in `evidence`. |
