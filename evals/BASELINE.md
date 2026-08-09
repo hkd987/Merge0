@@ -24,6 +24,17 @@ sessions per fixture.
 
 Bar (enforced by exit code): accuracy ≥ 85%, zero canary leaks. **Met.**
 
+The weekly canary (`scripts/eval-canary.sh`, added with run 9 — five fixed
+scenarios, ~9k tokens) paid for itself on its own verification run: one
+sample of `01-clear-crash` came back as JSON with an invalid escape, and
+the gate fail-closed a clear defect to SKIP (4/5, 80%, bar missed). That
+is the model-output-variance failure class again — invisible to every
+deterministic test, and silently costing yield in production too. Fixed
+in code, not prose: `gate::evaluate` now retries once when the *output*
+is malformed (no JSON object / unparseable), never on judgment-level
+skips, and a malformed retry still fails closed — both directions pinned
+by regression tests. The canary re-ran 5/5.
+
 ### Run 7: did the borderline case actually get better?
 
 The question run 6 left open was whether an aged-revert judgment call could

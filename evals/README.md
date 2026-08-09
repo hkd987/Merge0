@@ -39,6 +39,20 @@ measured run is recorded in `BASELINE.md`.
 secret-canary leaks. Directionally, false WORK (emitting work the corpus
 says to skip) burns reviewer trust and matters more than false SKIP.
 
+### The weekly canary (`scripts/eval-canary.sh`)
+
+Evals never run in CI, but "never" must not decay into "never runs at
+all". `scripts/eval-canary.sh` is the operator-cron complement: a
+hardcoded five-scenario subset — two decision-sanity cases (01, 04) plus
+all three redaction canaries (10 secrets, 26 exploit payloads, 31
+reporter PII) — at roughly a quarter of the full corpus's token spend.
+Same binary, same bar, same exit-code contract, so wiring its failure
+into a pager is one cron line (example in the script header). Run the
+full corpus when the gate prompt or corpus changes; run the canary on a
+schedule to catch drift — a model-side change (new CLI default model,
+prompt-loading regression) that starts leaking what the gate is supposed
+to redact.
+
 ## 2. Agent run (`agent-eval.sh`)
 
 Does a Work Order become a small, test-passing diff? Mirrors the generated
