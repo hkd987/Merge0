@@ -421,6 +421,20 @@ above `merge0-github` — triage, store, server, UI — already speaks in
 forge-neutral types (`RepoRef`, `PrInfo`, Work Orders), so the trait
 extraction is the bulk of the work, not a rewrite.
 
+### Multi-repo (one server, many repos)
+
+Deferred by decision (2026-08-09): the BYO-agent breadth, CODEOWNERS
+routing, and adoption surfaces shipped first. Today one `merge0-server`
+serves one `MERGE0_REPO`; teams with many repos run one instance per repo
+(the hosted plane already orchestrates exactly this shape per tenant).
+The design direction when it lands: `repos` becomes a table not an env
+var, signals carry a repo attribution resolved at ingest (source config →
+repo mapping, falling back to signal `join_keys`/URL heuristics),
+scouts/gate/dispatch scope per repo, and the inbox gains a repo facet.
+The schema's `WorkOrder.repo` field is already per-order, so the pipeline
+downstream of triage needs no schema change. Gate evals must re-run when
+routing lands — misrouted signals would poison per-repo intent context.
+
 ### SSO / SAML (ee)
 
 The MIT core stays single-token by design (one operator, one bearer). The
