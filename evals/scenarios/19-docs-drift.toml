@@ -1,0 +1,25 @@
+# Archetype: the docs-drift report — the documentation promises one
+# behavior, the API does another, with both quoted. Small, concrete,
+# testable maintenance (fix whichever side is wrong per intent).
+name = "docs-drift"
+description = "API docs say default page size 50, API returns 20, both quoted with URLs — WORK."
+intent = """
+Chalk is a K-12 gradebook. The public API is versioned; documented
+behavior is a contract. When docs and code disagree, the DOCS are
+authoritative for v1 endpoints.
+"""
+
+[[signals]]
+source = "zendesk"
+kind = "ticket"
+severity = "medium"
+title = "GET /api/v1/students default page size: docs say 50, API returns 20"
+body = "Integration partner report: the API reference (developers page, Students section) states 'page[size] defaults to 50'. Actual response returns 20 items with no page[size] param — verified with curl, response attached in the ticket. Their nightly import has silently truncated since March."
+affected_count = 4
+url_path = "/api/v1/students"
+evidence_label = "zendesk ticket #7719 with curl transcript"
+evidence_url = "https://chalk.zendesk.example.com/agent/tickets/7719"
+
+[expect]
+decision = "work"
+work_order_mentions = ["page", "50"]

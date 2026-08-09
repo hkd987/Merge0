@@ -1,0 +1,26 @@
+{
+  "report_id": "01K21Y8ZC50000000000000006",
+  "repo": "chalk/chalk",
+  "summary": "Admin dashboard keeps showing pre-enrollment roster counts after a roster changes",
+  "evidence": [
+    {
+      "kind": "ticket",
+      "label": "zendesk ticket 5120",
+      "url": "https://chalk.zendesk.com/agent/tickets/5120"
+    },
+    {
+      "kind": "issue",
+      "label": "posthog insight 771",
+      "url": "https://us.posthog.com/project/1/insights/771"
+    }
+  ],
+  "repro": "Record a count for a school, read it once (populating the cache), then record a new count. cached_count() still returns the first value. In production: administrators saw yesterday's enrollment numbers all day after enrollment day, and two districts filed tickets about it.",
+  "suspect_change": "unknown",
+  "success_criteria": "cargo test passes: after set_count() records a new value, cached_count() returns the new value for that school, and counts for other schools are left alone.",
+  "constraints": "Keep the cache — do not delete it and read straight through. Do not change the public method signatures. Keep the change minimal.",
+  "prior_attempts": [],
+  "diff_budget": {
+    "max_files": 4,
+    "max_total_lines": 150
+  }
+}

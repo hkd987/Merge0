@@ -1,0 +1,24 @@
+# Archetype: the angry rant with a real bug buried in the middle — most
+# of the text is venting, but one paragraph contains a precise repro and
+# location. The gate must extract signal from noise, not skip on tone.
+name = "buried-bug-rant"
+description = "Mostly venting, but one paragraph has an exact repro (CSV export drops the last row) — WORK."
+intent = """
+Chalk is a K-12 gradebook. Data integrity over speed: an export must
+never silently lose data.
+"""
+
+[[signals]]
+source = "intercom"
+kind = "ticket"
+severity = "high"
+title = "This product is becoming unusable and support keeps closing my tickets"
+body = "Third time writing in. Honestly considering switching vendors, every release breaks something and nobody reads these. Anyway, the actual problem this time: export a class of exactly 25 students to CSV from /classes/roster — the file contains 24 rows, the alphabetically last student is missing every single time. 30 students exports 29. It's always the last row. Import to our SIS has been short one kid per class since the last update. Also the new sidebar is ugly but whatever."
+affected_count = 26
+url_path = "/classes/roster"
+evidence_label = "intercom conversation with sample CSVs"
+evidence_url = "https://app.intercom-example.com/a/inbox/abc123/conversations/70099"
+
+[expect]
+decision = "work"
+work_order_mentions = ["last", "export"]

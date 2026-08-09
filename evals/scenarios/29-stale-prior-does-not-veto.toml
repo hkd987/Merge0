@@ -1,0 +1,64 @@
+name = "stale-prior-does-not-veto"
+description = """
+A defect whose evidence plainly supports a fix — concrete file and line,
+deterministic repro, corroborated across two sources — carrying two reverts
+from over two and a half years ago.
+
+The pair to hold in mind is 11-repeated-reverts: there, two reverts inside
+the recency window must SKIP. Here the reverts are aged out, so the only
+thing that could still block the fix is memory treated as permanent. A gate
+that reads the existence of a revert skips this forever; a gate that reads
+its age weighs it and proceeds. (11's own signal is deliberately vague, so
+it is a control for the memory rule, not an aged twin — swapping its dates
+would still be a correct SKIP on evidence grounds alone.)
+"""
+intent = "Chalk is a K-12 gradebook. Report exports are generated asynchronously."
+suspect_release = "v4.1.0"
+
+[[signals]]
+source = "sentry"
+kind = "exception"
+severity = "high"
+title = "TypeError: cannot read property 'term' of undefined in GradeExport.render"
+body = """
+Thrown at services/export/grade_export.rb:212 when a student has an
+enrollment with no term. Started with v4.1.0 and reproduces on every export
+of a mid-year transfer student. 61 users affected across 9 districts.
+"""
+affected_count = 61
+stack_hash = "9radeexp"
+release = "v4.1.0"
+url_path = "/reports/export"
+evidence_label = "sentry issue"
+evidence_url = "https://sentry.example.com/organizations/chalk/issues/7400/"
+
+[[signals]]
+source = "zendesk"
+kind = "ticket"
+severity = "high"
+title = "Grade export fails for transfer students"
+body = "Three districts report the export button errors for any student who transferred mid-year. Started after the 4.1 release."
+affected_count = 9
+release = "v4.1.0"
+url_path = "/reports/export"
+evidence_label = "zendesk ticket"
+evidence_url = "https://chalk.zendesk.com/agent/tickets/7401"
+
+[[prior_attempts]]
+outcome = "reverted"
+days_ago = 1190
+note = "fix reverted: caused a regression in the 3.x export pipeline"
+
+[[prior_attempts]]
+outcome = "reverted"
+days_ago = 940
+note = "second attempt reverted: same 3.x export pipeline regression"
+
+[expect]
+decision = "work"
+work_order_mentions = ["export"]
+# A judgment call, not a clean flip: measured as a rate so one unlucky
+# sampling of a genuinely borderline case cannot redden the corpus and
+# teach everyone to re-run until green. See BASELINE.md run 6.
+samples = 5
+min_pass_rate = 0.8

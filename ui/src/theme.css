@@ -1,0 +1,157 @@
+/* Merge0 design tokens — THE single source of truth for color, type,
+ * space, shape, and motion. See docs/style-guide.md. Components may not
+ * declare color literals (enforced by style-lint.test.ts); everything
+ * styles through these custom properties. */
+
+@import "@fontsource/ibm-plex-sans/400.css";
+@import "@fontsource/ibm-plex-sans/500.css";
+@import "@fontsource/ibm-plex-sans/600.css";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+
+:root {
+  /* color — light */
+  --bg: #fdfdfc;
+  --surface: #ffffff;
+  --surface-2: #f4f4f2;
+  --ink: #111214;
+  --ink-2: #5c6066;
+  --line: #e3e3e0;
+  --accent: #2f6fff;
+  --accent-ink: #ffffff;
+  --sev-critical: #d92d20;
+  --sev-high: #dc6803;
+  --sev-medium: #a15c07;
+  --sev-low: #087443;
+  --ok: #087443;
+  --danger: #d92d20;
+  --shadow: 0 8px 24px rgba(17, 18, 20, 0.14);
+  --backdrop: rgba(17, 18, 20, 0.4);
+
+  /* type */
+  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --fs-label: 0.75rem;
+  --fs-small: 0.8125rem;
+  --fs-body: 0.9375rem;
+  --fs-title: 1.125rem;
+  --fs-page: 1.5rem;
+  --fs-hero: 2.25rem;
+
+  /* space (8px grid) */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+
+  /* shape */
+  --r: 6px;
+  --r-s: 4px;
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0c0d0f;
+    --surface: #131519;
+    --surface-2: #1b1e24;
+    --ink: #f2f2f0;
+    --ink-2: #9ba0a8;
+    --line: #272b33;
+    --accent: #5b8dff;
+    --accent-ink: #0c0d0f;
+    --sev-critical: #f97066;
+    --sev-high: #fdb022;
+    --sev-medium: #d8b437;
+    --sev-low: #4cc38a;
+    --ok: #4cc38a;
+    --danger: #f97066;
+    --shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    --backdrop: rgba(0, 0, 0, 0.6);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0c0d0f;
+  --surface: #131519;
+  --surface-2: #1b1e24;
+  --ink: #f2f2f0;
+  --ink-2: #9ba0a8;
+  --line: #272b33;
+  --accent: #5b8dff;
+  --accent-ink: #0c0d0f;
+  --sev-critical: #f97066;
+  --sev-high: #fdb022;
+  --sev-medium: #d8b437;
+  --sev-low: #4cc38a;
+  --ok: #4cc38a;
+  --danger: #f97066;
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  color-scheme: dark;
+}
+
+/* base */
+* {
+  box-sizing: border-box;
+}
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100vh;
+}
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font: 400 var(--fs-body) / 1.55 var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+button {
+  font: inherit;
+}
+code,
+kbd,
+pre {
+  font-family: var(--font-mono);
+}
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  a,
+  button,
+  .card,
+  .chip {
+    transition: border-color 120ms ease-out, background 120ms ease-out,
+      color 120ms ease-out, opacity 120ms ease-out;
+  }
+}
+
+/* utility text roles */
+.mono {
+  font-family: var(--font-mono);
+}
+.label {
+  font: 500 var(--fs-label) var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.muted {
+  color: var(--ink-2);
+}
+.num {
+  font-variant-numeric: tabular-nums;
+}

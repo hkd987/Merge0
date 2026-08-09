@@ -1,0 +1,24 @@
+# Archetype: the long-running-process memory leak report with heap
+# evidence — growth curve, suspected retainer, restart workaround noted.
+name = "memory-leak"
+description = "Steady RSS growth with heap snapshots naming the retained structure — WORK."
+intent = """
+Chalk is a K-12 gradebook. The sync worker is expected to run for weeks
+unattended.
+"""
+
+[[signals]]
+source = "datadog"
+kind = "exception"
+severity = "high"
+title = "sync-worker RSS grows ~180MB/day until OOM-killed (heap dump attached)"
+body = "Worker RSS climbs linearly ~180MB/day; OOM kill every 4-5 days (restart cron is masking it). Two heap snapshots 24h apart show growth concentrated in RosterCache entries — evicted districts are still referenced from the retry queue's closure captures. Affects all 3 worker replicas."
+affected_count = 3
+stack_hash = "a11ea70bcafe"
+url_path = "/workers/sync"
+evidence_label = "datadog memory dashboard + heap diff"
+evidence_url = "https://app.datadog.example.com/dashboard/sync-worker-memory"
+
+[expect]
+decision = "work"
+work_order_mentions = ["RosterCache"]

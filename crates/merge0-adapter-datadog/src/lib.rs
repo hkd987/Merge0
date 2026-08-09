@@ -133,6 +133,7 @@ fn normalize_event(raw: &serde_json::Value, base_url: &str) -> Result<Signal, Ad
             ..Default::default()
         },
         affected_count: None,
+        delegated: false,
         first_seen: attrs.timestamp,
         last_seen: attrs.timestamp,
         raw: raw.clone(),

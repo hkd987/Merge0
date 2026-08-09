@@ -163,6 +163,7 @@ mod tests {
                         fingerprint: merge0_signal::fingerprint(Source::Webhook, &[reference]),
                         join_keys: JoinKeys::default(),
                         affected_count: None,
+                        delegated: false,
                         first_seen: chrono::DateTime::UNIX_EPOCH,
                         last_seen: chrono::DateTime::UNIX_EPOCH,
                         raw: item.clone(),

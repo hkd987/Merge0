@@ -61,6 +61,40 @@ pub struct AppState {
     pub vendor_webhooks: Arc<VendorWebhooks>,
     /// Per-IP rate limiting on the OPEN routes (None = disabled).
     pub rate_limiter: Option<Arc<ratelimit::RateLimiter>>,
+    /// Escalation re-open factor for dismissed reports (`MERGE0_REOPEN_FACTOR`,
+    /// default 3; 0 disables re-opens).
+    pub reopen_factor: u64,
+    /// Days a merged fix must stay quiet before it counts as confirmed
+    /// (`MERGE0_EFFICACY_GRACE_DAYS`, default 3).
+    pub efficacy_grace_days: u32,
+    /// Slack notification classes (`MERGE0_SLACK_NOTIFY`, default both):
+    /// new-report pushes and PR-ready pushes, individually killable.
+    pub notify_reports: bool,
+    pub notify_pr_ready: bool,
+    /// Credential broker (PRD §5a, P2): single-use per-Work-Order grants
+    /// behind `POST /broker/credentials`. None = surface disabled
+    /// (`MERGE0_BROKER_RUNNER_KEY` unset). The shipped minter is the
+    /// deterministic preview minter; production Git credentials remain the
+    /// runner's own token until the hosted minter lands.
+    pub broker: Option<Arc<tokio::sync::Mutex<merge0_broker::Broker<merge0_broker::FakeMinter>>>>,
+    /// Curated skill registry surface (PRD §5b, P2): a local signed-index
+    /// directory + the pinned verifying key. None = routes 503.
+    pub registry: Option<Arc<RegistryHandle>>,
+    /// What approval delivers: a PR (default), a tracker story, or both.
+    pub delivery_mode: handlers::actions::DeliveryMode,
+    /// Files stories for the story-bearing delivery modes. None = story
+    /// modes cannot deliver (approval fails loudly rather than silently
+    /// doing nothing).
+    pub tracker: Option<Arc<dyn merge0_tracker::Tracker>>,
+}
+
+/// The registry surface's configuration: where the signed index and skill
+/// packages live, and the pinned trust root that signs the index.
+pub struct RegistryHandle {
+    /// Directory containing `index.json` (a serialized `SignedIndex`) and
+    /// `skills/<name>/<files>` package payloads.
+    pub dir: std::path::PathBuf,
+    pub verifying_key: merge0_registry::VerifyingKey,
 }
 
 /// Configuration for `/webhooks/{vendor}` receivers: per-vendor
@@ -73,7 +107,14 @@ pub struct VendorWebhooks {
     pub posthog_shared_token: Option<String>,
     pub zendesk_signing_secret: Option<String>,
     pub datadog_shared_token: Option<String>,
+    pub jira_shared_token: Option<String>,
+    pub linear_signing_secret: Option<String>,
+    /// Slack Events API requests verify with the same app signing secret
+    /// as `/slack/interactions`.
+    pub slack_signing_secret: Option<String>,
     pub posthog_project_base_url: String,
     pub zendesk_agent_base_url: String,
     pub datadog_app_base_url: String,
+    pub jira_browse_base_url: String,
+    pub slack_team_base_url: String,
 }

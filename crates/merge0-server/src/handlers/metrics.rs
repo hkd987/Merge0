@@ -14,7 +14,10 @@ use merge0_signal::ReportStatus;
 const WINDOW_DAYS: u32 = 30;
 
 pub async fn scrape(State(state): State<AppState>) -> Result<Response, ApiError> {
-    let snapshot = state.tenant.telemetry(WINDOW_DAYS, Utc::now()).await?;
+    let snapshot = state
+        .tenant
+        .telemetry(WINDOW_DAYS, state.efficacy_grace_days, Utc::now())
+        .await?;
     let mut out = String::with_capacity(2048);
 
     let mut gauge = |name: &str, help: &str, value: f64| {
@@ -92,6 +95,41 @@ pub async fn scrape(State(state): State<AppState>) -> Result<Response, ApiError>
         "1 when the Phase 0 validation gate (>=10 decided, >=60% merged) holds.",
         f64::from(u8::from(snapshot.phase0_gate_met)),
     );
+    gauge(
+        "merge0_fixes_confirmed",
+        "Merged fixes whose signals stayed quiet past the grace period.",
+        c.fixes_confirmed as f64,
+    );
+    gauge(
+        "merge0_fixes_recurred",
+        "Merged fixes whose member signals recurred after the grace period.",
+        c.fixes_recurred as f64,
+    );
+    if let Some(rate) = snapshot.fix_efficacy_rate {
+        gauge(
+            "merge0_fix_efficacy_rate",
+            "confirmed / (confirmed + recurred) merged fixes.",
+            rate,
+        );
+    }
+    gauge(
+        "merge0_auto_dispatched",
+        "Dispatches pulled by the autonomy dial (not a human) in the window.",
+        c.auto_dispatched as f64,
+    );
+    gauge(
+        "merge0_tokens_spent_24h",
+        "Model tokens spent in the trailing 24h (gate + runner).",
+        c.tokens_spent_24h as f64,
+    );
+    let budget = state.gate.budget.max_tokens_per_day;
+    if budget > 0 {
+        gauge(
+            "merge0_token_budget_remaining",
+            "Tokens left in the rolling 24h budget (0 = gate paused).",
+            budget.saturating_sub(c.tokens_spent_24h) as f64,
+        );
+    }
 
     // Live queue depths by report status (labels, one TYPE header).
     out.push_str(

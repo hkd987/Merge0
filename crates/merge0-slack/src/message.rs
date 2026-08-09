@@ -65,7 +65,11 @@ fn affected_label(report: &Report) -> String {
 /// [`DismissReason`] values (option value `"<report id>:<reason>"` so the
 /// interaction payload is self-contained). The `{inbox_url}/reports/{id}`
 /// deep link rides along in a trailing context block as fallback only.
-pub fn report_message(report: &Report, inbox_url: &str) -> Value {
+pub fn report_message(
+    report: &Report,
+    confidence: Option<merge0_signal::GateConfidence>,
+    inbox_url: &str,
+) -> Value {
     let id = report.id.to_string();
     let deep_link = format!("{}/reports/{id}", inbox_url.trim_end_matches('/'));
     let dismiss_options: Vec<Value> = DISMISS_REASONS
@@ -77,6 +81,27 @@ pub fn report_message(report: &Report, inbox_url: &str) -> Value {
             })
         })
         .collect();
+
+    let mut fields = vec![
+        json!({
+            "type": "mrkdwn",
+            "text": format!("*Severity*\n{}", severity_label(report.severity)),
+        }),
+        json!({
+            "type": "mrkdwn",
+            "text": format!("*Affected*\n{}", affected_label(report)),
+        }),
+        json!({
+            "type": "mrkdwn",
+            "text": format!("*Evidence*\n{}", evidence_summary(&report.evidence)),
+        }),
+    ];
+    if let Some(confidence) = confidence {
+        fields.push(json!({
+            "type": "mrkdwn",
+            "text": format!("*Gate confidence*\n{}", confidence.as_str()),
+        }));
+    }
 
     json!({
         "text": format!(
@@ -95,20 +120,7 @@ pub fn report_message(report: &Report, inbox_url: &str) -> Value {
             },
             {
                 "type": "section",
-                "fields": [
-                    {
-                        "type": "mrkdwn",
-                        "text": format!("*Severity*\n{}", severity_label(report.severity)),
-                    },
-                    {
-                        "type": "mrkdwn",
-                        "text": format!("*Affected*\n{}", affected_label(report)),
-                    },
-                    {
-                        "type": "mrkdwn",
-                        "text": format!("*Evidence*\n{}", evidence_summary(&report.evidence)),
-                    },
-                ],
+                "fields": fields,
             },
             {
                 "type": "actions",
@@ -303,9 +315,30 @@ mod tests {
     }
 
     #[test]
+    fn confidence_rides_as_a_field_when_known() {
+        let report = fixture_report();
+        let msg = report_message(
+            &report,
+            Some(merge0_signal::GateConfidence::High),
+            "https://inbox.example.com",
+        );
+        let fields = msg["blocks"][1]["fields"].as_array().unwrap();
+        assert!(fields
+            .iter()
+            .any(|f| f["text"].as_str().unwrap_or_default() == "*Gate confidence*\nhigh"));
+
+        let without = report_message(&report, None, "https://inbox.example.com");
+        let fields = without["blocks"][1]["fields"].as_array().unwrap();
+        assert!(!fields.iter().any(|f| f["text"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("confidence")));
+    }
+
+    #[test]
     fn report_message_is_decision_ready() {
         let report = fixture_report();
-        let msg = report_message(&report, "https://inbox.example.com");
+        let msg = report_message(&report, None, "https://inbox.example.com");
         let fields = msg["blocks"][1]["fields"].as_array().unwrap();
         assert!(fields[0]["text"].as_str().unwrap().contains("high"));
         assert!(fields[1]["text"].as_str().unwrap().contains("42"));
@@ -318,7 +351,7 @@ mod tests {
     #[test]
     fn report_message_has_approve_and_structured_dismiss() {
         let report = fixture_report();
-        let msg = report_message(&report, "https://inbox.example.com");
+        let msg = report_message(&report, None, "https://inbox.example.com");
         let actions = &msg["blocks"][2];
         assert_eq!(actions["type"], "actions");
         let approve = &actions["elements"][0];
@@ -341,7 +374,7 @@ mod tests {
     fn report_message_deep_link_is_fallback_context() {
         let report = fixture_report();
         // Trailing slash on the inbox URL must not produce a double slash.
-        let msg = report_message(&report, "https://inbox.example.com/");
+        let msg = report_message(&report, None, "https://inbox.example.com/");
         let context = &msg["blocks"][3];
         assert_eq!(context["type"], "context");
         let text = context["elements"][0]["text"].as_str().unwrap();
@@ -355,7 +388,7 @@ mod tests {
         // rendered message carries exactly one approve action and one
         // dismiss select referencing exactly one report id.
         let report = fixture_report();
-        let msg = report_message(&report, "https://inbox.example.com");
+        let msg = report_message(&report, None, "https://inbox.example.com");
         let ids = action_ids(&msg);
         assert_eq!(
             ids.iter().filter(|id| *id == "approve").count(),

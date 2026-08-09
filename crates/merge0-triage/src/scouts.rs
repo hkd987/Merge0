@@ -123,6 +123,7 @@ mod tests {
             fingerprint: format!("{}:{}", source.as_str(), Ulid::new()),
             join_keys: JoinKeys::default(),
             affected_count: None,
+            delegated: false,
             first_seen: last_seen,
             last_seen,
             raw: serde_json::Value::Null,

@@ -12,9 +12,9 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 REPO_ROOT=$PWD
-FIXTURES=("${@:-districts offby1 conflict}")
+FIXTURES=("${@:-districts offby1 error-swallow utf8-truncate stale-cache conflict}")
 # Word-split the default list when invoked without args.
-if [ $# -eq 0 ]; then FIXTURES=(districts offby1 conflict); fi
+if [ $# -eq 0 ]; then FIXTURES=(districts offby1 error-swallow utf8-truncate stale-cache conflict); fi
 REPAIR_BUDGET=2
 WORKDIRS=()
 trap 'rm -rf "${WORKDIRS[@]}"' EXIT

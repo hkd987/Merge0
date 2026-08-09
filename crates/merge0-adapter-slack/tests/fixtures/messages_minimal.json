@@ -1,0 +1,17 @@
+{
+  "endpoint": "messages",
+  "context": {
+    "team_base_url": "https://acme-example.slack.com/",
+    "channel_id": "C0123456789",
+    "channel_name": "bugs"
+  },
+  "payload": {
+    "messages": [
+      {
+        "ts": "1723100000.000100",
+        "user": "U0EXAMPLE01",
+        "text": "Cannot log in"
+      }
+    ]
+  }
+}

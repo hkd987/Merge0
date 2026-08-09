@@ -208,6 +208,7 @@ fn meta_signal(
         fingerprint: fingerprint(Source::Meta, parts),
         join_keys: JoinKeys::default(),
         affected_count,
+        delegated: false,
         first_seen: captured_at,
         last_seen: captured_at,
         raw: raw.clone(),

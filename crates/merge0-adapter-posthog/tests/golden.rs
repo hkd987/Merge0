@@ -35,3 +35,39 @@ fn rageclick_events() {
         &fixture("rageclick_events.expected.json"),
     );
 }
+
+#[test]
+fn dead_click_events_typical() {
+    check_golden_files(
+        &PosthogAdapter,
+        &fixture("dead_click_events_typical.json"),
+        &fixture("dead_click_events_typical.expected.json"),
+    );
+}
+
+#[test]
+fn dead_click_events_minimal() {
+    check_golden_files(
+        &PosthogAdapter,
+        &fixture("dead_click_events_minimal.json"),
+        &fixture("dead_click_events_minimal.expected.json"),
+    );
+}
+
+#[test]
+fn funnels_typical() {
+    check_golden_files(
+        &PosthogAdapter,
+        &fixture("funnels_typical.json"),
+        &fixture("funnels_typical.expected.json"),
+    );
+}
+
+#[test]
+fn funnels_minimal() {
+    check_golden_files(
+        &PosthogAdapter,
+        &fixture("funnels_minimal.json"),
+        &fixture("funnels_minimal.expected.json"),
+    );
+}

@@ -1,0 +1,16 @@
+{
+  "endpoint": "issues",
+  "context": { "browse_base_url": "https://acme-example.atlassian.net/browse/" },
+  "payload": {
+    "issues": [
+      {
+        "key": "OPS-7",
+        "fields": {
+          "summary": "Nightly sync job logs a warning",
+          "created": "2026-08-05T14:00:00Z",
+          "updated": "2026-08-05T14:00:00Z"
+        }
+      }
+    ]
+  }
+}

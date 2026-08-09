@@ -1,0 +1,26 @@
+# Archetype: the VS Code-style performance regression report — before/
+# after numbers, a version boundary, and a profile attached. Perf work is
+# maintenance when the regression is measured, located, and testable.
+name = "perf-regression"
+description = "Measured perf regression (2.1s -> 9.4s) pinned to a release with a profile pointing at one function — WORK."
+intent = """
+Chalk is a K-12 gradebook. Teachers open the gradebook between classes;
+p95 page interactive under 3 seconds is the stated budget.
+"""
+suspect_release = "v2.5.0"
+
+[[signals]]
+source = "sentry"
+kind = "regression"
+severity = "high"
+title = "Gradebook grid time-to-interactive regressed 2.1s -> 9.4s after v2.5.0"
+body = "Transaction /gradebook p95 went from 2.1s to 9.4s with the v2.5.0 deploy and has stayed there for 3 days. The attached profile shows 71% of time in buildCellStyles() recomputing per cell per render; before v2.5.0 it was memoized. 480 teacher sessions over threshold."
+affected_count = 480
+url_path = "/gradebook"
+release = "v2.5.0"
+evidence_label = "sentry transaction profile"
+evidence_url = "https://sentry.example.com/organizations/chalk/performance/gradebook/"
+
+[expect]
+decision = "work"
+work_order_mentions = ["gradebook"]

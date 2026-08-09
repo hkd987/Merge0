@@ -1,0 +1,186 @@
+[
+  {
+    "body": "Applying a coupon on the checkout page leaves the Pay now button spinning forever. Reported by three pilot districts this week.",
+    "evidence": [
+      {
+        "kind": "ticket",
+        "label": "Jira CHK-42",
+        "url": "https://acme-example.atlassian.net/browse/CHK-42"
+      }
+    ],
+    "fingerprint": "jira:90dd62938bb57f8be20b2fe200c2eb2c",
+    "first_seen": "2026-08-04T11:30:00Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "ticket",
+    "last_seen": "2026-08-06T16:45:00Z",
+    "raw": {
+      "fields": {
+        "created": "2026-08-04T11:30:00Z",
+        "description": {
+          "content": [
+            {
+              "content": [
+                {
+                  "text": "Applying a coupon on the checkout page leaves the ",
+                  "type": "text"
+                },
+                {
+                  "marks": [
+                    {
+                      "type": "strong"
+                    }
+                  ],
+                  "text": "Pay now",
+                  "type": "text"
+                },
+                {
+                  "text": " button spinning forever.",
+                  "type": "text"
+                }
+              ],
+              "type": "paragraph"
+            },
+            {
+              "content": [
+                {
+                  "text": " Reported by three pilot districts this week.",
+                  "type": "text"
+                }
+              ],
+              "type": "paragraph"
+            }
+          ],
+          "type": "doc",
+          "version": 1
+        },
+        "labels": [
+          "checkout",
+          "payments"
+        ],
+        "priority": {
+          "id": "1",
+          "name": "Highest"
+        },
+        "project": {
+          "id": "10000",
+          "key": "CHK",
+          "name": "Checkout"
+        },
+        "status": {
+          "name": "In Progress",
+          "statusCategory": {
+            "id": 4,
+            "key": "indeterminate",
+            "name": "In Progress"
+          }
+        },
+        "summary": "Checkout spinner never resolves after coupon apply",
+        "updated": "2026-08-06T16:45:00Z"
+      },
+      "id": "10042",
+      "key": "CHK-42",
+      "self": "https://acme-example.atlassian.net/rest/api/3/issue/10042"
+    },
+    "severity": "critical",
+    "source": "jira",
+    "source_ref": "CHK-42",
+    "title": "Checkout spinner never resolves after coupon apply"
+  },
+  {
+    "body": "Emails arrive from \"noreply@example.com\" with the sender name of the staging brand instead of the store name.",
+    "delegated": true,
+    "evidence": [
+      {
+        "kind": "ticket",
+        "label": "Jira CHK-57",
+        "url": "https://acme-example.atlassian.net/browse/CHK-57"
+      }
+    ],
+    "fingerprint": "jira:b389182a36e67f5c50752936fe03b09a",
+    "first_seen": "2026-08-05T09:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "ticket",
+    "last_seen": "2026-08-05T09:00:00Z",
+    "raw": {
+      "fields": {
+        "created": "2026-08-05T09:00:00Z",
+        "description": "Emails arrive from \"noreply@example.com\" with the sender name of the staging brand instead of the store name.",
+        "labels": [
+          "email",
+          "Merge0"
+        ],
+        "priority": {
+          "id": "3",
+          "name": "Medium"
+        },
+        "project": {
+          "id": "10000",
+          "key": "CHK",
+          "name": "Checkout"
+        },
+        "status": {
+          "name": "To Do",
+          "statusCategory": {
+            "id": 2,
+            "key": "new",
+            "name": "To Do"
+          }
+        },
+        "summary": "Order confirmation email uses wrong sender name",
+        "updated": "2026-08-05T09:00:00Z"
+      },
+      "id": "10057",
+      "key": "CHK-57",
+      "self": "https://acme-example.atlassian.net/rest/api/3/issue/10057"
+    },
+    "severity": "high",
+    "source": "jira",
+    "source_ref": "CHK-57",
+    "title": "Order confirmation email uses wrong sender name"
+  },
+  {
+    "body": "",
+    "evidence": [
+      {
+        "kind": "ticket",
+        "label": "Jira CHK-73",
+        "url": "https://acme-example.atlassian.net/browse/CHK-73"
+      }
+    ],
+    "fingerprint": "jira:7f7da316d00dbc3b418ca3e7c650edaf",
+    "first_seen": "2026-08-06T08:15:00Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "ticket",
+    "last_seen": "2026-08-07T12:00:00Z",
+    "raw": {
+      "fields": {
+        "created": "2026-08-06T08:15:00Z",
+        "project": {
+          "id": "10000",
+          "key": "CHK",
+          "name": "Checkout"
+        },
+        "status": {
+          "name": "Backlog",
+          "statusCategory": {
+            "id": 2,
+            "key": "new",
+            "name": "To Do"
+          }
+        },
+        "summary": "Add keyboard navigation to the coupon field",
+        "updated": "2026-08-07T12:00:00Z"
+      },
+      "id": "10073",
+      "key": "CHK-73",
+      "self": "https://acme-example.atlassian.net/rest/api/3/issue/10073"
+    },
+    "severity": "low",
+    "source": "jira",
+    "source_ref": "CHK-73",
+    "title": "Add keyboard navigation to the coupon field"
+  }
+]

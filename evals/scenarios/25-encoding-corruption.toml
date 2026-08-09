@@ -1,0 +1,23 @@
+# Archetype: the classic i18n/encoding bug — accented names corrupted
+# at a specific boundary, with clean before/after examples.
+name = "encoding-corruption"
+description = "Accented student names become mojibake in PDF report cards only — concrete boundary, WORK."
+intent = """
+Chalk is a K-12 gradebook. Student names must render correctly
+everywhere — report cards go home to families.
+"""
+
+[[signals]]
+source = "jira"
+kind = "ticket"
+severity = "high"
+title = "Accented names corrupted in PDF report cards (fine on screen and in CSV)"
+body = "Names with accents render as mojibake only in the generated PDF: 'José Muñoz' prints as 'JosÃ© MuÃ±oz'. Screen display and CSV export are both correct, so the data is fine — the corruption happens in the PDF pipeline (looks like UTF-8 bytes read as Latin-1 when embedding the font subset). Repro: any student with a non-ASCII name, Reports -> Print report card."
+affected_count = 210
+url_path = "/reports/print"
+evidence_label = "jira CHK-1120 with sample PDF"
+evidence_url = "https://chalk-example.atlassian.net/browse/CHK-1120"
+
+[expect]
+decision = "work"
+work_order_mentions = ["PDF"]

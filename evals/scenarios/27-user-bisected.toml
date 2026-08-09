@@ -1,0 +1,23 @@
+# Archetype: the gift-wrapped report — a technical user who bisected the
+# regression to an exact commit and quotes it. The gate should use the
+# bisect result as suspect_change.
+name = "user-bisected"
+description = "User git-bisected the regression to one commit and says so — WORK with the bisected commit as the suspect change."
+intent = """
+Chalk is a K-12 gradebook. Data integrity over speed.
+"""
+
+[[signals]]
+source = "github"
+kind = "ticket"
+severity = "high"
+title = "Attendance keyboard shortcuts dead since commit 4f2a91c (bisected)"
+body = "The a/t/e keyboard shortcuts in the attendance grid stopped working. I bisected: last good is 09cc1f2, first bad is 4f2a91c ('refactor: extract KeyboardScope provider'). The provider now mounts after the grid registers its handlers, so registration lands on the old scope instance. Repro: open /attendance, press a — nothing. Happy to test a fix."
+affected_count = 38
+url_path = "/attendance"
+evidence_label = "github issue #2233 with bisect log"
+evidence_url = "https://github.example.com/chalk/chalk/issues/2233"
+
+[expect]
+decision = "work"
+work_order_mentions = ["4f2a91c"]

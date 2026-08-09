@@ -91,8 +91,15 @@ impl TenantManager {
         actor: &str,
         now: DateTime<Utc>,
     ) -> Result<()> {
-        // Surface a typed not-found instead of an FK violation.
-        self.get_tenant(tenant_id).await?;
+        // Surface a typed not-found instead of an FK violation — and refuse
+        // mutation on a suspended tenant. Suspension means frozen: the org's
+        // data plane is refused by `tenant_store`, and its membership must
+        // not drift underneath it either (an operator resumes first, then
+        // edits, and both actions land in the audit trail in that order).
+        let tenant = self.get_tenant(tenant_id).await?;
+        if tenant.suspended {
+            return Err(EeError::TenantSuspended(tenant_id.to_string()));
+        }
         let sql = format!(
             "INSERT INTO {t} (tenant_id, email, role) VALUES ($1,$2,$3)
              ON CONFLICT (tenant_id, email) DO UPDATE SET role = EXCLUDED.role",

@@ -126,6 +126,7 @@ fn normalize_issue(raw: &serde_json::Value, repo: &str) -> Result<Signal, Adapte
             ..Default::default()
         },
         affected_count: issue.reactions.as_ref().map(|r| r.total_count),
+        delegated: false,
         first_seen: issue.created_at,
         last_seen: issue.updated_at,
         raw: raw.clone(),

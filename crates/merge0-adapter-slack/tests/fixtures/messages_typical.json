@@ -1,0 +1,52 @@
+{
+  "endpoint": "messages",
+  "context": {
+    "team_base_url": "https://acme-example.slack.com",
+    "channel_id": "C0123456789",
+    "channel_name": "bugs"
+  },
+  "payload": {
+    "messages": [
+      {
+        "type": "message",
+        "ts": "1723273600.000400",
+        "user": "U0EXAMPLE03",
+        "text": "Sync status page goes blank for Lincoln Elementary\nRepro: open the sync status page for any school with no linked district. Console shows a TypeError.",
+        "thread_ts": "1723273600.000400",
+        "reply_count": 4,
+        "reply_users_count": 3,
+        "latest_reply": "1723360000.000900",
+        "team": "T0EXAMPLE00"
+      },
+      {
+        "type": "message",
+        "ts": "1723187200.000200",
+        "user": "U0EXAMPLE02",
+        "text": "Roster CSV export downloads an empty file when the roster has more than 500 students",
+        "team": "T0EXAMPLE00"
+      },
+      {
+        "type": "message",
+        "subtype": "channel_join",
+        "ts": "1723186900.000150",
+        "user": "U0EXAMPLE07",
+        "text": "<@U0EXAMPLE07> has joined the channel"
+      },
+      {
+        "type": "message",
+        "ts": "1723186800.000100",
+        "user": "U0EXAMPLE99",
+        "bot_id": "B0EXAMPLE01",
+        "text": "Merge0 triage: filed work order WO-1042 for the sync status crash",
+        "team": "T0EXAMPLE00"
+      },
+      {
+        "type": "message",
+        "ts": "1723100000.000100",
+        "user": "U0EXAMPLE01",
+        "text": "Grade band dropdown on the reports page lists each band twice",
+        "team": "T0EXAMPLE00"
+      }
+    ]
+  }
+}

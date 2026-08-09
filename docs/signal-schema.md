@@ -1,4 +1,4 @@
-# Signal Schema — v0.2
+# Signal Schema — v0.6
 
 The Signal is the contract between every Merge0 component and the integration
 surface for external adapters (including the future generic webhook adapter).
@@ -15,6 +15,22 @@ and the types cannot drift silently.
 
 ### Changelog
 
+- **v0.6** — `source` enum extended with the product-analytics tools
+  `mixpanel` (funnel drop-offs via the Query API) and `openpanel`
+  (self-hostable analytics; error-shaped events via the export API).
+  Additive only; no field changes.
+- **v0.5** — added `pr_url` (string, optional) to the internal `OutcomeRef`.
+  The value was already stored; outcome memory simply never surfaced it, so
+  the gate could see *that* a prior fix was reverted but never *what it
+  changed*. Additive and optional; no adapter-visible change.
+- **v0.4** — added `delegated` (boolean, default `false`): a ticket
+  explicitly handed to Merge0 via a tracker label (e.g. a `merge0` label in
+  Jira/Linear). Delegated signals bypass no safety checks — they are simply
+  prioritized by triage. Also adds the internal `GateConfidence` enum
+  (`low` / `medium` / `high`) carried on Work Orders; see Related types.
+- **v0.3** — `source` enum extended with the planning/ticketing tools:
+  `jira`, `linear`, `slack` (messages/threads from designated channels),
+  `asana`, and `trello`. Additive only; no field changes.
 - **v0.2** — `source` enum extended with `intercom`, `otel`, `datadog`,
   `loopforge`, and `meta` (Merge0's own operational telemetry, ingested for
   the meta-loop). Additive only; no field changes.
@@ -29,7 +45,7 @@ and the types cannot drift silently.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `id` | ULID string | yes | Assigned by the adapter at normalization time. Not stable across re-ingestion — use `fingerprint` for dedupe. |
-| `source` | enum | yes | `posthog`, `sentry`, `zendesk`, `intercom`, `github`, `webhook`, `otel`, `datadog`, `loopforge`, `meta` |
+| `source` | enum | yes | `posthog`, `sentry`, `zendesk`, `intercom`, `github`, `webhook`, `otel`, `datadog`, `loopforge`, `jira`, `linear`, `slack`, `asana`, `trello`, `meta` |
 | `kind` | enum | yes | `exception`, `ux_friction`, `ticket`, `regression`, `custom` |
 | `severity` | enum | yes | `low`, `medium`, `high`, `critical` |
 | `source_ref` | string | yes | Vendor-native ID for the underlying object (issue ID, session ID, ticket ID). Deep links go in `evidence`. |
@@ -39,6 +55,7 @@ and the types cannot drift silently.
 | `fingerprint` | string | yes | Stable hash for dedupe within a source: the same underlying defect must produce the same fingerprint across payload variants and re-ingestion. Format: `<source>:<16-byte-sha256-hex>`. |
 | `join_keys` | `JoinKeys` | yes (fields optional) | Correlation context — **required where derivable** from the vendor payload. |
 | `affected_count` | integer | no | Users/accounts impacted. |
+| `delegated` | boolean | no (default `false`) | The signal was explicitly handed to Merge0 (e.g. a `merge0` label on the source ticket). Serialized only when `true`. |
 | `first_seen` | RFC 3339 timestamp | yes | |
 | `last_seen` | RFC 3339 timestamp | yes | |
 | `raw` | JSON | yes | Original vendor payload, verbatim, for audit only. |
@@ -115,6 +132,17 @@ same one community adapters are expected to use.
 
 ## Related types
 
-`WorkOrder` and `OutcomeRef` (defined in `crates/merge0-signal` alongside
-`Signal`) are internal pipeline types, not part of the adapter integration
-surface; their canonical definition is the Rust source and the PRD (§4).
+`WorkOrder`, `OutcomeRef`, and `GateConfidence` (defined in
+`crates/merge0-signal` alongside `Signal`) are internal pipeline types, not
+part of the adapter integration surface; their canonical definition is the
+Rust source and the PRD (§4). `GateConfidence` (`low` / `medium` / `high`,
+default `low`) is the gate's self-assessed fix confidence carried on each
+Work Order; unparseable model output maps to `low` so autonomy decisions
+fail conservative.
+
+`OutcomeRef` carries `pr_url` (optional) alongside the outcome and its
+timestamp. It exists because "this was tried and reverted" is not, on its
+own, an actionable memory: without a pointer to what the reverted attempt
+changed, the gate can only decline. With one, it can write a constraint —
+*don't repeat the approach in this PR* — which is the difference between
+memory that blocks work and memory that improves it.

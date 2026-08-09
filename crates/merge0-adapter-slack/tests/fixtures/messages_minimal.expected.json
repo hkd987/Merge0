@@ -1,0 +1,28 @@
+[
+  {
+    "affected_count": 1,
+    "body": "Cannot log in",
+    "evidence": [
+      {
+        "kind": "other",
+        "label": "Slack thread in #bugs",
+        "url": "https://acme-example.slack.com/archives/C0123456789/p1723100000000100"
+      }
+    ],
+    "fingerprint": "slack:7e41fb604fae67894c212f39595cefcf",
+    "first_seen": "2024-08-08T06:53:20Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "ticket",
+    "last_seen": "2024-08-08T06:53:20Z",
+    "raw": {
+      "text": "Cannot log in",
+      "ts": "1723100000.000100",
+      "user": "U0EXAMPLE01"
+    },
+    "severity": "medium",
+    "source": "slack",
+    "source_ref": "C0123456789:1723100000.000100",
+    "title": "Cannot log in"
+  }
+]

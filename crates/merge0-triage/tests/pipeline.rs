@@ -67,6 +67,7 @@ fn exception(source: Source, reference: &str, shash: &str) -> Signal {
             ..Default::default()
         },
         affected_count: Some(21),
+        delegated: false,
         first_seen: now() - Duration::hours(20),
         last_seen: now() - Duration::hours(1),
         raw: serde_json::Value::Null,
@@ -93,6 +94,7 @@ fn rage_click(path: &str) -> Signal {
             ..Default::default()
         },
         affected_count: Some(3),
+        delegated: false,
         first_seen: now() - Duration::hours(10),
         last_seen: now() - Duration::hours(2),
         raw: serde_json::Value::Null,

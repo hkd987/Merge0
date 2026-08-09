@@ -1,0 +1,124 @@
+[
+  {
+    "body": "Deliveries to customer endpoints time out once the payload exceeds ~1 MB.\n\nSteps:\n1. Configure a webhook\n2. Trigger a bulk export\n3. Observe repeated 504s in the delivery log",
+    "evidence": [
+      {
+        "kind": "ticket",
+        "label": "Linear ENG-101",
+        "url": "https://linear.example.com/acme/issue/ENG-101/webhook-deliveries-time-out"
+      }
+    ],
+    "fingerprint": "linear:7bda042d6245c6224402f224f274e1fd",
+    "first_seen": "2026-08-03T10:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "ticket",
+    "last_seen": "2026-08-06T17:30:00Z",
+    "raw": {
+      "createdAt": "2026-08-03T10:00:00Z",
+      "description": "Deliveries to customer endpoints time out once the payload exceeds ~1 MB.\n\nSteps:\n1. Configure a webhook\n2. Trigger a bulk export\n3. Observe repeated 504s in the delivery log",
+      "id": "b1c2d3e4-0000-4000-8000-000000000101",
+      "identifier": "ENG-101",
+      "labels": {
+        "nodes": [
+          {
+            "name": "bug"
+          }
+        ]
+      },
+      "priority": 1,
+      "state": {
+        "id": "st-started",
+        "name": "In Progress",
+        "type": "started"
+      },
+      "title": "Webhook deliveries time out for large payloads",
+      "updatedAt": "2026-08-06T17:30:00Z",
+      "url": "https://linear.example.com/acme/issue/ENG-101/webhook-deliveries-time-out"
+    },
+    "severity": "critical",
+    "source": "linear",
+    "source_ref": "ENG-101",
+    "title": "Webhook deliveries time out for large payloads"
+  },
+  {
+    "body": "CSV export returns a 500 for large workspaces. Suspect the in-memory buffer in the export worker.",
+    "delegated": true,
+    "evidence": [
+      {
+        "kind": "ticket",
+        "label": "Linear ENG-123",
+        "url": "https://linear.example.com/acme/issue/ENG-123/report-export-fails"
+      }
+    ],
+    "fingerprint": "linear:ac5d1f9a0610b3462b7ecbb03acdde94",
+    "first_seen": "2026-08-05T09:15:00Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "ticket",
+    "last_seen": "2026-08-05T09:15:00Z",
+    "raw": {
+      "createdAt": "2026-08-05T09:15:00Z",
+      "description": "CSV export returns a 500 for large workspaces. Suspect the in-memory buffer in the export worker.",
+      "id": "b1c2d3e4-0000-4000-8000-000000000123",
+      "identifier": "ENG-123",
+      "labels": {
+        "nodes": [
+          {
+            "name": "exports"
+          },
+          {
+            "name": "Merge0"
+          }
+        ]
+      },
+      "priority": 3,
+      "state": {
+        "id": "st-backlog",
+        "name": "Backlog",
+        "type": "backlog"
+      },
+      "title": "Report export fails for workspaces with >10k rows",
+      "updatedAt": "2026-08-05T09:15:00Z",
+      "url": "https://linear.example.com/acme/issue/ENG-123/report-export-fails"
+    },
+    "severity": "high",
+    "source": "linear",
+    "source_ref": "ENG-123",
+    "title": "Report export fails for workspaces with >10k rows"
+  },
+  {
+    "body": "",
+    "evidence": [
+      {
+        "kind": "ticket",
+        "label": "Linear ENG-155",
+        "url": "https://linear.example.com/acme/issue/ENG-155/dark-mode-settings"
+      }
+    ],
+    "fingerprint": "linear:642afe7490645f43d13933f136f1ec10",
+    "first_seen": "2026-08-06T14:45:00Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "ticket",
+    "last_seen": "2026-08-07T11:00:00Z",
+    "raw": {
+      "createdAt": "2026-08-06T14:45:00Z",
+      "id": "b1c2d3e4-0000-4000-8000-000000000155",
+      "identifier": "ENG-155",
+      "priority": 0,
+      "state": {
+        "id": "st-triage",
+        "name": "Triage",
+        "type": "triage"
+      },
+      "title": "Consider dark mode for the settings page",
+      "updatedAt": "2026-08-07T11:00:00Z",
+      "url": "https://linear.example.com/acme/issue/ENG-155/dark-mode-settings"
+    },
+    "severity": "low",
+    "source": "linear",
+    "source_ref": "ENG-155",
+    "title": "Consider dark mode for the settings page"
+  }
+]

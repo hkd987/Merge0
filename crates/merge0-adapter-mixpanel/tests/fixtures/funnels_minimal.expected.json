@@ -1,0 +1,66 @@
+[
+  {
+    "affected_count": 80,
+    "body": "80 of 640 users lost at step 2/2 'Trial Started' (13% drop); steps: Landing 640 → Trial Started 560",
+    "evidence": [
+      {
+        "kind": "issue",
+        "label": "mixpanel funnel Trial start",
+        "url": "https://mixpanel.example.com/project/318/funnels/41"
+      }
+    ],
+    "fingerprint": "mixpanel:0d7da6b3fb38fd979613923c63dc5089",
+    "first_seen": "2026-08-01T06:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "ux_friction",
+    "last_seen": "2026-08-01T06:00:00Z",
+    "raw": {
+      "fetched_at": "2026-08-01T06:00:00Z",
+      "funnel_id": 41,
+      "name": "Trial start",
+      "response": {
+        "data": {
+          "2026-07-25": {
+            "steps": [
+              {
+                "count": 900,
+                "event": "Landing",
+                "goal": "Landing"
+              },
+              {
+                "count": 200,
+                "event": "Trial Started",
+                "goal": "Trial Started"
+              }
+            ]
+          },
+          "2026-08-01": {
+            "steps": [
+              {
+                "count": 640,
+                "event": "Landing",
+                "goal": "Landing"
+              },
+              {
+                "count": 560,
+                "event": "Trial Started",
+                "goal": "Trial Started"
+              }
+            ]
+          }
+        },
+        "meta": {
+          "dates": [
+            "2026-07-25",
+            "2026-08-01"
+          ]
+        }
+      }
+    },
+    "severity": "low",
+    "source": "mixpanel",
+    "source_ref": "41",
+    "title": "Funnel drop-off: Trial start loses 13% at Trial Started"
+  }
+]

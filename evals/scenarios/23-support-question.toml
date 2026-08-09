@@ -1,0 +1,21 @@
+# Archetype: the question-as-issue — a how-do-I filed where bugs go.
+# Nothing is broken; nothing to fix. Support content, not maintenance.
+name = "support-question"
+description = "'How do I export final grades for the district office?' — a usage question, not a defect — SKIP."
+intent = """
+Chalk is a K-12 gradebook. Export intentionally omits archived rosters.
+"""
+
+[[signals]]
+source = "zendesk"
+kind = "ticket"
+severity = "medium"
+title = "How do I export final grades for the district office?"
+body = "Hi — end of semester here. What's the right way to get final grades out for our district office? Is there a report under Analytics or do I use the CSV export? The office wants one file per school. Thanks so much, love the product."
+affected_count = 1
+url_path = "/reports"
+evidence_label = "zendesk ticket #7801"
+evidence_url = "https://chalk.zendesk.example.com/agent/tickets/7801"
+
+[expect]
+decision = "skip"

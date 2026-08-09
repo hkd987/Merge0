@@ -18,6 +18,9 @@ pub async fn snapshot(
     Query(params): Query<Params>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let window = params.window_days.unwrap_or(30).clamp(1, 365);
-    let snapshot = state.tenant.telemetry(window, Utc::now()).await?;
+    let snapshot = state
+        .tenant
+        .telemetry(window, state.efficacy_grace_days, Utc::now())
+        .await?;
     Ok(Json(serde_json::to_value(&snapshot).expect("serializes")))
 }

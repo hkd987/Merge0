@@ -1,0 +1,20 @@
+# Scout: signals from the places work gets written down — support desks,
+# issue trackers, planning boards, and designated Slack channels.
+# query_template is EXECUTED as a deterministic Signal filter — grammar
+# documented in new-exception-clusters.toml; typos fail the triage run loudly.
+
+name = "ticket-triage"
+description = "Actionable defect reports arriving as tickets/tasks/threads?"
+schedule = "nightly"
+sources = ["zendesk", "intercom", "github", "jira", "linear", "slack", "asana", "trello"]
+query_template = "kind = 'ticket' AND last_seen >= {{period_start}} ORDER BY severity DESC"
+prompt = """
+You are reviewing ticket-shaped Signals: support tickets, tracker issues,
+planning-board tasks, and messages from designated bug channels. Surface the
+ones that describe a concrete product DEFECT — something broken, wrong, or
+erroring — with enough substance to investigate: what happens, where, and to
+whom. Group duplicates describing the same underlying problem. Leave feature
+requests, questions, praise, and process chatter alone; they are not
+maintenance work. Cross-reference against error signals where join keys or
+matching pages suggest the same defect.
+"""

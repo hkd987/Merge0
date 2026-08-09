@@ -239,7 +239,7 @@ async fn the_complete_loop_fix_harden_meta() {
 
     // ---- Telemetry (P0-10) ----
     let snapshot = tenant
-        .telemetry(30, merged_at + Duration::hours(1))
+        .telemetry(30, 3, merged_at + Duration::hours(1))
         .await
         .unwrap();
     assert_eq!(snapshot.counts.prs_merged, 1);
@@ -420,6 +420,7 @@ async fn p2_broker_flow_work_order_scoped_short_lived_credentials() {
         constraints: String::new(),
         prior_attempts: vec![],
         diff_budget: Default::default(),
+        confidence: Default::default(),
     };
 
     let mut broker = Broker::new(FakeMinter);

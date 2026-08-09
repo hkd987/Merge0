@@ -31,7 +31,12 @@ pub async fn digest(State(state): State<AppState>) -> Result<Json<serde_json::Va
             }
         }
     }
-    let merged_this_week = state.tenant.telemetry(7, now).await?.counts.prs_merged;
+    let merged_this_week = state
+        .tenant
+        .telemetry(7, state.efficacy_grace_days, now)
+        .await?
+        .counts
+        .prs_merged;
 
     let message = merge0_slack::weekly_digest(&pending, &prs_awaiting, merged_this_week);
     if let Some(slack) = &state.slack {
@@ -75,7 +80,7 @@ pub async fn interactions(
         .map_err(|e| ApiError::bad_request(format!("unparseable interaction: {e}")))?;
     let id = parse_report_id(&verdict.report_id)?;
     let result = match verdict.verdict {
-        Verdict::Approve => actions::approve(&state, id).await?,
+        Verdict::Approve => actions::approve(&state, id, actions::DispatchedBy::Slack).await?,
         Verdict::Dismiss(reason) => actions::dismiss(&state, id, reason).await?,
     };
     Ok(Json(result))

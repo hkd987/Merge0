@@ -1,0 +1,15 @@
+{
+  "endpoint": "issues",
+  "context": {},
+  "payload": {
+    "nodes": [
+      {
+        "identifier": "OPS-3",
+        "title": "Deploy notifications are duplicated",
+        "url": "https://linear.example.com/acme/issue/OPS-3/deploy-notifications-duplicated",
+        "createdAt": "2026-08-05T14:00:00Z",
+        "updatedAt": "2026-08-05T14:00:00Z"
+      }
+    ]
+  }
+}

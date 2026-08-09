@@ -12,9 +12,9 @@
 //!    emitted Work Order.
 
 use crate::config::GateConfig;
-use crate::{truncate_with_marker, Result};
+use crate::Result;
 use merge0_model::{extract_json_object, Model, ModelRequest};
-use merge0_signal::{GateDecision, OutcomeRef, Report, WorkOrder};
+use merge0_signal::{GateConfidence, GateDecision, OutcomeRef, Report, WorkOrder};
 use serde::Deserialize;
 
 pub struct GateOutcome {
@@ -43,6 +43,8 @@ struct ModelVerdict {
     constraints: Option<Text>,
     #[serde(default)]
     suspect_change: Option<Text>,
+    #[serde(default)]
+    confidence: Option<Text>,
 }
 
 /// A string, or a list of strings joined into one.
@@ -122,11 +124,28 @@ fn build_prompt(
             )
         })
         .collect();
+    // Outcome memory without age is a blunt instrument: an eight-month-old
+    // revert should inform, not veto. Wall-clock is read here rather than
+    // threaded through `evaluate` because the marker is day-coarse.
+    let now = chrono::Utc::now();
     let prior: Vec<String> = prior_attempts
         .iter()
         .map(|p| {
+            let age_days = (now - p.occurred_at).num_days().max(0);
+            let staleness = if age_days > config.stale_prior_days as i64 {
+                " — STALE"
+            } else {
+                ""
+            };
+            // The PR link is what makes a revert actionable rather than
+            // merely discouraging: it is the only way the gate can say
+            // "don't repeat what that attempt did" instead of declining.
+            let pr = match p.pr_url.as_deref() {
+                Some(url) => format!(" [attempt PR: {url}]"),
+                None => String::new(),
+            };
             format!(
-                "- {} on {} ({})",
+                "- {} on {} ({age_days} days ago{staleness}) ({}){pr}",
                 serde_json::to_string(&p.outcome).unwrap(),
                 p.occurred_at.date_naive(),
                 p.note.as_deref().unwrap_or("no note")
@@ -138,7 +157,7 @@ fn build_prompt(
          suspect_release: {release}\n\nsummary:\n{summary}\n\nevidence:\n{evidence}\n\n\
          prior attempts (outcome memory):\n{prior}\n\nintent notes (customer-authored):\n{intent}\n\n\
          Respond with a single JSON object: either\n\
-         {{\"decision\":\"work\",\"summary\":...,\"repro\":...,\"success_criteria\":...,\"constraints\":...,\"suspect_change\":...}}\n\
+         {{\"decision\":\"work\",\"summary\":...,\"repro\":...,\"success_criteria\":...,\"constraints\":...,\"suspect_change\":...,\"confidence\":\"high|medium|low\"}}\n\
          or {{\"decision\":\"skip\",\"reason\":...}}. Every field is a plain string.",
         title = report.title,
         severity = report.severity,
@@ -150,7 +169,11 @@ fn build_prompt(
         summary = report.summary,
         evidence = if evidence.is_empty() { "- none".into() } else { evidence.join("\n") },
         prior = if prior.is_empty() { "- none".into() } else { prior.join("\n") },
-        intent = truncate_with_marker(intent_excerpt, config.max_section_chars),
+        intent = merge0_context::intent::relevant_intent(
+            intent_excerpt,
+            &format!("{} {}", report.title, report.summary),
+            config.max_section_chars,
+        ),
     )
 }
 
@@ -226,6 +249,13 @@ fn interpret(
                         .unwrap_or_default(),
                     prior_attempts: prior_attempts.to_vec(),
                     diff_budget: config.diff_budget(),
+                    // Absent or garbage confidence parses to Low — a model
+                    // that can't state its confidence never auto-dispatches.
+                    confidence: verdict
+                        .confidence
+                        .map(Text::into_string)
+                        .map(|c| GateConfidence::parse_lenient(&c))
+                        .unwrap_or_default(),
                 },
             }
         }
@@ -320,7 +350,8 @@ mod tests {
     async fn work_decision_builds_a_complete_work_order() {
         let model = ScriptedModel::new([r#"Decision follows.
             {"decision":"work","summary":"Fix null district","repro":"open /districts/sync",
-             "success_criteria":"regression test passes","constraints":"don't touch scheduler"}"#]);
+             "success_criteria":"regression test passes","constraints":"don't touch scheduler",
+             "confidence":"high"}"#]);
         let r = report(Severity::High, true);
         let outcome = evaluate(&r, "chalk/chalk", "intent text", vec![], &config(), &model)
             .await
@@ -336,6 +367,7 @@ mod tests {
             Some("regressed in v2.3.0")
         );
         assert_eq!(work_order.diff_budget, config().diff_budget());
+        assert_eq!(work_order.confidence, GateConfidence::High);
         assert_eq!(outcome.tokens_used, 1000);
         // Prompt carried the report bundle.
         let prompt = &model.requests()[0].prompt;
@@ -395,6 +427,50 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn confidence_parses_leniently_and_defaults_low() {
+        // (scripted verdict, expected confidence): absence, garbage, and
+        // list-shaped values must all land on Low — never on High by accident.
+        for (verdict, expected) in [
+            (
+                r#"{"decision":"work","summary":"s","repro":"r","success_criteria":"c"}"#,
+                GateConfidence::Low,
+            ),
+            (
+                r#"{"decision":"work","summary":"s","repro":"r","success_criteria":"c","confidence":"HIGH"}"#,
+                GateConfidence::High,
+            ),
+            (
+                r#"{"decision":"work","summary":"s","repro":"r","success_criteria":"c","confidence":" Medium "}"#,
+                GateConfidence::Medium,
+            ),
+            (
+                r#"{"decision":"work","summary":"s","repro":"r","success_criteria":"c","confidence":"absolutely"}"#,
+                GateConfidence::Low,
+            ),
+            (
+                r#"{"decision":"work","summary":"s","repro":"r","success_criteria":"c","confidence":["high","medium"]}"#,
+                GateConfidence::Low,
+            ),
+        ] {
+            let model = ScriptedModel::new([verdict]);
+            let outcome = evaluate(
+                &report(Severity::High, true),
+                "o/r",
+                "",
+                vec![],
+                &config(),
+                &model,
+            )
+            .await
+            .unwrap();
+            let GateDecision::Work { work_order } = outcome.decision else {
+                panic!("expected work for {verdict}");
+            };
+            assert_eq!(work_order.confidence, expected, "for {verdict}");
+        }
+    }
+
+    #[tokio::test]
     async fn unparseable_output_fails_closed() {
         for bad in [
             "total garbage",
@@ -445,6 +521,7 @@ mod tests {
             outcome: merge0_signal::OutcomeKind::Reverted,
             occurred_at: Utc.with_ymd_and_hms(2026, 3, 1, 0, 0, 0).unwrap(),
             note: Some("broke admin view".into()),
+            pr_url: Some("https://github.com/o/r/pull/412".into()),
         }];
         let outcome = evaluate(
             &report(Severity::High, true),
@@ -460,7 +537,97 @@ mod tests {
             panic!("expected work");
         };
         assert_eq!(work_order.prior_attempts, prior);
-        // The prompt surfaced the revert to the model.
+        // The prompt surfaced the revert to the model — and, since v0.5, the
+        // PR it produced. Without that link the gate can only decline; with
+        // it, it can instruct the agent to take a different approach.
         assert!(model.requests()[1].prompt.contains("broke admin view"));
+        assert!(
+            model.requests()[1]
+                .prompt
+                .contains("https://github.com/o/r/pull/412"),
+            "the attempt's PR must reach the gate: {}",
+            model.requests()[1].prompt
+        );
+    }
+
+    /// Memory without decay over-vetoes. A revert from last week is a real
+    /// signal about today's codebase; one from three years ago is a signal
+    /// about a codebase that no longer exists, and the gate is told which
+    /// it is looking at rather than treating both as equally damning.
+    #[tokio::test]
+    async fn prior_attempts_are_rendered_with_age_and_a_stale_marker() {
+        let model = ScriptedModel::new(vec![
+            r#"{"decision":"skip","reason":"no"}"#.to_string(),
+            r#"{"decision":"skip","reason":"no"}"#.to_string(),
+        ]);
+        let now = Utc::now();
+        let recent = vec![OutcomeRef {
+            work_order_id: Ulid::new(),
+            outcome: merge0_signal::OutcomeKind::Reverted,
+            occurred_at: now - chrono::Duration::days(3),
+            note: Some("recent revert".into()),
+            pr_url: None,
+        }];
+        let ancient = vec![OutcomeRef {
+            work_order_id: Ulid::new(),
+            outcome: merge0_signal::OutcomeKind::Reverted,
+            occurred_at: now - chrono::Duration::days(400),
+            note: Some("ancient revert".into()),
+            pr_url: None,
+        }];
+        for prior in [recent, ancient] {
+            evaluate(
+                &report(Severity::High, true),
+                "o/r",
+                "",
+                prior,
+                &config(),
+                &model,
+            )
+            .await
+            .unwrap();
+        }
+        let fresh = &model.requests()[0].prompt;
+        assert!(fresh.contains("3 days ago"), "{fresh}");
+        assert!(
+            !fresh.contains("STALE"),
+            "recent memory is not stale: {fresh}"
+        );
+        let old = &model.requests()[1].prompt;
+        assert!(old.contains("400 days ago"), "{old}");
+        assert!(old.contains("STALE"), "aged memory is marked: {old}");
+    }
+
+    /// The disconnection this retrieval layer exists to fix: `merge0-hardening`
+    /// writes earned constraints into MERGE0.md's machine fence, and the gate
+    /// used to see neither the fence (stripped) nor the tail of a long doc
+    /// (blind-truncated). Both paths are asserted here, at the seam that
+    /// actually builds the prompt.
+    #[tokio::test]
+    async fn intent_reaching_the_model_keeps_the_machine_fence_and_discloses_drops() {
+        let model = ScriptedModel::new(vec![r#"{"decision":"skip","reason":"no"}"#.to_string()]);
+        let filler = "Unrelated onboarding prose. ".repeat(120);
+        let intent = format!(
+            "# MERGE0.md\n\n## Onboarding\n{filler}\n\n## Invariants\n             - Schools may exist without a district.\n\n             <!-- merge0:managed:start -->\n             - do not retry the district backfill job\n             <!-- merge0:managed:end -->\n"
+        );
+        evaluate(
+            &report(Severity::High, true),
+            "o/r",
+            &intent,
+            vec![],
+            &config(),
+            &model,
+        )
+        .await
+        .unwrap();
+        let prompt = &model.requests()[0].prompt;
+        assert!(
+            prompt.contains("district backfill job"),
+            "hardening amendments must reach the gate: {prompt}"
+        );
+        assert!(
+            prompt.contains("[NOTE:") && prompt.contains("\"Onboarding\""),
+            "dropped intent is disclosed, never silent: {prompt}"
+        );
     }
 }

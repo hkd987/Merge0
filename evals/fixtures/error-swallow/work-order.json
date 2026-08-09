@@ -1,0 +1,26 @@
+{
+  "report_id": "01K21Y8ZC50000000000000004",
+  "repo": "chalk/chalk",
+  "summary": "Nightly roster sync reports success while silently dropping malformed rows",
+  "evidence": [
+    {
+      "kind": "issue",
+      "label": "sentry issue CHALK-31",
+      "url": "https://sentry.example.com/organizations/chalk/issues/9031/"
+    },
+    {
+      "kind": "ticket",
+      "label": "zendesk ticket 4412",
+      "url": "https://chalk.zendesk.com/agent/tickets/4412"
+    }
+  ],
+  "repro": "Call sync_roster with a row that does not parse, e.g. [\"1001,4\", \"not-a-row\", \"1003,3\"]. It returns Ok { imported: 2 } and the caller reports a successful nightly sync. Districts discover missing students days later.",
+  "suspect_change": "unknown",
+  "success_criteria": "cargo test passes: a roster containing an unparseable row returns SyncOutcome::Failed carrying the zero-based index of the offending row and a non-empty reason; a clean roster still returns Ok with every row counted.",
+  "constraints": "Do not change parse_row's signature or the shape of SyncOutcome. Keep the change minimal.",
+  "prior_attempts": [],
+  "diff_budget": {
+    "max_files": 4,
+    "max_total_lines": 150
+  }
+}

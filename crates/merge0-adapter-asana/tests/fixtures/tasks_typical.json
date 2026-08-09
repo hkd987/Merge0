@@ -1,0 +1,48 @@
+{
+  "endpoint": "tasks",
+  "context": {},
+  "payload": {
+    "data": [
+      {
+        "gid": "1207001112223334",
+        "name": "Roster import stalls at the review step",
+        "notes": "Reported by pilot-school@example.com: importing the fall roster hangs on the review screen. Needs investigation before the term starts.",
+        "completed": false,
+        "created_at": "2026-08-04T09:15:00Z",
+        "modified_at": "2026-08-06T16:40:00Z",
+        "permalink_url": "https://app.asana.com/0/1206000111222333/1207001112223334",
+        "assignee": { "gid": "1201900555666777", "name": "Jordan Example" },
+        "memberships": [
+          {
+            "section": { "gid": "1206000444555666", "name": "In progress" }
+          }
+        ]
+      },
+      {
+        "gid": "1207002223334445",
+        "name": "Write onboarding email copy",
+        "notes": "Draft lives at https://docs.example.com/onboarding-email",
+        "completed": true,
+        "created_at": "2026-07-28T11:00:00Z",
+        "modified_at": "2026-08-05T10:05:00Z",
+        "permalink_url": "https://app.asana.com/0/1206000111222333/1207002223334445"
+      },
+      {
+        "gid": "1207003334445556",
+        "name": "Audit dashboard empty-state copy",
+        "completed": false,
+        "created_at": "2026-08-05T13:30:00Z",
+        "modified_at": "2026-08-05T13:30:00Z",
+        "permalink_url": "https://app.asana.com/0/1206000111222333/1207003334445556"
+      },
+      {
+        "gid": "1207004445556667",
+        "name": "Spike: evaluate CSV export libraries",
+        "notes": "Compare options for the export feature requested by demo-district@example.com.",
+        "completed": false,
+        "created_at": "2026-08-06T08:00:00Z",
+        "modified_at": "2026-08-07T09:20:00Z"
+      }
+    ]
+  }
+}

@@ -35,10 +35,20 @@ pub fn app(state: HostedState) -> Router {
         .route("/ee/tenants/{id}/resume", post(resume_tenant))
         .route("/ee/tenants/{id}/members", post(add_member))
         .route("/ee/tenants/{id}/usage", get(usage))
+        .route("/ee/tenants/{id}/runtime", get(runtime))
         .route("/ee/tenants/{id}/audit", get(audit))
         .route("/ee/priors", get(priors))
         .route_layer(middleware::from_fn_with_state(state.clone(), require_admin))
         .route("/healthz", get(|| async { "ok" }))
+        // Same protective posture as the core server: bounded bodies and a
+        // request deadline. Admin-token gating is not a reason to accept
+        // unbounded input — tokens leak, and defence in depth is cheap.
+        .layer(axum::extract::DefaultBodyLimit::max(1024 * 1024))
+        .layer(tower_http::timeout::TimeoutLayer::with_status_code(
+            StatusCode::REQUEST_TIMEOUT,
+            std::time::Duration::from_secs(30),
+        ))
+        .layer(tower_http::trace::TraceLayer::new_for_http())
         .with_state(state)
 }
 
@@ -242,6 +252,69 @@ fn parse_pricing(spec: &str) -> Result<Pricing, HostedError> {
             "pricing must be per_merged_pr:<cents> or flat:<monthly>:<included>:<overage>",
         )),
     }
+}
+
+/// The control->data bridge: everything an operator (or an orchestrator
+/// reconciling desired state) needs to run this tenant's data plane. One
+/// `merge0-server` process per tenant, pointed at the tenant schema this
+/// plane provisioned.
+///
+/// Deliberately contains NO secret values — the same name-only discipline
+/// as `config/sources.toml` (CLAUDE.md rule 4). The tenant's GitHub App
+/// credentials, API tokens, and vendor keys live in the deployment
+/// environment the operator controls; this endpoint tells them exactly
+/// which variables that environment must provide.
+async fn runtime(
+    State(state): State<HostedState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, HostedError> {
+    let id = parse_id(&id)?;
+    let tenant = state.manager.get_tenant(id).await?;
+    let desired_state = if tenant.suspended {
+        // Suspension is enforced twice: `tenant_store` refuses the schema
+        // inside this plane, and the orchestrator reading this field scales
+        // the tenant's data-plane service to zero.
+        "suspended"
+    } else {
+        "running"
+    };
+    let service = format!("merge0-tenant-{}", tenant.id.to_string().to_lowercase());
+    Ok(Json(serde_json::json!({
+        "tenant": tenant.id.to_string(),
+        "desired_state": desired_state,
+        "service_name": service,
+        "image_command": "merge0-server",
+        "env": {
+            // Fixed by the control plane.
+            "MERGE0_TENANT": tenant.schema_name,
+            // Provided by the operator's deployment environment (values
+            // never transit or persist in the control plane).
+            "required_from_operator": [
+                "MERGE0_DATABASE_URL",
+                "MERGE0_REPO",
+                "MERGE0_PUBLIC_URL",
+                "MERGE0_API_TOKEN",
+                "MERGE0_RUNNER_TOKEN",
+                "MERGE0_GITHUB_WEBHOOK_SECRET",
+                "MERGE0_GITHUB_APP_ID",
+                "MERGE0_GITHUB_INSTALLATION_ID",
+                "MERGE0_GITHUB_APP_PRIVATE_KEY",
+                "ANTHROPIC_API_KEY",
+            ],
+            "optional_from_operator": [
+                "MERGE0_SLACK_WEBHOOK_URL",
+                "MERGE0_SLACK_SIGNING_SECRET",
+                "MERGE0_DELIVERY_MODE",
+                "MERGE0_JIRA_PROJECT",
+                "MERGE0_GATE_CONTEXT_EXTRA",
+            ],
+        },
+        "notes": [
+            "one merge0-server process per tenant; never point two at one schema",
+            "suspended tenants: scale the service to 0 — the schema also refuses opens through the control plane",
+            "MERGE0_GATE_CONTEXT_EXTRA can carry the /ee/priors gate_context block; refresh it on deploys",
+        ],
+    })))
 }
 
 async fn audit(

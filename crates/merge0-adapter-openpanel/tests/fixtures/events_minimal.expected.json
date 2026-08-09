@@ -1,0 +1,50 @@
+[
+  {
+    "affected_count": 1,
+    "body": "1 'form_error' event(s)",
+    "evidence": [
+      {
+        "kind": "issue",
+        "label": "openpanel events form_error",
+        "url": "https://openpanel.example.com/acme/website/events?event=form_error"
+      }
+    ],
+    "fingerprint": "openpanel:b7e6981862fbc122dc49e5a86a6884b3",
+    "first_seen": "2026-08-01T09:15:00Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "exception",
+    "last_seen": "2026-08-01T09:15:00Z",
+    "raw": [
+      {
+        "brand": "",
+        "browser": "Edge",
+        "browserVersion": "126",
+        "city": "Denver",
+        "country": "US",
+        "createdAt": "2026-08-01T09:15:00.000Z",
+        "device": "desktop",
+        "deviceId": "d-3",
+        "id": "01K2ZGOODROW000000000003",
+        "model": "",
+        "name": "form_error",
+        "origin": "https://app.example.com",
+        "os": "Windows",
+        "osVersion": "11",
+        "path": "",
+        "profileId": "",
+        "projectId": "website",
+        "properties": {},
+        "referrer": "",
+        "referrerName": "",
+        "referrerType": "",
+        "region": "CO",
+        "sessionId": "s-3"
+      }
+    ],
+    "severity": "low",
+    "source": "openpanel",
+    "source_ref": "form_error:",
+    "title": "Error event: form_error (1 event)"
+  }
+]

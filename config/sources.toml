@@ -18,6 +18,9 @@ api_key_env = "MERGE0_POSTHOG_API_KEY"
 base_url = "https://us.posthog.com"
 # Project UI base used for deep links (issue pages, session replays).
 project_base_url = "https://us.posthog.com/project/12345"
+# Funnel insights (numeric ids or short ids) polled for drop-off analysis,
+# e.g. ["301", "AbCd1234"]. Empty = funnels are skipped.
+funnel_insight_ids = []
 
 [sentry]
 enabled = false
@@ -54,3 +57,95 @@ enabled = false
 # owner/name. Auth rides on the Merge0 GitHub App installation — no
 # separate secret here.
 repo = "example-org/example-app"
+
+# ---- Ticket + planning sources (schema v0.3) ----
+
+[jira]
+enabled = false
+# Jira Cloud site base; browse links derive from it ({base_url}/browse/KEY).
+base_url = "https://acme-example.atlassian.net"
+# Jira Cloud API auth is basic auth: account email + API token.
+email_env = "MERGE0_JIRA_EMAIL"
+api_token_env = "MERGE0_JIRA_API_TOKEN"
+# JQL the poller runs (the fetch cursor ANDs an `updated >=` bound onto it).
+jql = "statusCategory != Done ORDER BY updated ASC"
+
+[linear]
+enabled = false
+# Env var holding a Linear API key (read access).
+api_key_env = "MERGE0_LINEAR_API_KEY"
+base_url = "https://api.linear.app"
+
+[slack_channels]
+enabled = false
+# Bot token with channels:history + channels:read scopes for the channels
+# below. This is the INGEST side (reading #bugs-style channels) — separate
+# from the notification webhook (MERGE0_SLACK_WEBHOOK_URL).
+bot_token_env = "MERGE0_SLACK_BOT_TOKEN"
+base_url = "https://slack.com/api"
+# Workspace base for archive permalinks in evidence links.
+team_base_url = "https://acme-example.slack.com"
+# Channels whose messages are treated as tickets by team convention.
+channels = [{ id = "C0123456789", name = "bugs" }]
+
+[asana]
+enabled = false
+# Env var holding a personal access token.
+pat_env = "MERGE0_ASANA_PAT"
+base_url = "https://app.asana.com/api/1.0"
+# Projects whose tasks are polled.
+project_gids = ["120000000000001"]
+
+[trello]
+enabled = false
+key_env = "MERGE0_TRELLO_API_KEY"
+token_env = "MERGE0_TRELLO_TOKEN"
+base_url = "https://api.trello.com/1"
+# Boards whose open cards are polled.
+board_ids = ["abc123def456"]
+
+[intercom]
+enabled = false
+access_token_env = "MERGE0_INTERCOM_ACCESS_TOKEN"
+base_url = "https://api.intercom.io"
+# Inbox base for conversation deep links.
+app_base_url = "https://app.intercom-example.com/a/inbox/abc123"
+
+[mixpanel]
+enabled = false
+# Numeric Mixpanel project id (Query API requires it with service accounts).
+project_id = "12345"
+# Env vars holding the service-account username and secret (Basic auth).
+service_account_user_env = "MERGE0_MIXPANEL_SA_USER"
+service_account_secret_env = "MERGE0_MIXPANEL_SA_SECRET"
+# EU projects use https://eu.mixpanel.com, India https://in.mixpanel.com.
+base_url = "https://mixpanel.com"
+# Project UI base used for funnel deep links.
+project_base_url = "https://mixpanel.com/project/12345"
+# Saved funnels polled for drop-off analysis (numeric ids from the funnel
+# URL). The funnels query is Mixpanel's only signal source here, so an
+# enabled section with an empty list fails at startup rather than running
+# dead.
+funnel_ids = []
+# Trailing window re-read each round (aggregates carry no cursor).
+lookback_days = 7
+
+[openpanel]
+enabled = false
+# OpenPanel project id (the export API scopes by project).
+project_id = "example-project"
+# Env vars holding a READ-mode client's id and secret — the default write
+# client cannot use the export API; create a read client in the dashboard.
+client_id_env = "MERGE0_OPENPANEL_CLIENT_ID"
+client_secret_env = "MERGE0_OPENPANEL_CLIENT_SECRET"
+# Self-hosted deployments override this.
+base_url = "https://api.openpanel.dev"
+# Dashboard base used for event deep links.
+project_base_url = "https://dashboard.openpanel.dev/example-org/example-project"
+# Which event names are defect signals — OpenPanel has no built-in error
+# tracking, so this is your call (e.g. ["error", "payment_failed"]). An
+# enabled section with an empty list fails at startup rather than running
+# dead.
+error_events = []
+# First-round trailing window; later rounds are incremental.
+lookback_days = 7

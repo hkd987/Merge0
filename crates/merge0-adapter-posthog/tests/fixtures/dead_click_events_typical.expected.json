@@ -1,0 +1,90 @@
+[
+  {
+    "affected_count": 2,
+    "body": "2 dead-click event(s) from 2 distinct user(s) on /gradebook/import",
+    "evidence": [
+      {
+        "kind": "replay",
+        "label": "Session replay sess-ddd",
+        "url": "https://us.posthog.com/project/1/replay/sess-ddd"
+      },
+      {
+        "kind": "replay",
+        "label": "Session replay sess-eee",
+        "url": "https://us.posthog.com/project/1/replay/sess-eee"
+      }
+    ],
+    "fingerprint": "posthog:93caf43b692c2bf7f55d2713fc13d726",
+    "first_seen": "2026-08-05T14:30:00Z",
+    "id": "<ulid>",
+    "join_keys": {
+      "url_path": "/gradebook/import"
+    },
+    "kind": "ux_friction",
+    "last_seen": "2026-08-05T15:45:00Z",
+    "raw": [
+      {
+        "distinct_id": "teacher-104",
+        "event": "$dead_click",
+        "id": "d1",
+        "properties": {
+          "$current_url": "https://app.example.com/gradebook/import",
+          "$pathname": "/gradebook/import",
+          "$session_id": "sess-ddd"
+        },
+        "timestamp": "2026-08-05T14:30:00Z"
+      },
+      {
+        "distinct_id": "teacher-233",
+        "event": "$dead_click",
+        "id": "d2",
+        "properties": {
+          "$current_url": "https://app.example.com/gradebook/import",
+          "$pathname": "/gradebook/import",
+          "$session_id": "sess-eee"
+        },
+        "timestamp": "2026-08-05T15:45:00Z"
+      }
+    ],
+    "severity": "low",
+    "source": "posthog",
+    "source_ref": "dead_click:/gradebook/import",
+    "title": "Dead clicks on /gradebook/import"
+  },
+  {
+    "affected_count": 1,
+    "body": "1 dead-click event(s) from 1 distinct user(s) on /settings/roster",
+    "evidence": [
+      {
+        "kind": "replay",
+        "label": "Session replay sess-fff",
+        "url": "https://us.posthog.com/project/1/replay/sess-fff"
+      }
+    ],
+    "fingerprint": "posthog:244eeb3013a40fc17d8dc50183dc90c5",
+    "first_seen": "2026-08-05T17:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {
+      "account_id": "admin-7",
+      "url_path": "/settings/roster"
+    },
+    "kind": "ux_friction",
+    "last_seen": "2026-08-05T17:00:00Z",
+    "raw": [
+      {
+        "distinct_id": "admin-7",
+        "event": "$dead_click",
+        "id": "d3",
+        "properties": {
+          "$current_url": "https://app.example.com/settings/roster?tab=staff",
+          "$session_id": "sess-fff"
+        },
+        "timestamp": "2026-08-05T17:00:00Z"
+      }
+    ],
+    "severity": "low",
+    "source": "posthog",
+    "source_ref": "dead_click:/settings/roster",
+    "title": "Dead clicks on /settings/roster"
+  }
+]

@@ -9,7 +9,9 @@
 //! printed.
 
 use crate::pollers::{
-    DatadogPoller, GithubIssuesPoller, PosthogPoller, SentryPoller, ZendeskPoller,
+    AsanaPoller, DatadogPoller, GithubIssuesPoller, IntercomPoller, JiraPoller, LinearPoller,
+    MixpanelPoller, OpenpanelPoller, PosthogPoller, SentryPoller, SlackChannelsPoller,
+    TrelloPoller, ZendeskPoller,
 };
 use crate::{FetchError, Fetcher};
 use merge0_github::GitHubApi;
@@ -27,6 +29,86 @@ pub struct SourcesConfig {
     pub zendesk: Option<ZendeskConfig>,
     pub datadog: Option<DatadogConfig>,
     pub github_issues: Option<GithubIssuesConfig>,
+    pub jira: Option<JiraConfig>,
+    pub linear: Option<LinearConfig>,
+    pub slack_channels: Option<SlackChannelsConfig>,
+    pub asana: Option<AsanaConfig>,
+    pub trello: Option<TrelloConfig>,
+    pub intercom: Option<IntercomConfig>,
+    pub mixpanel: Option<MixpanelConfig>,
+    pub openpanel: Option<OpenpanelConfig>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MixpanelConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Numeric Mixpanel project id (required by the Query API when
+    /// authenticating with a service account).
+    pub project_id: String,
+    /// Env var *names* holding the service-account username and secret
+    /// (HTTP Basic auth on the Query API).
+    pub service_account_user_env: String,
+    pub service_account_secret_env: String,
+    /// Query API host; EU projects use https://eu.mixpanel.com, India
+    /// https://in.mixpanel.com.
+    #[serde(default = "MixpanelConfig::default_base_url")]
+    pub base_url: String,
+    /// Project UI base for deep links (envelope context `project_base_url`).
+    pub project_base_url: String,
+    /// Saved funnels polled for drop-off analysis. The funnels query is
+    /// Mixpanel's only signal source here, so an enabled section with an
+    /// empty list fails at startup rather than running dead.
+    #[serde(default)]
+    pub funnel_ids: Vec<u64>,
+    /// Trailing window re-read each round (funnel results are aggregates,
+    /// not events — there is no incremental cursor).
+    #[serde(default = "default_lookback_days")]
+    pub lookback_days: i64,
+}
+
+impl MixpanelConfig {
+    fn default_base_url() -> String {
+        "https://mixpanel.com".into()
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct OpenpanelConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// OpenPanel project id (the export API scopes by project).
+    pub project_id: String,
+    /// Env var *names* holding a **read**-mode client's id and secret (the
+    /// default write client cannot use the export API).
+    pub client_id_env: String,
+    pub client_secret_env: String,
+    /// API host; self-hosted deployments override this.
+    #[serde(default = "OpenpanelConfig::default_base_url")]
+    pub base_url: String,
+    /// Dashboard base for deep links (envelope context `project_base_url`).
+    pub project_base_url: String,
+    /// Which event names are defect signals (OpenPanel has no built-in
+    /// error tracking, so this is an operator decision). An enabled section
+    /// with an empty list fails at startup rather than running dead.
+    #[serde(default)]
+    pub error_events: Vec<String>,
+    /// First-round trailing window; later rounds are incremental via the
+    /// stored cursor.
+    #[serde(default = "default_lookback_days")]
+    pub lookback_days: i64,
+}
+
+impl OpenpanelConfig {
+    fn default_base_url() -> String {
+        "https://api.openpanel.dev".into()
+    }
+}
+
+fn default_lookback_days() -> i64 {
+    7
 }
 
 fn default_true() -> bool {
@@ -46,6 +128,10 @@ pub struct PosthogConfig {
     pub base_url: String,
     /// Project UI base for deep links (envelope context `project_base_url`).
     pub project_base_url: String,
+    /// Funnel insights (numeric ids or short ids) polled for drop-off
+    /// analysis. Empty (the default) skips the funnels endpoint entirely.
+    #[serde(default)]
+    pub funnel_insight_ids: Vec<String>,
 }
 
 impl PosthogConfig {
@@ -131,6 +217,130 @@ pub struct GithubIssuesConfig {
     pub repo: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct JiraConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Jira Cloud site base; browse links derive from it.
+    pub base_url: String,
+    /// Env var *names*: Jira Cloud API auth is basic auth (email + token).
+    pub email_env: String,
+    pub api_token_env: String,
+    /// JQL the poller runs; the cursor ANDs an `updated >=` bound onto it.
+    #[serde(default = "JiraConfig::default_jql")]
+    pub jql: String,
+}
+
+impl JiraConfig {
+    fn default_jql() -> String {
+        "statusCategory != Done ORDER BY updated ASC".into()
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LinearConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Env var *name* holding a Linear API key.
+    pub api_key_env: String,
+    #[serde(default = "LinearConfig::default_base_url")]
+    pub base_url: String,
+}
+
+impl LinearConfig {
+    fn default_base_url() -> String {
+        "https://api.linear.app".into()
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SlackChannel {
+    pub id: String,
+    pub name: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SlackChannelsConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Env var *name* holding a bot token with `channels:history`.
+    pub bot_token_env: String,
+    #[serde(default = "SlackChannelsConfig::default_base_url")]
+    pub base_url: String,
+    /// Workspace base for archive permalinks (envelope context).
+    pub team_base_url: String,
+    /// Channels treated as ticket streams by team convention.
+    pub channels: Vec<SlackChannel>,
+}
+
+impl SlackChannelsConfig {
+    fn default_base_url() -> String {
+        "https://slack.com/api".into()
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AsanaConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Env var *name* holding a personal access token.
+    pub pat_env: String,
+    #[serde(default = "AsanaConfig::default_base_url")]
+    pub base_url: String,
+    /// Projects whose tasks are polled.
+    pub project_gids: Vec<String>,
+}
+
+impl AsanaConfig {
+    fn default_base_url() -> String {
+        "https://app.asana.com/api/1.0".into()
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TrelloConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Env var *names* for the key+token query-auth pair.
+    pub key_env: String,
+    pub token_env: String,
+    #[serde(default = "TrelloConfig::default_base_url")]
+    pub base_url: String,
+    /// Boards whose open cards are polled.
+    pub board_ids: Vec<String>,
+}
+
+impl TrelloConfig {
+    fn default_base_url() -> String {
+        "https://api.trello.com/1".into()
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct IntercomConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Env var *name* holding an access token.
+    pub access_token_env: String,
+    #[serde(default = "IntercomConfig::default_base_url")]
+    pub base_url: String,
+    /// Inbox base for conversation deep links (envelope context).
+    pub app_base_url: String,
+}
+
+impl IntercomConfig {
+    fn default_base_url() -> String {
+        "https://api.intercom.io".into()
+    }
+}
+
 impl SourcesConfig {
     /// Parse a TOML string. Unknown fields anywhere are rejected — a typo'd
     /// key must fail loudly, not silently disable a source.
@@ -180,6 +390,46 @@ pub fn build_fetchers(
             fetchers.push(Box::new(GithubIssuesPoller::from_config(c, github)?));
         }
     }
+    if let Some(c) = &config.jira {
+        if c.enabled {
+            fetchers.push(Box::new(JiraPoller::from_config(c)?));
+        }
+    }
+    if let Some(c) = &config.linear {
+        if c.enabled {
+            fetchers.push(Box::new(LinearPoller::from_config(c)?));
+        }
+    }
+    if let Some(c) = &config.slack_channels {
+        if c.enabled {
+            fetchers.push(Box::new(SlackChannelsPoller::from_config(c)?));
+        }
+    }
+    if let Some(c) = &config.asana {
+        if c.enabled {
+            fetchers.push(Box::new(AsanaPoller::from_config(c)?));
+        }
+    }
+    if let Some(c) = &config.trello {
+        if c.enabled {
+            fetchers.push(Box::new(TrelloPoller::from_config(c)?));
+        }
+    }
+    if let Some(c) = &config.intercom {
+        if c.enabled {
+            fetchers.push(Box::new(IntercomPoller::from_config(c)?));
+        }
+    }
+    if let Some(c) = &config.mixpanel {
+        if c.enabled {
+            fetchers.push(Box::new(MixpanelPoller::from_config(c)?));
+        }
+    }
+    if let Some(c) = &config.openpanel {
+        if c.enabled {
+            fetchers.push(Box::new(OpenpanelPoller::from_config(c)?));
+        }
+    }
     Ok(fetchers)
 }
 
@@ -206,6 +456,17 @@ mod tests {
                 "github_issues",
                 config.github_issues.as_ref().map(|c| c.enabled),
             ),
+            ("jira", config.jira.as_ref().map(|c| c.enabled)),
+            ("linear", config.linear.as_ref().map(|c| c.enabled)),
+            (
+                "slack_channels",
+                config.slack_channels.as_ref().map(|c| c.enabled),
+            ),
+            ("asana", config.asana.as_ref().map(|c| c.enabled)),
+            ("trello", config.trello.as_ref().map(|c| c.enabled)),
+            ("intercom", config.intercom.as_ref().map(|c| c.enabled)),
+            ("mixpanel", config.mixpanel.as_ref().map(|c| c.enabled)),
+            ("openpanel", config.openpanel.as_ref().map(|c| c.enabled)),
         ] {
             assert_eq!(enabled, Some(false), "section [{name}] missing or enabled");
         }

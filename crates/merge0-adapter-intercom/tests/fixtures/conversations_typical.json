@@ -1,0 +1,89 @@
+{
+  "endpoint": "conversations",
+  "context": {
+    "app_base_url": "https://app.intercom-example.com/a/inbox/abc123"
+  },
+  "payload": {
+    "conversations": [
+      {
+        "type": "conversation",
+        "id": "70012345",
+        "title": null,
+        "state": "open",
+        "priority": "priority",
+        "created_at": 1723100000,
+        "updated_at": 1723186400,
+        "source": {
+          "type": "conversation",
+          "body": "<p>Every sync for Lincoln Elementary has failed since Tuesday.</p><p>The status page shows <b>stuck at 90%</b> and never finishes.</p>",
+          "author": {
+            "type": "user",
+            "id": "6401ab234cde567890f12a34",
+            "name": "Jordan Example",
+            "email": "jordan@example.com"
+          }
+        },
+        "statistics": {
+          "type": "conversation_statistics",
+          "count_conversation_parts": 6
+        }
+      },
+      {
+        "type": "conversation",
+        "id": "70012399",
+        "title": "Feature request: CSV roster export",
+        "state": "open",
+        "priority": "not_priority",
+        "created_at": 1723190000,
+        "updated_at": 1723190000,
+        "source": {
+          "type": "conversation",
+          "body": "It would help our admins a lot to export the full roster as CSV.<br/>Weekly, ideally.",
+          "author": {
+            "type": "admin",
+            "id": "991234",
+            "name": "Sam Support",
+            "email": "sam@acme-example.com"
+          }
+        },
+        "statistics": {
+          "type": "conversation_statistics",
+          "count_conversation_parts": 2
+        }
+      },
+      {
+        "type": "conversation",
+        "id": "70011111",
+        "title": "Password reset email never arrives",
+        "state": "closed",
+        "priority": "not_priority",
+        "created_at": 1722900000,
+        "updated_at": 1723000000,
+        "source": {
+          "type": "conversation",
+          "body": "<p>I never get the password reset email.</p>",
+          "author": {
+            "type": "user",
+            "id": "6401ab234cde567890f12b99"
+          }
+        }
+      },
+      {
+        "type": "conversation",
+        "id": "70012500",
+        "title": null,
+        "state": "open",
+        "created_at": 1723273600,
+        "updated_at": 1723275000,
+        "source": {
+          "type": "conversation",
+          "body": "<p>Grade band dropdown shows duplicates &amp; the selection resets on save.</p>",
+          "author": {
+            "type": "lead",
+            "id": "6401ab234cde567890f12c11"
+          }
+        }
+      }
+    ]
+  }
+}

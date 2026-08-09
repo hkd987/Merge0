@@ -7,16 +7,32 @@
 use crate::FetchError;
 use std::time::Duration;
 
+mod asana;
 mod datadog;
 mod github_issues;
+mod intercom;
+mod jira;
+mod linear;
+mod mixpanel;
+mod openpanel;
 mod posthog;
 mod sentry;
+mod slack_channels;
+mod trello;
 mod zendesk;
 
+pub use asana::AsanaPoller;
 pub use datadog::DatadogPoller;
 pub use github_issues::GithubIssuesPoller;
+pub use intercom::IntercomPoller;
+pub use jira::JiraPoller;
+pub use linear::LinearPoller;
+pub use mixpanel::MixpanelPoller;
+pub use openpanel::OpenpanelPoller;
 pub use posthog::PosthogPoller;
 pub use sentry::SentryPoller;
+pub use slack_channels::SlackChannelsPoller;
+pub use trello::TrelloPoller;
 pub use zendesk::ZendeskPoller;
 
 /// Shared HTTP client: 30s request timeout, nothing vendor-specific.

@@ -3,5 +3,7 @@ target/
 .github/
 scripts/
 evals/
+ui/node_modules/
+ui/dist/
 *.md
 !docs/**

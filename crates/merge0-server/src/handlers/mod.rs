@@ -1,15 +1,17 @@
 //! HTTP handlers, one module per concern.
 
 pub mod actions;
+pub mod broker;
 pub mod health;
-pub mod inbox;
 pub mod ingest;
 pub mod metrics;
 pub mod onboarding;
+pub mod registry;
 pub mod reports;
 pub mod runner;
 pub mod safety;
 pub mod slack;
+pub mod spa;
 pub mod telemetry;
 pub mod triage;
 pub mod vendor_webhooks;
@@ -19,6 +21,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 
 /// Uniform error → HTTP mapping.
+#[derive(Debug)]
 pub enum ApiError {
     Status(StatusCode, String),
 }

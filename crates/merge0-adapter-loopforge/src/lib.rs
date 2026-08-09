@@ -98,6 +98,7 @@ fn normalize_finding(raw: &serde_json::Value) -> Result<Signal, AdapterError> {
         fingerprint: fingerprint(Source::Loopforge, &["finding", &finding.id]),
         join_keys: JoinKeys::default(),
         affected_count: finding.occurrences,
+        delegated: false,
         first_seen: finding.created_at,
         last_seen: finding.created_at,
         raw: raw.clone(),

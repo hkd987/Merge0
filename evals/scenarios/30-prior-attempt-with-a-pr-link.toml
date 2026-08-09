@@ -1,0 +1,63 @@
+name = "prior-attempt-with-a-pr-link"
+description = """
+Scenario 29's twin, differing in one field: the reverts carry the PR they
+produced (schema v0.5). 29 gives the gate "this was tried twice and
+reverted"; this gives it "…and here is what was tried".
+
+The hypothesis being measured is that a revert you can point at stops being
+a reason to decline and becomes an instruction — the gate should proceed AND
+carry the prior attempt into its constraints, so the agent reads it before
+taking a different approach. Run as a rate alongside 29 so the two are
+comparable; BASELINE.md records both.
+"""
+intent = "Chalk is a K-12 gradebook. Report exports are generated asynchronously."
+suspect_release = "v4.1.0"
+
+[[signals]]
+source = "sentry"
+kind = "exception"
+severity = "high"
+title = "TypeError: cannot read property 'term' of undefined in GradeExport.render"
+body = """
+Thrown at services/export/grade_export.rb:212 when a student has an
+enrollment with no term. Started with v4.1.0 and reproduces on every export
+of a mid-year transfer student. 61 users affected across 9 districts.
+"""
+affected_count = 61
+stack_hash = "9radeexp"
+release = "v4.1.0"
+url_path = "/reports/export"
+evidence_label = "sentry issue"
+evidence_url = "https://sentry.example.com/organizations/chalk/issues/7400/"
+
+[[signals]]
+source = "zendesk"
+kind = "ticket"
+severity = "high"
+title = "Grade export fails for transfer students"
+body = "Three districts report the export button errors for any student who transferred mid-year. Started after the 4.1 release."
+affected_count = 9
+release = "v4.1.0"
+url_path = "/reports/export"
+evidence_label = "zendesk ticket"
+evidence_url = "https://chalk.zendesk.com/agent/tickets/7401"
+
+[[prior_attempts]]
+outcome = "reverted"
+days_ago = 1190
+note = "fix reverted: caused a regression in the 3.x export pipeline"
+pr_url = "https://github.com/chalk/chalk/pull/412"
+
+[[prior_attempts]]
+outcome = "reverted"
+days_ago = 940
+note = "second attempt reverted: same 3.x export pipeline regression"
+pr_url = "https://github.com/chalk/chalk/pull/older-attempt-987"
+
+[expect]
+decision = "work"
+# The point of the schema change: the gate should not merely decide, it
+# should hand the agent the earlier attempt to read.
+work_order_mentions = ["412"]
+samples = 5
+min_pass_rate = 0.8

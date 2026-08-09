@@ -81,6 +81,41 @@ impl DismissReason {
     }
 }
 
+/// The gate's self-assessed confidence that a Work Order's fix will land as
+/// specified. Ordered (`Low < Medium < High`) so autonomy thresholds compare
+/// directly. Defaults to `Low`: unparseable or absent model output must never
+/// qualify for auto-dispatch.
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum GateConfidence {
+    #[default]
+    Low,
+    Medium,
+    High,
+}
+
+impl GateConfidence {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            GateConfidence::Low => "low",
+            GateConfidence::Medium => "medium",
+            GateConfidence::High => "high",
+        }
+    }
+
+    /// Tolerant parse of model output: case-insensitive match on the level
+    /// names, anything else (including garbage) is `Low` — fail-conservative.
+    pub fn parse_lenient(text: &str) -> GateConfidence {
+        match text.trim().to_ascii_lowercase().as_str() {
+            "high" => GateConfidence::High,
+            "medium" => GateConfidence::Medium,
+            _ => GateConfidence::Low,
+        }
+    }
+}
+
 /// The gate's output for one Report: Work Order or SKIP, never silence.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "decision")]
@@ -128,6 +163,22 @@ mod tests {
         assert_eq!(value["decision"], "skip");
         let back: GateDecision = serde_json::from_value(value).unwrap();
         assert_eq!(back, skip);
+    }
+
+    #[test]
+    fn gate_confidence_orders_parses_and_fails_conservative() {
+        assert!(GateConfidence::Low < GateConfidence::Medium);
+        assert!(GateConfidence::Medium < GateConfidence::High);
+        assert_eq!(GateConfidence::default(), GateConfidence::Low);
+        assert_eq!(GateConfidence::parse_lenient("High"), GateConfidence::High);
+        assert_eq!(
+            GateConfidence::parse_lenient("  medium  "),
+            GateConfidence::Medium
+        );
+        assert_eq!(GateConfidence::parse_lenient("sure"), GateConfidence::Low);
+        assert_eq!(GateConfidence::parse_lenient(""), GateConfidence::Low);
+        let json = serde_json::to_string(&GateConfidence::High).unwrap();
+        assert_eq!(json, "\"high\"");
     }
 
     #[test]

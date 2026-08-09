@@ -3,7 +3,6 @@
 //! are never logged. Fail-fast validation at boot (audit O4): a bad
 //! MERGE0_REPO dies here, not when a reviewer clicks Approve.
 
-use merge0_context::intent::IntentDoc;
 use merge0_github::api::RestGitHub;
 use merge0_github::auth::{AppAuth, InstallationTokenSource};
 use merge0_github::RepoRef;
@@ -35,24 +34,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let scouts =
         triage_config::load_scouts(std::path::Path::new(&config_dir).join("scouts").as_path())?;
+    // MERGE0_GATE_CONTEXT_EXTRA: operator-supplied background context
+    // appended to the gate prompt (hosted deployments wire the ee control
+    // plane's cross-tenant priors block through this; self-hosters can carry
+    // site conventions). Unset or blank is a no-op.
     let gate = triage_config::load_gate(
         std::path::Path::new(&config_dir)
             .join("gate.toml")
             .as_path(),
-    )?;
+    )?
+    .with_extra_context(std::env::var("MERGE0_GATE_CONTEXT_EXTRA").ok().as_deref());
     let pr_body_template =
         std::fs::read_to_string(std::path::Path::new(&config_dir).join("pr-body-template.md"))
             .map_err(|e| format!("config/pr-body-template.md unreadable: {e}"))?;
 
     // Fallback intent (the live MERGE0.md is fetched from the customer repo
     // per triage run): a local override path, else the shipped template.
-    let intent_text = match std::env::var("MERGE0_INTENT_FALLBACK") {
+    // Kept whole — the machine fence carries earned constraints, and the
+    // gate's own retrieval decides what fits (see server::intent).
+    let intent_fallback = match std::env::var("MERGE0_INTENT_FALLBACK") {
         Ok(path) => std::fs::read_to_string(path)?,
         Err(_) => merge0_context::intent::MERGE0_TEMPLATE.to_string(),
     };
-    let intent_fallback = IntentDoc::parse(&intent_text)
-        .map(|doc| doc.human_text())
-        .unwrap_or(intent_text);
 
     // MERGE0_DEV_FAKES=1 swaps the model and GitHub for in-process fakes so
     // the complete loop can be driven locally (manual e2e) without a live
@@ -69,11 +72,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 required_checks: true,
             },
         );
+        // Confidence is overridable so the confidence-routing path is
+        // drivable end to end (dev fakes only — production reads the real
+        // model's own self-assessment and nothing can override it).
+        let fake_confidence =
+            std::env::var("MERGE0_DEV_FAKE_CONFIDENCE").unwrap_or_else(|_| "high".into());
         let fixed = merge0_model::FixedModel {
-            response: r#"{"decision":"work","summary":"Fix the reported defect",
+            response: format!(
+                r#"{{"decision":"work","summary":"Fix the reported defect",
                 "repro":"see evidence links","success_criteria":"regression test passes",
-                "constraints":"stay within the diff budget"}"#
-                .to_string(),
+                "constraints":"stay within the diff budget","confidence":"{fake_confidence}"}}"#
+            ),
         };
         (Arc::new(fixed), Arc::new(fake_github))
     } else {
@@ -101,6 +110,41 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let slack = std::env::var("MERGE0_SLACK_WEBHOOK_URL")
         .ok()
         .map(|url| Arc::new(WebhookSink::new(url)) as Arc<dyn merge0_slack::SlackSink>);
+
+    // Tracker (story delivery). Jira reuses the ingestion credentials, so a
+    // team already polling Jira only adds a project key. Under dev fakes the
+    // recording tracker stands in, so the story path is drivable in e2e
+    // without a live Jira.
+    let tracker: Option<Arc<dyn merge0_tracker::Tracker>> = if dev_fakes {
+        Some(Arc::new(merge0_tracker::RecordingTracker::new()))
+    } else {
+        match std::env::var("MERGE0_JIRA_PROJECT") {
+            Ok(project) => {
+                let base_url = required("MERGE0_JIRA_BASE_URL")?;
+                let email = required("MERGE0_JIRA_EMAIL")?;
+                let token = required("MERGE0_JIRA_API_TOKEN")?;
+                let issue_type =
+                    std::env::var("MERGE0_JIRA_ISSUE_TYPE").unwrap_or_else(|_| "Task".into());
+                Some(Arc::new(
+                    merge0_tracker::JiraTracker::new(base_url, email, token, project, issue_type)
+                        .map_err(|e| format!("jira tracker init: {e}"))?,
+                ))
+            }
+            Err(_) => None,
+        }
+    };
+
+    // Confidence routing needs somewhere to route to. Saying so at boot
+    // beats a config knob that quietly does nothing for months.
+    if tracker.is_none() && gate.delivery.min_confidence_for_pr > merge0_signal::GateConfidence::Low
+    {
+        tracing::warn!(
+            "config/gate.toml sets [delivery] min_confidence_for_pr = {:?} but no tracker is \
+             configured (MERGE0_JIRA_PROJECT) — confidence routing is INERT and low-confidence \
+             Work Orders will dispatch as PRs",
+            gate.delivery.min_confidence_for_pr.as_str()
+        );
+    }
 
     let api_token = std::env::var("MERGE0_API_TOKEN").ok();
     if api_token.is_none() {
@@ -150,40 +194,133 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .as_ref()
             .map(|d| d.app_base_url.clone())
             .unwrap_or_else(|| "https://app.datadoghq.com".into()),
+        jira_shared_token: std::env::var("MERGE0_JIRA_WEBHOOK_TOKEN").ok(),
+        linear_signing_secret: std::env::var("MERGE0_LINEAR_WEBHOOK_SECRET").ok(),
+        // Slack Events verify with the app's signing secret (same as
+        // /slack/interactions).
+        slack_signing_secret: std::env::var("MERGE0_SLACK_SIGNING_SECRET").ok(),
+        jira_browse_base_url: sources
+            .jira
+            .as_ref()
+            .map(|j| format!("{}/browse", j.base_url.trim_end_matches('/')))
+            .unwrap_or_else(|| "https://example.atlassian.net/browse".into()),
+        slack_team_base_url: sources
+            .slack_channels
+            .as_ref()
+            .map(|s| s.team_base_url.clone())
+            .unwrap_or_else(|| "https://example.slack.com".into()),
     };
 
-    let state = AppState {
-        tenant,
-        model,
-        github,
-        slack,
-        scouts: Arc::new(scouts),
-        gate: Arc::new(gate),
-        repo,
-        intent_fallback: Arc::new(intent_fallback),
-        agent: agent_kind_from_env(),
-        pr_body_template: Arc::new(pr_body_template),
-        callback_url: std::env::var("MERGE0_CALLBACK_URL")
-            .unwrap_or_else(|_| "http://localhost:8080/runner/callback".into()),
-        inbox_url: std::env::var("MERGE0_PUBLIC_URL")
-            .unwrap_or_else(|_| "http://localhost:8080".into()),
-        api_token,
-        runner_token: std::env::var("MERGE0_RUNNER_TOKEN").ok(),
-        webhook_secret: std::env::var("MERGE0_GITHUB_WEBHOOK_SECRET").ok(),
-        slack_signing_secret: std::env::var("MERGE0_SLACK_SIGNING_SECRET").ok(),
-        hardening_enabled: std::env::var("MERGE0_HARDENING_ENABLED").as_deref() == Ok("1"),
-        fetchers: Arc::new(fetchers),
-        vendor_webhooks: Arc::new(vendor_webhooks),
-        // Open-route flood control: default 10 req/s per IP (burst 30);
-        // MERGE0_RATE_LIMIT_PER_SECOND=0 disables.
-        rate_limiter: merge0_server::ratelimit::RateLimiter::from_rate(
-            std::env::var("MERGE0_RATE_LIMIT_PER_SECOND")
+    let state =
+        AppState {
+            tenant,
+            model,
+            github,
+            slack,
+            scouts: Arc::new(scouts),
+            gate: Arc::new(gate),
+            repo,
+            intent_fallback: Arc::new(intent_fallback),
+            agent: agent_kind_from_env(),
+            pr_body_template: Arc::new(pr_body_template),
+            callback_url: std::env::var("MERGE0_CALLBACK_URL")
+                .unwrap_or_else(|_| "http://localhost:8080/runner/callback".into()),
+            inbox_url: std::env::var("MERGE0_PUBLIC_URL")
+                .unwrap_or_else(|_| "http://localhost:8080".into()),
+            api_token,
+            runner_token: std::env::var("MERGE0_RUNNER_TOKEN").ok(),
+            webhook_secret: std::env::var("MERGE0_GITHUB_WEBHOOK_SECRET").ok(),
+            slack_signing_secret: std::env::var("MERGE0_SLACK_SIGNING_SECRET").ok(),
+            hardening_enabled: std::env::var("MERGE0_HARDENING_ENABLED").as_deref() == Ok("1"),
+            fetchers: Arc::new(fetchers),
+            vendor_webhooks: Arc::new(vendor_webhooks),
+            // Open-route flood control: default 10 req/s per IP (burst 30);
+            // MERGE0_RATE_LIMIT_PER_SECOND=0 disables.
+            rate_limiter: merge0_server::ratelimit::RateLimiter::from_rate(
+                std::env::var("MERGE0_RATE_LIMIT_PER_SECOND")
+                    .ok()
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(10),
+            )
+            .map(Arc::new),
+            reopen_factor: std::env::var("MERGE0_REOPEN_FACTOR")
                 .ok()
                 .and_then(|v| v.parse().ok())
-                .unwrap_or(10),
-        )
-        .map(Arc::new),
-    };
+                .unwrap_or(3),
+            efficacy_grace_days: std::env::var("MERGE0_EFFICACY_GRACE_DAYS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(3),
+            notify_reports: slack_notify_enabled("reports"),
+            notify_pr_ready: slack_notify_enabled("pr_ready"),
+            // Credential broker surface (PRD §5a P2): enabled by registering a
+            // per-tenant runner key. Ships with the deterministic preview
+            // minter — production Git credentials remain the runner's own token.
+            broker: std::env::var("MERGE0_BROKER_RUNNER_KEY").ok().map(|key| {
+                let mut broker = merge0_broker::Broker::new(merge0_broker::FakeMinter);
+                broker.add_runner_key(key);
+                Arc::new(tokio::sync::Mutex::new(broker))
+            }),
+            // Registry surface (PRD §5b P2): a local signed-index directory
+            // plus the pinned hex-encoded verifying key.
+            registry: match (
+                std::env::var("MERGE0_REGISTRY_DIR").ok(),
+                std::env::var("MERGE0_REGISTRY_PUBKEY").ok(),
+            ) {
+                (Some(dir), Some(pubkey)) => Some(Arc::new(merge0_server::RegistryHandle {
+                    dir: dir.into(),
+                    verifying_key: merge0_registry::verifying_key_from_hex(&pubkey)
+                        .map_err(|e| format!("MERGE0_REGISTRY_PUBKEY invalid: {e}"))?,
+                })),
+                (Some(_), None) | (None, Some(_)) => {
+                    return Err("registry needs BOTH MERGE0_REGISTRY_DIR and \
+                     MERGE0_REGISTRY_PUBKEY"
+                        .into());
+                }
+                (None, None) => None,
+            },
+            // Delivery mode (PRD: a story is the on-ramp for teams not yet
+            // ready for autonomous PRs). Default `pr` keeps every existing
+            // install behaving identically.
+            delivery_mode: match std::env::var("MERGE0_DELIVERY_MODE") {
+                Ok(raw) => merge0_server::handlers::actions::DeliveryMode::parse(&raw).ok_or_else(
+                    || format!("MERGE0_DELIVERY_MODE invalid: {raw:?} (pr|story|story_and_pr)"),
+                )?,
+                Err(_) => merge0_server::handlers::actions::DeliveryMode::default(),
+            },
+            tracker,
+        };
+
+    // Release-timeline backfill (PRD P0-4): the webhook only sees releases
+    // published AFTER install, so a fresh install has no timeline for
+    // first-bad-release attribution until we seed it from the GitHub
+    // Releases API once. Best-effort: an API failure logs and moves on —
+    // the webhook keeps the timeline current either way.
+    match state.tenant.releases().await {
+        Ok(existing) if existing.is_empty() => {
+            match state.github.list_releases(&state.repo).await {
+                Ok(releases) if !releases.is_empty() => {
+                    let count = releases.len();
+                    for release in releases {
+                        state
+                            .tenant
+                            .upsert_release(
+                                &release.tag,
+                                release.sha.as_deref(),
+                                release.published_at,
+                                release.notes.as_deref(),
+                            )
+                            .await?;
+                    }
+                    tracing::info!("release timeline backfilled: {count} release(s)");
+                }
+                Ok(_) => {}
+                Err(e) => tracing::warn!("release backfill skipped: {e}"),
+            }
+        }
+        Ok(_) => {}
+        Err(e) => tracing::warn!("release backfill check failed: {e}"),
+    }
 
     spawn_schedulers(&state);
 
@@ -280,7 +417,10 @@ fn spawn_schedulers(state: &AppState) {
 async fn run_meta_loop(state: &AppState) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     use merge0_adapters::Adapter;
     let now = chrono::Utc::now();
-    let snapshot = state.tenant.telemetry(30, now).await?;
+    let snapshot = state
+        .tenant
+        .telemetry(30, state.efficacy_grace_days, now)
+        .await?;
 
     let envelope = serde_json::json!({
         "endpoint": "telemetry",
@@ -325,7 +465,31 @@ async fn shutdown_signal() {
 }
 
 fn required(name: &str) -> Result<String, String> {
-    std::env::var(name).map_err(|_| format!("missing required env var {name}"))
+    std::env::var(name).map_err(|_| {
+        // Boot failures are the first thing a new operator sees — point at
+        // the fix, not just the symptom.
+        let hint = match name {
+            "MERGE0_GITHUB_APP_ID"
+            | "MERGE0_GITHUB_APP_PRIVATE_KEY"
+            | "MERGE0_GITHUB_INSTALLATION_ID" => {
+                " — create the GitHub App with docs/github-app-setup.md, \
+                 or set MERGE0_DEV_FAKES=1 to run without GitHub"
+            }
+            "ANTHROPIC_API_KEY" => " — or set MERGE0_DEV_FAKES=1 to run without a model",
+            _ => "",
+        };
+        format!("missing required env var {name}{hint}")
+    })
+}
+
+/// `MERGE0_SLACK_NOTIFY`: comma-separated notification classes to enable
+/// (`reports`, `pr_ready`). Unset = all classes on (the webhook URL itself
+/// is the master switch).
+fn slack_notify_enabled(class: &str) -> bool {
+    match std::env::var("MERGE0_SLACK_NOTIFY") {
+        Ok(list) => list.split(',').any(|c| c.trim() == class),
+        Err(_) => true,
+    }
 }
 
 fn agent_kind_from_env() -> AgentKind {

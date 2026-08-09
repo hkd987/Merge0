@@ -15,7 +15,7 @@
 name = "new-exception-clusters"
 description = "New exception clusters this period?"
 schedule = "nightly"
-sources = ["posthog", "sentry"]
+sources = ["posthog", "sentry", "datadog", "otel", "openpanel"]
 query_template = "kind = 'exception' AND first_seen >= {{period_start}} ORDER BY affected_count DESC"
 prompt = """
 You are reviewing newly ingested exception Signals from the last period.

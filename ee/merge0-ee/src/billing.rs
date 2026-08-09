@@ -128,16 +128,22 @@ pub struct Usage {
     pub tokens_spent: u64,
 }
 
-/// Meter one tenant. Fails with [`EeError::TenantSuspended`] for suspended
-/// tenants (metering goes through the same guarded door as everything else).
+/// Meter one tenant — INCLUDING suspended ones, deliberately.
+///
+/// `tenant_store`'s suspension gate exists to stop the *data plane* from
+/// operating on a frozen org. Metering is a control-plane read, and the
+/// moment you most need a tenant's numbers is right after suspending it
+/// for non-payment: the invoice that justifies the suspension must remain
+/// computable. So this opens the schema directly rather than through the
+/// guarded door — read-only telemetry, no writes.
 pub async fn usage(
     manager: &TenantManager,
     tenant: &Tenant,
     window_days: u32,
     now: DateTime<Utc>,
 ) -> Result<Usage> {
-    let store = manager.tenant_store(tenant).await?;
-    let snapshot = store.telemetry(window_days, now).await?;
+    let store = manager.store().tenant(&tenant.schema_name).await?;
+    let snapshot = store.telemetry(window_days, 3, now).await?;
     Ok(Usage {
         window_days,
         merged_prs: snapshot.counts.prs_merged,

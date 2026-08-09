@@ -1,0 +1,21 @@
+{
+  "report_id": "01K21Y8ZC50000000000000005",
+  "repo": "chalk/chalk",
+  "summary": "Gradebook list crashes for comments containing accented or non-Latin characters",
+  "evidence": [
+    {
+      "kind": "stack_trace",
+      "label": "sentry issue CHALK-44",
+      "url": "https://sentry.example.com/organizations/chalk/issues/9044/"
+    }
+  ],
+  "repro": "Call preview(\"Buen año: éxito rotundo\"). The 12th byte lands inside a multi-byte character and the slice panics, taking down the whole gradebook list for that class. Reported by two districts running Spanish-language rosters and one running Japanese.",
+  "suspect_change": "unknown",
+  "success_criteria": "cargo test passes: preview() truncates on a character boundary rather than a byte index, never panics for multi-byte input, and still returns short comments unchanged and long ASCII comments with a trailing ellipsis.",
+  "constraints": "PREVIEW_LIMIT counts characters, not bytes, once fixed. Do not change the public signature. Keep the change minimal.",
+  "prior_attempts": [],
+  "diff_budget": {
+    "max_files": 4,
+    "max_total_lines": 150
+  }
+}

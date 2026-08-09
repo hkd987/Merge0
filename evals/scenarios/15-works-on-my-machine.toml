@@ -1,0 +1,21 @@
+# Archetype: the giant "doesn't work, works on my machine" thread — an
+# environment-specific report with no version, no error text, no path.
+# Real-world model: the classic can't-reproduce issue that accumulates
+# hundreds of "+1 same here" comments and no actionable content.
+name = "works-on-my-machine"
+description = "Environment-specific 'doesn't work for me' with no version, error, or path — must SKIP as unactionable."
+intent = """
+Chalk is a K-12 gradebook. Data integrity over speed.
+"""
+
+[[signals]]
+source = "github"
+kind = "ticket"
+severity = "medium"
+title = "App doesn't load"
+body = "The app just doesn't load for me. White screen. My colleague opened the same page on her laptop and it loads fine. I tried restarting. Windows, I think Chrome? +1s from three other users in the thread, none with versions or console output."
+evidence_label = "github issue #2041"
+evidence_url = "https://github.example.com/chalk/chalk/issues/2041"
+
+[expect]
+decision = "skip"

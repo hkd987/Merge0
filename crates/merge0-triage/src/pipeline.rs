@@ -18,6 +18,9 @@ pub struct TriageRun {
     pub skips: usize,
     pub opportunities: usize,
     pub tokens_used: u64,
+    /// The rolling 24h token budget was hit: gate evaluation stopped early
+    /// and the remaining candidates stayed Pending for the next window.
+    pub budget_exhausted: bool,
 }
 
 /// Run the full triage pass for one tenant/repo.
@@ -94,21 +97,51 @@ pub async fn run_triage(
     }
 
     // Gate stage: every pending maintenance report — this run's plus any
-    // overflow left pending by earlier capped runs. Highest severity first.
-    let mut maintenance_reports: Vec<_> = store
+    // overflow left pending by earlier capped runs. Delegated tickets jump
+    // the queue (an explicit human handoff outranks inferred priority),
+    // then highest severity first.
+    let mut maintenance_reports = Vec::new();
+    for report in store
         .list_reports(Some(merge0_signal::ReportStatus::Pending))
         .await?
         .into_iter()
         .filter(|r| r.kind != ReportKind::Opportunity)
-        .collect();
-    maintenance_reports.sort_by(|a, b| {
-        b.severity
-            .cmp(&a.severity)
+    {
+        let delegated = store
+            .report_signals(report.id)
+            .await?
+            .iter()
+            .any(|s| s.delegated);
+        maintenance_reports.push((report, delegated));
+    }
+    maintenance_reports.sort_by(|(a, a_del), (b, b_del)| {
+        b_del
+            .cmp(a_del)
+            .then(b.severity.cmp(&a.severity))
             .then(b.affected_count.cmp(&a.affected_count))
     });
-    for report in &maintenance_reports {
+
+    // The spend ceiling (hard stop, never silent): gate calls halt for the
+    // rest of the window once gate + runner spend crosses the cap.
+    let budget = gate_config.budget.max_tokens_per_day;
+    let spent_before = if budget > 0 {
+        store.tokens_spent_since(now - Duration::hours(24)).await?
+    } else {
+        0
+    };
+
+    for (report, _) in &maintenance_reports {
         if run.work_orders >= gate_config.max_work_orders_per_run as usize {
             break; // Remaining reports stay Pending for the next run.
+        }
+        if budget > 0 && spent_before + run.tokens_used >= budget {
+            run.budget_exhausted = true;
+            tracing::warn!(
+                budget,
+                spent = spent_before + run.tokens_used,
+                "token budget exhausted — gate halted, candidates stay pending"
+            );
+            break;
         }
         let prior =
             prior_attempts(store, &report.fingerprints, gate_config.prior_attempts_cap).await?;
@@ -122,6 +155,12 @@ pub async fn run_triage(
             .set_gate_decision(report.id, &outcome.decision)
             .await?;
     }
+
+    // The ledger row is what makes the budget rolling: the next run's
+    // spent-since query sums these.
+    store
+        .record_triage_run(now, run.tokens_used, run.budget_exhausted)
+        .await?;
 
     Ok(run)
 }

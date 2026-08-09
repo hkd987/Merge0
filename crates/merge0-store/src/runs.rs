@@ -36,6 +36,9 @@ pub struct DispatchRecord {
     pub tokens_spent: Option<u64>,
     /// MCP/skill attribution for this run (PRD §5b).
     pub extensions: Option<serde_json::Value>,
+    /// Who pulled the trigger: `human`, `slack`, or `auto` (the autonomy
+    /// dial's audit trail).
+    pub dispatched_by: String,
 }
 
 impl TenantStore {
@@ -49,6 +52,7 @@ impl TenantStore {
         report_id: Ulid,
         runner_kind: &str,
         extensions: Option<&serde_json::Value>,
+        dispatched_by: &str,
         now: DateTime<Utc>,
     ) -> Result<()> {
         let mut tx = self.pool().begin().await?;
@@ -69,13 +73,15 @@ impl TenantStore {
             )));
         }
         let dispatch_sql = format!(
-            "INSERT INTO {t} (report_id, runner_kind, dispatched_at, status, extensions)
-             VALUES ($1,$2,$3,$4,$5)
+            "INSERT INTO {t} (report_id, runner_kind, dispatched_at, status, extensions,
+                              dispatched_by)
+             VALUES ($1,$2,$3,$4,$5,$6)
              ON CONFLICT (report_id) DO UPDATE SET
                  runner_kind = EXCLUDED.runner_kind,
                  dispatched_at = EXCLUDED.dispatched_at,
                  status = EXCLUDED.status,
                  extensions = EXCLUDED.extensions,
+                 dispatched_by = EXCLUDED.dispatched_by,
                  pr_url = NULL, branch = NULL, pr_opened_at = NULL,
                  discard_reason = NULL, diagnosis = NULL",
             t = self.table("dispatches")
@@ -86,6 +92,7 @@ impl TenantStore {
             .bind(now)
             .bind(enum_str(&DispatchStatus::Dispatched))
             .bind(extensions)
+            .bind(dispatched_by)
             .execute(&mut *tx)
             .await?;
         tx.commit().await?;
@@ -255,9 +262,68 @@ impl TenantStore {
                 diagnosis: row.get("diagnosis"),
                 tokens_spent: row.get::<Option<i64>, _>("tokens_spent").map(|n| n as u64),
                 extensions: row.get("extensions"),
+                dispatched_by: row.get("dispatched_by"),
             })
         })
         .transpose()
+    }
+
+    /// Persist one triage run's token spend into the rolling ledger.
+    pub async fn record_triage_run(
+        &self,
+        started_at: DateTime<Utc>,
+        tokens_used: u64,
+        budget_exhausted: bool,
+    ) -> Result<()> {
+        let sql = format!(
+            "INSERT INTO {t} (id, started_at, tokens_used, budget_exhausted)
+             VALUES ($1,$2,$3,$4)",
+            t = self.table("triage_runs")
+        );
+        sqlx::query(&sql)
+            .bind(Ulid::new().to_string())
+            .bind(started_at)
+            .bind(tokens_used as i64)
+            .bind(budget_exhausted)
+            .execute(self.pool())
+            .await?;
+        Ok(())
+    }
+
+    /// Whether the most recent triage run already hit the budget — the
+    /// dedupe key for "warn once per exhausted window", not once per run.
+    pub async fn last_run_budget_exhausted(&self) -> Result<bool> {
+        let sql = format!(
+            "SELECT budget_exhausted FROM {t} ORDER BY started_at DESC LIMIT 1",
+            t = self.table("triage_runs")
+        );
+        Ok(sqlx::query_scalar(&sql)
+            .fetch_optional(self.pool())
+            .await?
+            .unwrap_or(false))
+    }
+
+    /// Total model spend since `cutoff`: gate tokens from the triage-run
+    /// ledger plus runner-reported tokens on dispatches in the window.
+    pub async fn tokens_spent_since(&self, cutoff: DateTime<Utc>) -> Result<u64> {
+        let gate_sql = format!(
+            "SELECT COALESCE(SUM(tokens_used), 0)::BIGINT FROM {t} WHERE started_at >= $1",
+            t = self.table("triage_runs")
+        );
+        let gate: i64 = sqlx::query_scalar(&gate_sql)
+            .bind(cutoff)
+            .fetch_one(self.pool())
+            .await?;
+        let runner_sql = format!(
+            "SELECT COALESCE(SUM(tokens_spent), 0)::BIGINT FROM {t}
+             WHERE dispatched_at >= $1 AND tokens_spent IS NOT NULL",
+            t = self.table("dispatches")
+        );
+        let runner: i64 = sqlx::query_scalar(&runner_sql)
+            .bind(cutoff)
+            .fetch_one(self.pool())
+            .await?;
+        Ok(gate.max(0) as u64 + runner.max(0) as u64)
     }
 
     /// Record the merge commit SHA when the PR merges — the key revert
@@ -405,7 +471,7 @@ impl TenantStore {
     /// reverted". Feeds `WorkOrder::prior_attempts` and hardening targeting.
     pub async fn outcomes_for_fingerprint(&self, fingerprint: &str) -> Result<Vec<OutcomeRef>> {
         let sql = format!(
-            "SELECT o.report_id, o.kind, o.occurred_at, o.note
+            "SELECT o.report_id, o.kind, o.occurred_at, o.note, o.pr_url
              FROM {outcomes} o
              JOIN {report_signals} rs ON rs.report_id = o.report_id
              WHERE rs.fingerprint = $1
@@ -426,6 +492,7 @@ impl TenantStore {
                     outcome: enum_parse(row.get("kind"))?,
                     occurred_at: row.get("occurred_at"),
                     note: row.get("note"),
+                    pr_url: row.get("pr_url"),
                 })
             })
             .collect()
@@ -433,7 +500,7 @@ impl TenantStore {
 
     pub async fn outcomes_for_report(&self, report_id: Ulid) -> Result<Vec<OutcomeRef>> {
         let sql = format!(
-            "SELECT report_id, kind, occurred_at, note FROM {t}
+            "SELECT report_id, kind, occurred_at, note, pr_url FROM {t}
              WHERE report_id = $1 ORDER BY occurred_at DESC",
             t = self.table("outcomes")
         );
@@ -448,6 +515,7 @@ impl TenantStore {
                     outcome: enum_parse(row.get("kind"))?,
                     occurred_at: row.get("occurred_at"),
                     note: row.get("note"),
+                    pr_url: row.get("pr_url"),
                 })
             })
             .collect()

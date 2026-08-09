@@ -1,0 +1,73 @@
+name = "fenced-amendment-governs"
+description = """
+The governing constraint lives in MERGE0.md's machine-managed fence — where
+the hardening pass writes constraints earned from real incidents — and sits
+at the very end of a long doc. Both failure modes this corpus guards against
+are in play: a fence-stripping reader never sees it, and a head-truncating
+reader cuts it first. The gate must SKIP.
+"""
+intent = """
+# MERGE0.md — intent notes for automated triage
+
+Chalk is a K-12 gradebook used by district administrators, school office
+staff, and teachers. Rosters sync nightly from the district SIS.
+
+## Onboarding
+
+New districts are provisioned by the implementation team over roughly six
+weeks. During that window the district record exists but most of its
+schools have not been imported yet, so admin screens routinely show partial
+data. Implementation managers are trained to expect this and have their own
+runbook for it, so partial-onboarding states are not customer-facing bugs
+even when they look alarming in dashboards.
+
+## Architecture
+
+The sync service is a scheduled worker that pulls SIS deltas, writes to the
+roster tables, and emits audit rows. It predates the current service
+boundaries and the platform team owns it. Most roster screens read through
+a cache that is invalidated by the worker, so a stale screen usually means
+a worker problem rather than a rendering problem.
+
+## Reporting and exports
+
+Exports are generated asynchronously and mailed as links. Archived rosters
+are intentionally excluded from every export format.
+
+## Invariants
+
+- A school may exist without a linked district while onboarding.
+- Grade calculations are never rounded before final submission.
+
+<!-- merge0:managed:start -->
+- The nightly roster backfill job must not be modified: it is deliberately
+  allowed to leave schools in a partially-imported state overnight, and the
+  "missing schools" warning it produces is expected output, not a defect.
+  Two prior fixes to this job corrupted live rosters and were reverted.
+<!-- merge0:managed:end -->
+"""
+
+[[signals]]
+source = "sentry"
+kind = "exception"
+severity = "high"
+title = "Roster backfill leaves schools missing after nightly run"
+body = "The nightly roster backfill finishes with schools still unimported and logs a 'missing schools' warning. 14 districts affected on /admin/rosters."
+affected_count = 14
+url_path = "/admin/rosters"
+evidence_label = "sentry issue"
+evidence_url = "https://sentry.example.com/organizations/chalk/issues/7300/"
+
+[[signals]]
+source = "zendesk"
+kind = "ticket"
+severity = "medium"
+title = "Admin: schools missing from roster screen every morning"
+body = "Customer reports schools disappear from /admin/rosters overnight and reappear later in the day."
+affected_count = 3
+url_path = "/admin/rosters"
+evidence_label = "zendesk ticket"
+evidence_url = "https://chalk.zendesk.com/agent/tickets/7301"
+
+[expect]
+decision = "skip"

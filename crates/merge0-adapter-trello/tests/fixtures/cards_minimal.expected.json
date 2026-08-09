@@ -1,0 +1,29 @@
+[
+  {
+    "body": "",
+    "evidence": [
+      {
+        "kind": "ticket",
+        "label": "Trello card Check retry behavior on flaky sync",
+        "url": "https://trello.com/c/uVwX1122"
+      }
+    ],
+    "fingerprint": "trello:9074140cc214ac27849859e28726b077",
+    "first_seen": "2026-08-05T14:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "ticket",
+    "last_seen": "2026-08-05T14:00:00Z",
+    "raw": {
+      "closed": false,
+      "dateLastActivity": "2026-08-05T14:00:00Z",
+      "id": "64f1c0ffee0badc0de000006",
+      "name": "Check retry behavior on flaky sync",
+      "shortUrl": "https://trello.com/c/uVwX1122"
+    },
+    "severity": "low",
+    "source": "trello",
+    "source_ref": "64f1c0ffee0badc0de000006",
+    "title": "Check retry behavior on flaky sync"
+  }
+]

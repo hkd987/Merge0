@@ -29,6 +29,11 @@ pub fn app(state: AppState) -> Router {
         .route("/metrics", get(handlers::metrics::scrape))
         .route("/safety", get(handlers::safety::verify))
         .route("/onboarding", get(handlers::onboarding::bundle))
+        .route("/registry/skills", get(handlers::registry::list))
+        .route(
+            "/registry/skills/{name}/install",
+            post(handlers::registry::install),
+        )
         .route("/slack/digest", post(handlers::slack::digest))
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
@@ -38,11 +43,19 @@ pub fn app(state: AppState) -> Router {
     // Self-authenticated or data-free routes. (`/webhooks/github` is a
     // static route and takes precedence over the `{vendor}` capture.)
     // Rate-limited per IP: these verify their own signatures, but the
-    // verification itself must not be a free DoS vector.
+    // verification itself must not be a free DoS vector. The SPA routes
+    // serve embedded, data-free static assets (auth is client-side —
+    // audit C2).
     let open = Router::new()
         .route("/healthz", get(handlers::health::healthz))
-        .route("/inbox", get(handlers::inbox::page))
+        .route("/", get(handlers::spa::serve))
+        .route("/inbox", get(handlers::spa::serve))
+        .route("/inbox/{id}", get(handlers::spa::serve))
+        .route("/dashboard", get(handlers::spa::serve))
+        .route("/setup", get(handlers::spa::serve))
+        .route("/assets/{*file}", get(handlers::spa::serve))
         .route("/runner/callback", post(handlers::runner::callback))
+        .route("/broker/credentials", post(handlers::broker::credentials))
         .route("/webhooks/github", post(handlers::webhooks::github))
         .route(
             "/webhooks/{vendor}",

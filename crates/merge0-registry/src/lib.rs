@@ -31,7 +31,10 @@
 //! override, surfaced in the PR body so the reviewing human sees it too.
 
 use chrono::{DateTime, Utc};
-use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
+use ed25519_dalek::{Signature, Signer, Verifier};
+// Re-exported so registry consumers (the server's HTTP surface) never take
+// a direct ed25519 dependency.
+pub use ed25519_dalek::{SigningKey, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -151,6 +154,16 @@ pub fn verify_index(
         }
     }
     Ok(index)
+}
+
+/// Parse a hex-encoded ed25519 public key (the pinned registry trust root,
+/// as operators configure it via env).
+pub fn verifying_key_from_hex(hex_key: &str) -> Result<VerifyingKey, RegistryError> {
+    let bytes = hex::decode(hex_key.trim()).map_err(|_| RegistryError::BadSignatureEncoding)?;
+    let bytes: [u8; 32] = bytes
+        .try_into()
+        .map_err(|_| RegistryError::BadSignatureEncoding)?;
+    VerifyingKey::from_bytes(&bytes).map_err(|_| RegistryError::BadSignatureEncoding)
 }
 
 fn is_sha256_hex(s: &str) -> bool {

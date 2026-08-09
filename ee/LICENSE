@@ -1,8 +1,45 @@
-Merge0 Enterprise License (placeholder)
+The Merge0 Enterprise License (the "Enterprise License")
+Copyright (c) AdminRemix LLC
 
-The contents of this "ee" directory are NOT covered by the MIT license at the
-repository root. They are source-available under a commercial license from
-AdminRemix LLC, to be finalized before the repository goes public (Phase 1
-end — see docs/PRD.md, "Distribution & Open Source Strategy").
+With regard to the Merge0 Software:
 
-Until that license text is finalized: all rights reserved by AdminRemix LLC.
+This software and associated documentation files (the "Software") may only
+be used in production, if you (and any entity that you represent) have
+agreed to, and are in compliance with, a valid subscription agreement with
+AdminRemix LLC for the correct number of usage units as defined in that
+agreement, or otherwise have a written agreement with AdminRemix LLC
+granting you production rights to the Software (in each case, the
+"Enterprise Terms"), and otherwise have a valid Merge0 Enterprise license
+key for the correct usage volume. Subject to the foregoing sentence, you
+are free to modify this Software and publish patches to the Software. You
+agree that AdminRemix LLC and/or its licensors (as applicable) retain all
+right, title and interest in and to all such modifications and/or patches,
+and all such modifications and/or patches may only be used, copied,
+modified, displayed, distributed, or otherwise exploited with a valid
+Merge0 Enterprise license for the correct usage volume. Notwithstanding
+the foregoing, you may copy and modify the Software for development and
+testing purposes, without requiring a subscription. You agree that
+AdminRemix LLC and/or its licensors (as applicable) retain all right,
+title and interest in and to all such modifications. You are not granted
+any other rights beyond what is expressly stated herein. Subject to the
+foregoing, it is forbidden to copy, merge, publish, distribute,
+sublicense, and/or sell the Software.
+
+The full text of this Enterprise License shall be included in all copies
+or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+For all third party components incorporated into the Merge0 Software,
+those components are licensed under the original license provided by the
+owner of the applicable component.
+
+Everything in this repository OUTSIDE this "ee" directory is licensed
+under the MIT license at the repository root; only the contents of "ee"
+are covered by these Enterprise License terms.

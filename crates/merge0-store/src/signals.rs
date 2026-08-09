@@ -22,8 +22,9 @@ impl TenantStore {
     pub async fn upsert_signal(&self, signal: &Signal) -> Result<IngestOutcome> {
         let sql = format!(
             "INSERT INTO {t} (id, source, source_ref, kind, severity, title, body, evidence,
-                              fingerprint, join_keys, affected_count, first_seen, last_seen, raw)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+                              fingerprint, join_keys, affected_count, delegated,
+                              first_seen, last_seen, raw)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
              ON CONFLICT (fingerprint) DO UPDATE SET
                  severity = EXCLUDED.severity,
                  title = EXCLUDED.title,
@@ -31,6 +32,7 @@ impl TenantStore {
                  evidence = EXCLUDED.evidence,
                  join_keys = EXCLUDED.join_keys,
                  affected_count = EXCLUDED.affected_count,
+                 delegated = EXCLUDED.delegated,
                  first_seen = LEAST({t}.first_seen, EXCLUDED.first_seen),
                  last_seen = GREATEST({t}.last_seen, EXCLUDED.last_seen),
                  raw = EXCLUDED.raw
@@ -49,6 +51,7 @@ impl TenantStore {
             .bind(&signal.fingerprint)
             .bind(serde_json::to_value(&signal.join_keys).expect("join_keys serializes"))
             .bind(signal.affected_count.map(|n| n as i64))
+            .bind(signal.delegated)
             .bind(signal.first_seen)
             .bind(signal.last_seen)
             .bind(&signal.raw)
@@ -122,6 +125,7 @@ pub(crate) fn row_to_signal(row: &PgRow) -> Result<Signal> {
         affected_count: row
             .get::<Option<i64>, _>("affected_count")
             .map(|n| n as u64),
+        delegated: row.get("delegated"),
         first_seen: row.get("first_seen"),
         last_seen: row.get("last_seen"),
         raw: row.get("raw"),

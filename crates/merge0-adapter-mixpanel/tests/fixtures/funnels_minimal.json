@@ -1,0 +1,45 @@
+{
+  "endpoint": "funnels",
+  "context": { "project_base_url": "https://mixpanel.example.com/project/318/" },
+  "payload": {
+    "results": [
+      {
+        "funnel_id": 41,
+        "name": "Trial start",
+        "fetched_at": "2026-08-01T06:00:00Z",
+        "response": {
+          "meta": { "dates": ["2026-07-25", "2026-08-01"] },
+          "data": {
+            "2026-07-25": {
+              "steps": [
+                { "count": 900, "goal": "Landing", "event": "Landing" },
+                { "count": 200, "goal": "Trial Started", "event": "Trial Started" }
+              ]
+            },
+            "2026-08-01": {
+              "steps": [
+                { "count": 640, "goal": "Landing", "event": "Landing" },
+                { "count": 560, "goal": "Trial Started", "event": "Trial Started" }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "funnel_id": 42,
+        "name": "Single step",
+        "fetched_at": "2026-08-01T06:00:00Z",
+        "response": {
+          "meta": { "dates": ["2026-08-01"] },
+          "data": {
+            "2026-08-01": {
+              "steps": [
+                { "count": 75, "goal": "App Open", "event": "App Open" }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  }
+}

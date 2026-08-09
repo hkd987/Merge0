@@ -1,0 +1,128 @@
+[
+  {
+    "affected_count": 6,
+    "body": "Every sync for Lincoln Elementary has failed since Tuesday.\nThe status page shows stuck at 90% and never finishes.",
+    "evidence": [
+      {
+        "kind": "ticket",
+        "label": "Intercom conversation 70012345",
+        "url": "https://app.intercom-example.com/a/inbox/abc123/conversation/70012345"
+      }
+    ],
+    "fingerprint": "intercom:a47f675af318efaf6753075aae933989",
+    "first_seen": "2024-08-08T06:53:20Z",
+    "id": "<ulid>",
+    "join_keys": {
+      "account_id": "6401ab234cde567890f12a34"
+    },
+    "kind": "ticket",
+    "last_seen": "2024-08-09T06:53:20Z",
+    "raw": {
+      "created_at": 1723100000,
+      "id": "70012345",
+      "priority": "priority",
+      "source": {
+        "author": {
+          "email": "jordan@example.com",
+          "id": "6401ab234cde567890f12a34",
+          "name": "Jordan Example",
+          "type": "user"
+        },
+        "body": "<p>Every sync for Lincoln Elementary has failed since Tuesday.</p><p>The status page shows <b>stuck at 90%</b> and never finishes.</p>",
+        "type": "conversation"
+      },
+      "state": "open",
+      "statistics": {
+        "count_conversation_parts": 6,
+        "type": "conversation_statistics"
+      },
+      "title": null,
+      "type": "conversation",
+      "updated_at": 1723186400
+    },
+    "severity": "high",
+    "source": "intercom",
+    "source_ref": "70012345",
+    "title": "Every sync for Lincoln Elementary has failed since Tuesday.\nThe status page shows stuck at 90% and never finishes."
+  },
+  {
+    "affected_count": 2,
+    "body": "It would help our admins a lot to export the full roster as CSV.\nWeekly, ideally.",
+    "evidence": [
+      {
+        "kind": "ticket",
+        "label": "Intercom conversation 70012399",
+        "url": "https://app.intercom-example.com/a/inbox/abc123/conversation/70012399"
+      }
+    ],
+    "fingerprint": "intercom:8f7a949e9824bdd68d2b1583c4c99242",
+    "first_seen": "2024-08-09T07:53:20Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "ticket",
+    "last_seen": "2024-08-09T07:53:20Z",
+    "raw": {
+      "created_at": 1723190000,
+      "id": "70012399",
+      "priority": "not_priority",
+      "source": {
+        "author": {
+          "email": "sam@acme-example.com",
+          "id": "991234",
+          "name": "Sam Support",
+          "type": "admin"
+        },
+        "body": "It would help our admins a lot to export the full roster as CSV.<br/>Weekly, ideally.",
+        "type": "conversation"
+      },
+      "state": "open",
+      "statistics": {
+        "count_conversation_parts": 2,
+        "type": "conversation_statistics"
+      },
+      "title": "Feature request: CSV roster export",
+      "type": "conversation",
+      "updated_at": 1723190000
+    },
+    "severity": "low",
+    "source": "intercom",
+    "source_ref": "70012399",
+    "title": "Feature request: CSV roster export"
+  },
+  {
+    "body": "Grade band dropdown shows duplicates &amp; the selection resets on save.",
+    "evidence": [
+      {
+        "kind": "ticket",
+        "label": "Intercom conversation 70012500",
+        "url": "https://app.intercom-example.com/a/inbox/abc123/conversation/70012500"
+      }
+    ],
+    "fingerprint": "intercom:d74195a3898ed3d3a4183effdf81e089",
+    "first_seen": "2024-08-10T07:06:40Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "ticket",
+    "last_seen": "2024-08-10T07:30:00Z",
+    "raw": {
+      "created_at": 1723273600,
+      "id": "70012500",
+      "source": {
+        "author": {
+          "id": "6401ab234cde567890f12c11",
+          "type": "lead"
+        },
+        "body": "<p>Grade band dropdown shows duplicates &amp; the selection resets on save.</p>",
+        "type": "conversation"
+      },
+      "state": "open",
+      "title": null,
+      "type": "conversation",
+      "updated_at": 1723275000
+    },
+    "severity": "low",
+    "source": "intercom",
+    "source_ref": "70012500",
+    "title": "Grade band dropdown shows duplicates &amp; the selection resets on save."
+  }
+]

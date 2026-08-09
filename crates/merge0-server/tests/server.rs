@@ -20,6 +20,13 @@ fn database_url() -> String {
 const WORK_JSON: &str = r#"{"decision":"work","summary":"Fix the crash","repro":"open /districts/sync",
     "success_criteria":"regression test passes","constraints":"stay small"}"#;
 
+/// The same verdict, stated confidently. WORK_JSON omits `confidence`, which
+/// parses to Low — so with a tracker configured it is routed to a story
+/// rather than dispatched. Tests that mean to exercise *dispatch* must say
+/// they are confident, exactly as a real gate would.
+const WORK_JSON_HIGH: &str = r#"{"decision":"work","summary":"Fix the crash","repro":"open /districts/sync",
+    "success_criteria":"regression test passes","constraints":"stay small","confidence":"high"}"#;
+
 struct Harness {
     base: String,
     #[allow(dead_code)]
@@ -36,6 +43,10 @@ struct HarnessOptions {
     model_responses: Vec<&'static str>,
     hardening: bool,
     rate_limit_per_second: u32,
+    registry: Option<merge0_server::RegistryHandle>,
+    gate_toml: Option<&'static str>,
+    delivery_mode: merge0_server::handlers::actions::DeliveryMode,
+    tracker: Option<Arc<dyn merge0_tracker::Tracker>>,
 }
 
 impl Default for HarnessOptions {
@@ -45,12 +56,16 @@ impl Default for HarnessOptions {
             model_responses: vec![WORK_JSON],
             hardening: false,
             rate_limit_per_second: 0,
+            registry: None,
+            gate_toml: None,
+            delivery_mode: merge0_server::handlers::actions::DeliveryMode::Pr,
+            tracker: None,
         }
     }
 }
 
 impl Harness {
-    async fn start(options: HarnessOptions) -> Harness {
+    async fn start(mut options: HarnessOptions) -> Harness {
         let store = Store::connect(&database_url()).await.unwrap();
         let schema = format!("t_{}", Ulid::new().to_string().to_lowercase());
         let tenant = store.tenant(&schema).await.unwrap();
@@ -71,13 +86,13 @@ impl Harness {
             "#,
         )
         .unwrap()];
-        let gate = toml::from_str(
+        let gate = toml::from_str(options.gate_toml.unwrap_or(
             r#"
             prompt = "gate"
             min_severity = "medium"
             max_work_orders_per_run = 5
             "#,
-        )
+        ))
         .unwrap();
 
         let state = AppState {
@@ -104,14 +119,31 @@ impl Harness {
                 posthog_shared_token: Some("posthog-token".into()),
                 zendesk_signing_secret: Some("zendesk-secret".into()),
                 datadog_shared_token: Some("datadog-token".into()),
+                jira_shared_token: Some("jira-token".into()),
+                linear_signing_secret: Some("linear-secret".into()),
+                slack_signing_secret: Some("slack-secret".into()),
                 posthog_project_base_url: "https://us.posthog.com/project/1".into(),
                 zendesk_agent_base_url: "https://chalk.zendesk.example.com/agent".into(),
                 datadog_app_base_url: "https://app.datadog.example.com".into(),
+                jira_browse_base_url: "https://chalk-example.atlassian.net/browse".into(),
+                slack_team_base_url: "https://chalk-example.slack.com".into(),
             }),
             rate_limiter: merge0_server::ratelimit::RateLimiter::from_rate(
                 options.rate_limit_per_second,
             )
             .map(Arc::new),
+            reopen_factor: 3,
+            efficacy_grace_days: 3,
+            notify_reports: true,
+            notify_pr_ready: true,
+            broker: {
+                let mut broker = merge0_broker::Broker::new(merge0_broker::FakeMinter);
+                broker.add_runner_key("broker-runner-key");
+                Some(Arc::new(tokio::sync::Mutex::new(broker)))
+            },
+            registry: options.registry.take().map(Arc::new),
+            delivery_mode: options.delivery_mode,
+            tracker: options.tracker.take(),
         };
 
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -409,20 +441,27 @@ async fn every_data_route_requires_the_bearer_token() {
         .await
         .unwrap();
     assert_eq!(res.status(), 200);
-    let shell = h
-        .client
-        .get(format!("{}/inbox", h.base))
-        .send()
-        .await
-        .unwrap()
-        .text()
-        .await
-        .unwrap();
-    assert!(
-        shell.contains("merge0_token"),
-        "shell prompts for the token"
-    );
-    assert!(!shell.contains("TypeError"), "shell carries no report data");
+    // SPA routes serve the same data-free shell (or an actionable 503 when
+    // the UI bundle isn't built in this environment).
+    for page in ["/", "/inbox", "/dashboard", "/setup"] {
+        let res = h
+            .client
+            .get(format!("{}{page}", h.base))
+            .send()
+            .await
+            .unwrap();
+        let status = res.status().as_u16();
+        assert!(
+            status == 200 || status == 503,
+            "GET {page} must serve the shell or an unbuilt-UI 503, got {status}"
+        );
+        let body = res.text().await.unwrap();
+        assert!(
+            !body.contains("TypeError: districtId"),
+            "shell carries no report data"
+        );
+        assert!(!body.contains("api-secret"), "shell carries no token");
+    }
 
     h.teardown().await;
 }
@@ -927,5 +966,890 @@ async fn metrics_scrape_is_prometheus_text_over_real_counts() {
 
     // Silence the unused-variable pedantry honestly: the report exists.
     assert!(!report_id.is_empty());
+    h.teardown().await;
+}
+
+/// The ticket-source webhooks: Jira (shared token), Linear (HMAC
+/// signature), and Slack Events (v0 signature + URL-verification
+/// handshake) all verify, normalize, and store.
+#[tokio::test]
+async fn ticket_source_webhooks_verify_and_normalize() {
+    let h = Harness::start(HarnessOptions::default()).await;
+
+    // Jira: shared token.
+    let jira = serde_json::json!({
+        "webhookEvent": "jira:issue_created",
+        "issue": {
+            "key": "CHK-77",
+            "fields": {
+                "summary": "Roster import stalls at 200 students",
+                "priority": { "name": "High" },
+                "status": { "statusCategory": { "key": "indeterminate" } },
+                "created": "2026-08-05T10:00:00.000Z",
+                "updated": "2026-08-06T11:00:00.000Z"
+            }
+        }
+    });
+    let res = h
+        .client
+        .post(format!("{}/webhooks/jira", h.base))
+        .header("x-merge0-webhook-token", "jira-token")
+        .json(&jira)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res.status(), 200);
+    let body: serde_json::Value = res.json().await.unwrap();
+    assert_eq!(body["inserted"], 1);
+
+    // Linear: HMAC over the exact body bytes.
+    let linear = serde_json::json!({
+        "type": "Issue",
+        "action": "create",
+        "data": {
+            "identifier": "ENG-500",
+            "title": "Attendance export empty",
+            "priority": 1,
+            "createdAt": "2026-08-06T10:00:00.000Z",
+            "updatedAt": "2026-08-06T10:30:00.000Z",
+            "url": "https://linear.example.com/chalk/issue/ENG-500"
+        }
+    });
+    let linear_bytes = serde_json::to_vec(&linear).unwrap();
+    let mut mac = hmac::Hmac::<sha2::Sha256>::new_from_slice(b"linear-secret").unwrap();
+    mac.update(&linear_bytes);
+    let res = h
+        .client
+        .post(format!("{}/webhooks/linear", h.base))
+        .header("linear-signature", hex::encode(mac.finalize().into_bytes()))
+        .header("content-type", "application/json")
+        .body(linear_bytes)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res.status(), 200);
+    let body: serde_json::Value = res.json().await.unwrap();
+    assert_eq!(body["inserted"], 1);
+
+    // Slack Events: the URL-verification handshake echoes the challenge…
+    let sign_slack = |body: &[u8], ts: &str| {
+        let mut mac = hmac::Hmac::<sha2::Sha256>::new_from_slice(b"slack-secret").unwrap();
+        mac.update(b"v0:");
+        mac.update(ts.as_bytes());
+        mac.update(b":");
+        mac.update(body);
+        format!("v0={}", hex::encode(mac.finalize().into_bytes()))
+    };
+    let handshake = serde_json::to_vec(&serde_json::json!({
+        "type": "url_verification", "challenge": "chalk-challenge-123"
+    }))
+    .unwrap();
+    let res = h
+        .client
+        .post(format!("{}/webhooks/slack", h.base))
+        .header("x-slack-request-timestamp", "1723100000")
+        .header("x-slack-signature", sign_slack(&handshake, "1723100000"))
+        .header("content-type", "application/json")
+        .body(handshake)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res.status(), 200);
+    let body: serde_json::Value = res.json().await.unwrap();
+    assert_eq!(body["challenge"], "chalk-challenge-123");
+
+    // …and a channel message event lands as a signal.
+    let event = serde_json::to_vec(&serde_json::json!({
+        "type": "event_callback",
+        "event": {
+            "type": "message",
+            "channel": "C0123456789",
+            "ts": "1723100001.000200",
+            "text": "Gradebook import failing for classes over 200",
+            "user": "U0456"
+        }
+    }))
+    .unwrap();
+    let res = h
+        .client
+        .post(format!("{}/webhooks/slack", h.base))
+        .header("x-slack-request-timestamp", "1723100001")
+        .header("x-slack-signature", sign_slack(&event, "1723100001"))
+        .header("content-type", "application/json")
+        .body(event)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res.status(), 200);
+    let body: serde_json::Value = res.json().await.unwrap();
+    assert_eq!(body["inserted"], 1);
+
+    // Forged credentials are rejected on all three.
+    for (path, header_name, value) in [
+        ("jira", "x-merge0-webhook-token", "wrong"),
+        ("linear", "linear-signature", "deadbeef"),
+        ("slack", "x-slack-signature", "v0=deadbeef"),
+    ] {
+        let res = h
+            .client
+            .post(format!("{}/webhooks/{path}", h.base))
+            .header(header_name, value)
+            .header("x-slack-request-timestamp", "1723100002")
+            .json(&serde_json::json!({}))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status(), 401, "forged {path} webhook must 401");
+    }
+
+    h.teardown().await;
+}
+
+/// The autonomy dial: OFF by default (the shipped trust posture), and when
+/// an operator enables it, only Work Orders at or above the confidence
+/// threshold dispatch — with the actor recorded as `auto`.
+#[tokio::test]
+async fn auto_dispatch_is_off_by_default_and_confidence_gated_when_enabled() {
+    // Default config + a high-confidence verdict: stays in the inbox.
+    let h = Harness::start(HarnessOptions {
+        model_responses: vec![WORK_HIGH_CONFIDENCE_JSON],
+        ..HarnessOptions::default()
+    })
+    .await;
+    let report_id = h.seed_awaiting_report().await;
+    let detail: serde_json::Value = h
+        .get(&format!("/reports/{report_id}"))
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(detail["report"]["status"], "awaiting_review");
+    assert_eq!(detail["work_order"]["confidence"], "high");
+    assert!(detail["dispatch"].is_null(), "no dispatch without a human");
+    h.teardown().await;
+
+    // Autonomy enabled but the verdict carries NO confidence → Low →
+    // fail-conservative: still a human decision.
+    let h = Harness::start(HarnessOptions {
+        gate_toml: Some(AUTONOMY_GATE_TOML),
+        ..HarnessOptions::default()
+    })
+    .await;
+    let report_id = h.seed_awaiting_report().await;
+    let detail: serde_json::Value = h
+        .get(&format!("/reports/{report_id}"))
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(detail["report"]["status"], "awaiting_review");
+    h.teardown().await;
+
+    // Autonomy enabled + high confidence → dispatched with actor "auto".
+    let h = Harness::start(HarnessOptions {
+        gate_toml: Some(AUTONOMY_GATE_TOML),
+        model_responses: vec![WORK_HIGH_CONFIDENCE_JSON],
+        ..HarnessOptions::default()
+    })
+    .await;
+    h.post(
+        "/ingest/sentry",
+        Some("api-secret"),
+        Some(h.sentry_envelope()),
+    )
+    .await;
+    h.post("/triage/run", Some("api-secret"), None).await;
+    let reports: serde_json::Value = h
+        .get("/reports?status=dispatched")
+        .await
+        .json()
+        .await
+        .unwrap();
+    let report_id = reports[0]["id"].as_str().expect("auto-dispatched report");
+    let detail: serde_json::Value = h
+        .get(&format!("/reports/{report_id}"))
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(detail["dispatch"]["dispatched_by"], "auto");
+    let telemetry: serde_json::Value = h.get("/telemetry").await.json().await.unwrap();
+    assert_eq!(telemetry["counts"]["auto_dispatched"], 1);
+    h.teardown().await;
+}
+
+const WORK_HIGH_CONFIDENCE_JSON: &str = r#"{"decision":"work","summary":"Fix the crash",
+    "repro":"open /districts/sync","success_criteria":"regression test passes",
+    "constraints":"stay small","confidence":"high"}"#;
+
+const AUTONOMY_GATE_TOML: &str = r#"
+prompt = "gate"
+min_severity = "medium"
+max_work_orders_per_run = 5
+
+[autonomy]
+auto_dispatch = true
+min_confidence = "high"
+"#;
+
+/// The hard spend ceiling: once gate spend crosses the cap mid-run, the
+/// remaining candidates stay Pending and the run says so loudly.
+#[tokio::test]
+async fn token_budget_halts_the_gate_and_leaves_overflow_pending() {
+    let h = Harness::start(HarnessOptions {
+        gate_toml: Some(
+            r#"
+            prompt = "gate"
+            min_severity = "medium"
+            max_work_orders_per_run = 5
+
+            [budget]
+            max_tokens_per_day = 1
+            "#,
+        ),
+        model_responses: vec![WORK_JSON, WORK_JSON],
+        ..HarnessOptions::default()
+    })
+    .await;
+
+    // Two distinct defects → two clusters → two gate candidates.
+    let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+    h.post(
+        "/ingest/sentry",
+        Some("api-secret"),
+        Some(serde_json::json!({
+            "endpoint": "issues",
+            "payload": [
+                {
+                    "id": "42", "shortId": "CHALK-1",
+                    "title": "TypeError: districtId undefined",
+                    "permalink": "https://sentry.example.com/organizations/chalk/issues/42/",
+                    "level": "error",
+                    "metadata": {"type": "TypeError", "value": "districtId undefined"},
+                    "userCount": 30, "firstSeen": "2026-08-06T00:00:00Z", "lastSeen": now,
+                },
+                {
+                    "id": "43", "shortId": "CHALK-2",
+                    "title": "Panic: report export queue stalled",
+                    "permalink": "https://sentry.example.com/organizations/chalk/issues/43/",
+                    "level": "error",
+                    "metadata": {"type": "Panic", "value": "export queue stalled"},
+                    "userCount": 12, "firstSeen": "2026-08-06T00:00:00Z", "lastSeen": now,
+                },
+            ]
+        })),
+    )
+    .await;
+    let run: serde_json::Value = h
+        .post("/triage/run", Some("api-secret"), None)
+        .await
+        .json()
+        .await
+        .unwrap();
+    // First gate call is allowed (nothing spent yet); its 1000 scripted
+    // tokens cross the 1-token cap, so the second candidate never gates.
+    assert_eq!(run["work_orders"], 1);
+    assert_eq!(run["budget_exhausted"], true);
+    let pending: serde_json::Value = h.get("/reports?status=pending").await.json().await.unwrap();
+    assert_eq!(
+        pending.as_array().unwrap().len(),
+        1,
+        "over-budget candidate stays pending for the next window"
+    );
+    h.teardown().await;
+}
+
+/// Dismissals are not forever: impact growth past the re-open factor pulls
+/// a dismissed report back into the inbox — except `intended_behavior`,
+/// which stays closed (its recurrence path is the Opportunity classifier).
+#[tokio::test]
+async fn dismissed_reports_reopen_when_impact_escalates() {
+    let h = Harness::start(HarnessOptions::default()).await;
+    let report_id = h.seed_awaiting_report().await;
+    h.post(
+        &format!("/reports/{report_id}/dismiss"),
+        Some("api-secret"),
+        Some(serde_json::json!({"reason": "wont_fix"})),
+    )
+    .await;
+
+    // Same fingerprint, affected count 30 → 95 (>= 3x the snapshot).
+    let mut escalated = h.sentry_envelope();
+    escalated["payload"][0]["userCount"] = serde_json::json!(95);
+    h.post("/ingest/sentry", Some("api-secret"), Some(escalated))
+        .await;
+    h.post("/triage/run", Some("api-secret"), None).await;
+
+    let detail: serde_json::Value = h
+        .get(&format!("/reports/{report_id}"))
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(detail["report"]["status"], "awaiting_review");
+    let summary = detail["report"]["summary"].as_str().unwrap();
+    assert!(
+        summary.contains("REOPENED") && summary.contains("wont_fix"),
+        "prior dismissal must be visible: {summary}"
+    );
+
+    // intended_behavior stays closed under identical escalation.
+    h.post(
+        &format!("/reports/{report_id}/dismiss"),
+        Some("api-secret"),
+        Some(serde_json::json!({"reason": "intended_behavior"})),
+    )
+    .await;
+    let mut tripled = h.sentry_envelope();
+    tripled["payload"][0]["userCount"] = serde_json::json!(500);
+    h.post("/ingest/sentry", Some("api-secret"), Some(tripled))
+        .await;
+    h.post("/triage/run", Some("api-secret"), None).await;
+    let detail: serde_json::Value = h
+        .get(&format!("/reports/{report_id}"))
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(
+        detail["report"]["status"], "dismissed",
+        "intended_behavior dismissals never re-open"
+    );
+    h.teardown().await;
+}
+
+/// The broker's HTTP face: runner key + approved Work Order → single-use,
+/// repo-scoped credential; wrong key 401, wrong repo 403, reuse 409.
+#[tokio::test]
+async fn broker_issues_single_use_work_order_scoped_credentials() {
+    let h = Harness::start(HarnessOptions::default()).await;
+    let report_id = h.seed_awaiting_report().await;
+    h.post(
+        &format!("/reports/{report_id}/approve"),
+        Some("api-secret"),
+        None,
+    )
+    .await;
+
+    let request = serde_json::json!({
+        "work_order_id": report_id,
+        "repo": "chalk/chalk",
+    });
+    let forged = h
+        .post(
+            "/broker/credentials",
+            Some("wrong-key"),
+            Some(request.clone()),
+        )
+        .await;
+    assert_eq!(forged.status(), 401);
+
+    let mismatched = h
+        .post(
+            "/broker/credentials",
+            Some("broker-runner-key"),
+            Some(serde_json::json!({
+                "work_order_id": report_id,
+                "repo": "chalk/other-repo",
+            })),
+        )
+        .await;
+    assert_eq!(mismatched.status(), 403);
+
+    let granted = h
+        .post(
+            "/broker/credentials",
+            Some("broker-runner-key"),
+            Some(request.clone()),
+        )
+        .await;
+    assert_eq!(granted.status(), 200);
+    let body: serde_json::Value = granted.json().await.unwrap();
+    assert_eq!(body["token"], "fake-token-chalk-chalk");
+    assert!(body["expires_at"].is_string());
+
+    let reused = h
+        .post(
+            "/broker/credentials",
+            Some("broker-runner-key"),
+            Some(request),
+        )
+        .await;
+    assert_eq!(reused.status(), 409, "grants are single-use");
+    h.teardown().await;
+}
+
+/// The registry's HTTP face: a signature-verified index lists skills, and
+/// install opens the manifest-change PR (never a server-side toggle).
+#[tokio::test]
+async fn registry_lists_signed_index_and_installs_via_manifest_pr() {
+    use merge0_registry::{
+        content_hash, sign_index, AcceptanceTelemetry, RegistryIndex, SigningKey, SkillListing,
+    };
+
+    // A throwaway on-disk registry: one proven skill, index signed with a
+    // fixed test key.
+    let dir = std::env::temp_dir().join(format!("merge0-registry-{}", Ulid::new()));
+    let skill_dir = dir.join("skills").join("db-migrations");
+    std::fs::create_dir_all(&skill_dir).unwrap();
+    let files = vec![(
+        "SKILL.md".to_string(),
+        "# DB migration review checklist\n".to_string(),
+    )];
+    std::fs::write(skill_dir.join("SKILL.md"), &files[0].1).unwrap();
+    let signing = SigningKey::from_bytes(&[7u8; 32]);
+    let index = RegistryIndex {
+        generated_at: chrono::Utc::now(),
+        listings: vec![SkillListing {
+            name: "db-migrations".into(),
+            version: "1.2.0".into(),
+            description: "Schema-change review skill".into(),
+            content_sha256: content_hash(&files),
+            acceptance: Some(AcceptanceTelemetry {
+                runs: 12,
+                merge_rate: 0.8,
+            }),
+        }],
+    };
+    let signed = sign_index(&index, &signing).unwrap();
+    std::fs::write(
+        dir.join("index.json"),
+        serde_json::json!({
+            "index_json": signed.index_json,
+            "signature_hex": signed.signature_hex,
+        })
+        .to_string(),
+    )
+    .unwrap();
+
+    let h = Harness::start(HarnessOptions {
+        registry: Some(merge0_server::RegistryHandle {
+            dir: dir.clone(),
+            verifying_key: signing.verifying_key(),
+        }),
+        ..HarnessOptions::default()
+    })
+    .await;
+
+    let unauthenticated = h.client.get(format!("{}/registry/skills", h.base)).send();
+    assert_eq!(unauthenticated.await.unwrap().status(), 401);
+
+    let listing: serde_json::Value = h.get("/registry/skills").await.json().await.unwrap();
+    assert_eq!(listing["skills"][0]["name"], "db-migrations");
+
+    let installed: serde_json::Value = h
+        .post(
+            "/registry/skills/db-migrations/install",
+            Some("api-secret"),
+            Some(serde_json::json!({})),
+        )
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(installed["installed"], "db-migrations");
+    assert!(installed["pr_url"]
+        .as_str()
+        .unwrap()
+        .starts_with("https://"));
+    {
+        let prs = &h.github.state.lock().unwrap().created_prs;
+        assert_eq!(prs.len(), 1);
+        assert!(prs[0].4.contains("Acceptance telemetry: 12 runs"));
+    }
+
+    std::fs::remove_dir_all(&dir).ok();
+    h.teardown().await;
+}
+
+/// Story-only delivery: the story IS the artifact. No safety dispatch, no
+/// runner, no PR — the report is terminally handed off with the story
+/// recorded on it.
+#[tokio::test]
+async fn story_mode_delivers_a_story_and_never_dispatches() {
+    let tracker = Arc::new(merge0_tracker::RecordingTracker::new());
+    let h = Harness::start(HarnessOptions {
+        delivery_mode: merge0_server::handlers::actions::DeliveryMode::Story,
+        tracker: Some(tracker.clone()),
+        ..HarnessOptions::default()
+    })
+    .await;
+    let report_id = h.seed_awaiting_report().await;
+
+    let body: serde_json::Value = h
+        .post(
+            &format!("/reports/{report_id}/approve"),
+            Some("api-secret"),
+            None,
+        )
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(body["delivered_as"], "story");
+    assert_eq!(body["story_key"], "FAKE-1");
+
+    // Exactly one story, carrying the Work Order's evidence and the
+    // anti-loop stamp.
+    let stories = tracker.stories();
+    assert_eq!(stories.len(), 1);
+    assert!(stories[0].description.contains("districts/sync"));
+    assert!(stories[0]
+        .labels
+        .contains(&merge0_signal::ORIGIN_LABEL.to_string()));
+
+    // Terminal handoff, and NOT dispatched: no runner was triggered.
+    let detail: serde_json::Value = h
+        .get(&format!("/reports/{report_id}"))
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(detail["report"]["status"], "handed_off");
+    assert!(detail["dispatch"].is_null(), "story mode must not dispatch");
+    assert_eq!(detail["story_key"], "FAKE-1");
+    assert!(detail["story_url"].as_str().unwrap().contains("FAKE-1"));
+    assert!(
+        h.github.state.lock().unwrap().dispatches.is_empty(),
+        "no repository_dispatch in story mode"
+    );
+
+    h.teardown().await;
+}
+
+/// Accompany mode: the board reflects work the agent is already doing —
+/// story AND dispatch, both recorded.
+#[tokio::test]
+async fn story_and_pr_mode_files_the_story_and_still_dispatches() {
+    let tracker = Arc::new(merge0_tracker::RecordingTracker::new());
+    let h = Harness::start(HarnessOptions {
+        delivery_mode: merge0_server::handlers::actions::DeliveryMode::StoryAndPr,
+        tracker: Some(tracker.clone()),
+        model_responses: vec![WORK_JSON_HIGH],
+        ..HarnessOptions::default()
+    })
+    .await;
+    let report_id = h.seed_awaiting_report().await;
+
+    let body: serde_json::Value = h
+        .post(
+            &format!("/reports/{report_id}/approve"),
+            Some("api-secret"),
+            None,
+        )
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(body["delivered_as"], "story_and_pr");
+    assert_eq!(body["dispatched_to"], "chalk/chalk");
+
+    assert_eq!(tracker.stories().len(), 1);
+    let detail: serde_json::Value = h
+        .get(&format!("/reports/{report_id}"))
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(detail["report"]["status"], "dispatched");
+    assert_eq!(detail["dispatch"]["status"], "dispatched");
+    assert_eq!(detail["story_key"], "FAKE-1");
+    h.teardown().await;
+}
+
+/// The two modes deliberately disagree about what a tracker outage means.
+#[tokio::test]
+async fn tracker_failure_blocks_story_only_delivery_but_never_the_pr() {
+    // story-only: the story was the whole delivery, so claiming success
+    // would be a lie. Fail, and leave the report reviewable.
+    let h = Harness::start(HarnessOptions {
+        delivery_mode: merge0_server::handlers::actions::DeliveryMode::Story,
+        tracker: Some(Arc::new(merge0_tracker::RecordingTracker::failing(
+            "jira is down",
+        ))),
+        ..HarnessOptions::default()
+    })
+    .await;
+    let report_id = h.seed_awaiting_report().await;
+    let response = h
+        .post(
+            &format!("/reports/{report_id}/approve"),
+            Some("api-secret"),
+            None,
+        )
+        .await;
+    assert_eq!(response.status(), 500);
+
+    let detail: serde_json::Value = h
+        .get(&format!("/reports/{report_id}"))
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(
+        detail["report"]["status"], "awaiting_review",
+        "a failed story delivery must leave the report retryable"
+    );
+    assert!(detail["story_key"].is_null());
+    h.teardown().await;
+
+    // accompany mode: the PR is the artifact; a board outage must not
+    // block the fix.
+    let h = Harness::start(HarnessOptions {
+        delivery_mode: merge0_server::handlers::actions::DeliveryMode::StoryAndPr,
+        tracker: Some(Arc::new(merge0_tracker::RecordingTracker::failing(
+            "jira is down",
+        ))),
+        model_responses: vec![WORK_JSON_HIGH],
+        ..HarnessOptions::default()
+    })
+    .await;
+    let report_id = h.seed_awaiting_report().await;
+    let body: serde_json::Value = h
+        .post(
+            &format!("/reports/{report_id}/approve"),
+            Some("api-secret"),
+            None,
+        )
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(body["dispatched_to"], "chalk/chalk");
+    assert_eq!(body["delivered_as"], "pr", "no story was filed");
+    assert!(body["story_key"].is_null());
+    h.teardown().await;
+}
+
+/// A story already filed for a report is never filed twice, so a retry
+/// after a partial failure cannot litter the board with duplicates.
+#[tokio::test]
+async fn an_existing_story_is_reused_rather_than_duplicated() {
+    let tracker = Arc::new(merge0_tracker::RecordingTracker::new());
+    let h = Harness::start(HarnessOptions {
+        delivery_mode: merge0_server::handlers::actions::DeliveryMode::StoryAndPr,
+        tracker: Some(tracker.clone()),
+        model_responses: vec![WORK_JSON_HIGH],
+        ..HarnessOptions::default()
+    })
+    .await;
+    let report_id = h.seed_awaiting_report().await;
+
+    // Simulate the crash window: the story landed, the approval did not.
+    let id = report_id.parse::<Ulid>().unwrap();
+    h.tenant
+        .set_report_story(id, "ENG-7", "https://tracker.example.com/browse/ENG-7")
+        .await
+        .unwrap();
+
+    let body: serde_json::Value = h
+        .post(
+            &format!("/reports/{report_id}/approve"),
+            Some("api-secret"),
+            None,
+        )
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(body["story_key"], "ENG-7", "the existing story is reused");
+    assert!(
+        tracker.stories().is_empty(),
+        "no second story may be filed for the same report"
+    );
+    h.teardown().await;
+}
+
+/// Confidence routing, end to end: a PR-mode install with a tracker turns a
+/// Work Order the gate is NOT confident in into a story instead of an
+/// autonomous PR.
+///
+/// This is the product's answer to a borderline gate decision. Before it,
+/// uncertainty was resolved by whichever way the model happened to fall on
+/// a given run, and the result was a PR either way.
+#[tokio::test]
+async fn a_low_confidence_work_order_is_routed_to_a_story_instead_of_dispatched() {
+    let tracker = Arc::new(merge0_tracker::RecordingTracker::new());
+    let h = Harness::start(HarnessOptions {
+        // Configured for PRs — routing, not configuration, changes this.
+        delivery_mode: merge0_server::handlers::actions::DeliveryMode::Pr,
+        tracker: Some(tracker.clone()),
+        model_responses: vec![WORK_JSON], // no confidence field → Low
+        ..HarnessOptions::default()
+    })
+    .await;
+    let report_id = h.seed_awaiting_report().await;
+
+    let body: serde_json::Value = h
+        .post(
+            &format!("/reports/{report_id}/approve"),
+            Some("api-secret"),
+            None,
+        )
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(body["delivered_as"], "story");
+    assert_eq!(body["confidence"], "low");
+    assert_eq!(
+        body["routed_by_confidence"], true,
+        "a reviewer expecting a PR must be told why they got a story"
+    );
+
+    assert_eq!(tracker.stories().len(), 1, "the work is still queued");
+
+    // The reason survives the request: a reviewer opening this report
+    // tomorrow can tell "the gate was unsure" from "this install files
+    // stories", which are very different facts about the same outcome.
+    let detail: serde_json::Value = h
+        .get(&format!("/reports/{report_id}"))
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(detail["report"]["status"], "handed_off");
+    let brief = detail["handoff_brief"].as_str().unwrap();
+    assert!(
+        brief.contains("gate confidence was low"),
+        "the routing reason must be persisted, not only returned: {brief}"
+    );
+
+    assert!(
+        h.github.state.lock().unwrap().dispatches.is_empty(),
+        "a low-confidence Work Order must never become an autonomous PR"
+    );
+    h.teardown().await;
+}
+
+/// The other side of the same rule: confidence at or above the floor
+/// dispatches exactly as before, so routing costs the confident path
+/// nothing.
+#[tokio::test]
+async fn a_confident_work_order_still_dispatches_with_a_tracker_configured() {
+    let tracker = Arc::new(merge0_tracker::RecordingTracker::new());
+    let h = Harness::start(HarnessOptions {
+        delivery_mode: merge0_server::handlers::actions::DeliveryMode::Pr,
+        tracker: Some(tracker.clone()),
+        model_responses: vec![WORK_JSON_HIGH],
+        ..HarnessOptions::default()
+    })
+    .await;
+    let report_id = h.seed_awaiting_report().await;
+
+    let body: serde_json::Value = h
+        .post(
+            &format!("/reports/{report_id}/approve"),
+            Some("api-secret"),
+            None,
+        )
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(body["delivered_as"], "pr");
+    assert_eq!(body["dispatched_to"], "chalk/chalk");
+    assert!(
+        tracker.stories().is_empty(),
+        "PR mode files no story when it dispatches"
+    );
+    h.teardown().await;
+}
+
+/// Without a tracker the floor has nowhere to route to, so it stays inert
+/// rather than turning approvals into no-ops. (Startup warns; see main.rs.)
+#[tokio::test]
+async fn routing_is_inert_when_no_tracker_is_configured() {
+    let h = Harness::start(HarnessOptions {
+        delivery_mode: merge0_server::handlers::actions::DeliveryMode::Pr,
+        tracker: None,
+        model_responses: vec![WORK_JSON], // Low confidence
+        ..HarnessOptions::default()
+    })
+    .await;
+    let report_id = h.seed_awaiting_report().await;
+
+    let body: serde_json::Value = h
+        .post(
+            &format!("/reports/{report_id}/approve"),
+            Some("api-secret"),
+            None,
+        )
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(body["delivered_as"], "pr");
+    assert_eq!(body["dispatched_to"], "chalk/chalk");
+    h.teardown().await;
+}
+
+/// **Security review regression.** Both unauthenticated surfaces used to
+/// parse the request body before deciding whether the caller was allowed to
+/// talk to them at all. Sending malformed JSON with bad credentials is the
+/// test: a server that authenticates first answers 401, one that parses
+/// first answers 400 and has told an anonymous caller something about the
+/// body shape it expected — while doing work on their behalf.
+#[tokio::test]
+async fn unauthenticated_callers_are_rejected_before_the_body_is_parsed() {
+    let h = Harness::start(HarnessOptions::default()).await;
+    let garbage = "{ this is not json at all";
+
+    // Vendor webhook: wrong shared token.
+    let res = h
+        .client
+        .post(format!("{}/webhooks/posthog", h.base))
+        .header("x-merge0-webhook-token", "wrong")
+        .header("content-type", "application/json")
+        .body(garbage)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(
+        res.status(),
+        401,
+        "bad token must lose before the parser is reached"
+    );
+
+    // Unknown vendor: 404 without parsing either.
+    let res = h
+        .client
+        .post(format!("{}/webhooks/nope", h.base))
+        .header("content-type", "application/json")
+        .body(garbage)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res.status(), 404);
+
+    // Credential broker: wrong runner key.
+    let res = h
+        .client
+        .post(format!("{}/broker/credentials", h.base))
+        .header("authorization", "Bearer wrong-runner-key")
+        .header("content-type", "application/json")
+        .body(garbage)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(
+        res.status(),
+        401,
+        "the broker must authenticate before parsing, as its docs claim"
+    );
+
+    // And the runner callback, which already had this property — asserted so
+    // it keeps it.
+    let res = h
+        .client
+        .post(format!("{}/runner/callback", h.base))
+        .header("authorization", "Bearer wrong-runner-token")
+        .header("content-type", "application/json")
+        .body(garbage)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res.status(), 401);
+
     h.teardown().await;
 }

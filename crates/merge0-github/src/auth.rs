@@ -29,6 +29,40 @@ impl AppJwtClaims {
     }
 }
 
+/// Accept the App private key in the shapes deployment environments
+/// actually produce, not just the pristine file GitHub downloads.
+///
+/// A PKCS#1 PEM is multi-line, but most places the key gets pasted are
+/// single-line: `.env` files (an unquoted multi-line value is a hard parse
+/// error in docker compose), PaaS environment-variable UIs, and CI secret
+/// fields. So a key arriving with literal `\n` escape sequences — or
+/// wrapped in the quotes a shell left behind — is a configuration that
+/// *looks* right to the operator and must work, rather than failing with
+/// an opaque "bad private key".
+///
+/// Normalization is deliberately conservative: unwrap matching surrounding
+/// quotes, turn literal `\n` / `\r\n` escapes into real newlines, and trim.
+/// Anything else is passed through untouched for the PEM parser to judge.
+fn normalize_pem(raw: &str) -> String {
+    let trimmed = raw.trim();
+    // Strip one layer of matching quotes (e.g. `KEY="-----BEGIN..."` read by
+    // a shell that kept them).
+    let unquoted = match (trimmed.chars().next(), trimmed.chars().last()) {
+        (Some('"'), Some('"')) | (Some('\''), Some('\'')) if trimmed.len() >= 2 => {
+            &trimmed[1..trimmed.len() - 1]
+        }
+        _ => trimmed,
+    };
+    // Only rewrite escapes when the value has no real newlines — a genuine
+    // multi-line PEM is left exactly as it is.
+    let expanded = if unquoted.contains('\n') {
+        unquoted.to_string()
+    } else {
+        unquoted.replace("\\r\\n", "\n").replace("\\n", "\n")
+    };
+    format!("{}\n", expanded.trim())
+}
+
 /// App credentials. `Debug` never prints the key.
 pub struct AppAuth {
     app_id: String,
@@ -48,7 +82,7 @@ impl AppAuth {
     pub fn new(app_id: String, private_key_pem: String) -> Self {
         AppAuth {
             app_id,
-            private_key_pem,
+            private_key_pem: normalize_pem(&private_key_pem),
         }
     }
 
@@ -166,6 +200,41 @@ mod tests {
             claims.exp - claims.iat <= 600,
             "GitHub caps App JWTs at 10m"
         );
+    }
+
+    /// The key must survive the shapes real deployments hand us: an
+    /// unquoted `.env` value can't be multi-line, and PaaS env-var UIs are
+    /// single-line fields, so `\n`-escaped and quote-wrapped keys are what
+    /// operators actually paste. All of them must sign.
+    #[test]
+    fn private_key_accepts_escaped_and_quoted_forms() {
+        let pem = test_rsa_pem();
+        let now = Utc.with_ymd_and_hms(2026, 8, 7, 12, 0, 0).unwrap();
+        let canonical = AppAuth::new("777".into(), pem.clone()).jwt(now).unwrap();
+
+        let escaped = pem.replace('\n', "\\n");
+        let crlf_escaped = pem.replace('\n', "\\r\\n");
+        for variant in [
+            escaped.clone(),
+            format!("\"{escaped}\""),
+            format!("'{escaped}'"),
+            crlf_escaped,
+            format!("  {pem}  "),
+            format!("\"{pem}\""),
+        ] {
+            let jwt = AppAuth::new("777".into(), variant.clone())
+                .jwt(now)
+                .unwrap_or_else(|e| panic!("variant must sign, got {e}"));
+            assert_eq!(jwt, canonical, "every accepted form signs identically");
+        }
+    }
+
+    #[test]
+    fn garbage_private_key_still_fails_loudly() {
+        let auth = AppAuth::new("1".into(), "not a pem at all".into());
+        let now = Utc.with_ymd_and_hms(2026, 8, 7, 12, 0, 0).unwrap();
+        let err = auth.jwt(now).expect_err("must not accept garbage");
+        assert!(matches!(err, GitHubError::Auth(_)));
     }
 
     #[test]

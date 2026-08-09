@@ -1,0 +1,23 @@
+[
+  {
+    "body": "",
+    "evidence": [],
+    "fingerprint": "asana:655a700aaaf873c17b10c70b43c10aa3",
+    "first_seen": "2026-08-05T14:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "ticket",
+    "last_seen": "2026-08-05T14:00:00Z",
+    "raw": {
+      "completed": false,
+      "created_at": "2026-08-05T14:00:00Z",
+      "gid": "1207005556667778",
+      "modified_at": "2026-08-05T14:00:00Z",
+      "name": "Follow up on sync retry behavior"
+    },
+    "severity": "medium",
+    "source": "asana",
+    "source_ref": "1207005556667778",
+    "title": "Follow up on sync retry behavior"
+  }
+]

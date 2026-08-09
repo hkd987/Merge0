@@ -1,0 +1,158 @@
+{
+  "endpoint": "funnels",
+  "context": { "project_base_url": "https://mixpanel.example.com/project/318" },
+  "payload": {
+    "results": [
+      {
+        "funnel_id": 301,
+        "name": "Signup funnel",
+        "fetched_at": "2026-08-08T12:00:00Z",
+        "response": {
+          "meta": { "dates": ["2026-08-01", "2026-08-08"] },
+          "data": {
+            "2026-08-01": {
+              "steps": [
+                {
+                  "count": 30112,
+                  "goal": "App Open",
+                  "event": "App Open",
+                  "step_conv_ratio": 1,
+                  "overall_conv_ratio": 1,
+                  "avg_time": 2
+                },
+                {
+                  "count": 21080,
+                  "goal": "Signup",
+                  "event": "Signup",
+                  "step_conv_ratio": 0.7,
+                  "overall_conv_ratio": 0.7,
+                  "avg_time": 48
+                },
+                {
+                  "count": 15810,
+                  "goal": "Purchase",
+                  "event": "Purchase",
+                  "step_conv_ratio": 0.75,
+                  "overall_conv_ratio": 0.525,
+                  "avg_time": 120
+                }
+              ],
+              "analysis": {
+                "completion": 15810,
+                "starting_amount": 30112,
+                "steps": 3,
+                "worst": 1
+              }
+            },
+            "2026-08-08": {
+              "steps": [
+                {
+                  "count": 32688,
+                  "goal": "App Open",
+                  "event": "App Open",
+                  "step_conv_ratio": 1,
+                  "overall_conv_ratio": 1,
+                  "avg_time": 2
+                },
+                {
+                  "count": 20524,
+                  "goal": "Signup",
+                  "event": "Signup",
+                  "step_conv_ratio": 0.6279,
+                  "overall_conv_ratio": 0.6279,
+                  "avg_time": 55
+                },
+                {
+                  "count": 9210,
+                  "goal": "Purchase",
+                  "event": "Purchase",
+                  "step_conv_ratio": 0.4487,
+                  "overall_conv_ratio": 0.2818,
+                  "avg_time": 130
+                }
+              ],
+              "analysis": {
+                "completion": 9210,
+                "starting_amount": 32688,
+                "steps": 3,
+                "worst": 2
+              }
+            }
+          }
+        }
+      },
+      {
+        "funnel_id": 302,
+        "name": "Invite flow",
+        "fetched_at": "2026-08-08T12:00:00Z",
+        "response": {
+          "meta": { "dates": ["2026-08-08"] },
+          "data": {
+            "2026-08-08": {
+              "steps": [
+                {
+                  "count": 5400,
+                  "goal": "Invite Viewed",
+                  "event": "Invite Viewed",
+                  "step_conv_ratio": 1,
+                  "overall_conv_ratio": 1,
+                  "avg_time": 4
+                },
+                {
+                  "count": 3780,
+                  "goal": "Invite Accepted",
+                  "event": "Invite Accepted",
+                  "step_conv_ratio": 0.7,
+                  "overall_conv_ratio": 0.7,
+                  "avg_time": 90
+                }
+              ],
+              "analysis": {
+                "completion": 3780,
+                "starting_amount": 5400,
+                "steps": 2,
+                "worst": 1
+              }
+            }
+          }
+        }
+      },
+      {
+        "funnel_id": 303,
+        "name": "Docs search",
+        "fetched_at": "2026-08-08T12:00:00Z",
+        "response": {
+          "meta": { "dates": ["2026-08-08"] },
+          "data": {
+            "2026-08-08": {
+              "steps": [
+                {
+                  "count": 1200,
+                  "goal": "Search",
+                  "event": "Search",
+                  "step_conv_ratio": 1,
+                  "overall_conv_ratio": 1,
+                  "avg_time": 1
+                },
+                {
+                  "count": 1120,
+                  "goal": "Result Clicked",
+                  "event": "Result Clicked",
+                  "step_conv_ratio": 0.9333,
+                  "overall_conv_ratio": 0.9333,
+                  "avg_time": 6
+                }
+              ],
+              "analysis": {
+                "completion": 1120,
+                "starting_amount": 1200,
+                "steps": 2,
+                "worst": 1
+              }
+            }
+          }
+        }
+      }
+    ]
+  }
+}

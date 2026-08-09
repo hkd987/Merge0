@@ -1,0 +1,103 @@
+[
+  {
+    "affected_count": 630,
+    "body": "630 of 940 users lost at step 3/4 'Confirm email' (67% drop)",
+    "evidence": [
+      {
+        "kind": "other",
+        "label": "PostHog insight Teacher onboarding",
+        "url": "https://us.posthog.com/project/1/insights/AbCd1234"
+      }
+    ],
+    "fingerprint": "posthog:6a0fedcced9c57a646c73d625a5b95d3",
+    "first_seen": "2026-08-05T06:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {
+      "url_path": "/signup/confirm"
+    },
+    "kind": "ux_friction",
+    "last_seen": "2026-08-05T06:00:00Z",
+    "raw": {
+      "id": 301,
+      "last_refresh": "2026-08-05T06:00:00Z",
+      "name": "Teacher onboarding",
+      "result": [
+        {
+          "action_id": "$pageview",
+          "count": 1200,
+          "custom_name": "Visit signup",
+          "name": "$pageview",
+          "order": 0,
+          "url": "https://app.example.com/signup"
+        },
+        {
+          "action_id": "signup_submitted",
+          "count": 940,
+          "custom_name": "Submit signup",
+          "name": "signup_submitted",
+          "order": 1
+        },
+        {
+          "action_id": "$pageview",
+          "count": 310,
+          "custom_name": "Confirm email",
+          "name": "$pageview",
+          "order": 2,
+          "url": "https://app.example.com/signup/confirm?src=email"
+        },
+        {
+          "action_id": "onboarding_completed",
+          "count": 280,
+          "name": "onboarding_completed",
+          "order": 3
+        }
+      ],
+      "short_id": "AbCd1234"
+    },
+    "severity": "high",
+    "source": "posthog",
+    "source_ref": "funnel:AbCd1234",
+    "title": "Funnel 'Teacher onboarding': 67% drop at step 'Confirm email'"
+  },
+  {
+    "affected_count": 60,
+    "body": "60 of 200 users lost at step 2/2 'export_downloaded' (30% drop)",
+    "evidence": [
+      {
+        "kind": "other",
+        "label": "PostHog insight Report export",
+        "url": "https://us.posthog.com/project/1/insights/IjKl9012"
+      }
+    ],
+    "fingerprint": "posthog:3dc012155f59c1df08e4200a8f7c980b",
+    "first_seen": "2026-08-05T06:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "ux_friction",
+    "last_seen": "2026-08-05T06:00:00Z",
+    "raw": {
+      "id": 303,
+      "last_refresh": "2026-08-05T06:00:00Z",
+      "name": "Report export",
+      "result": [
+        {
+          "action_id": "report_opened",
+          "count": 200,
+          "name": "report_opened",
+          "order": 0
+        },
+        {
+          "action_id": "export_downloaded",
+          "count": 140,
+          "name": "export_downloaded",
+          "order": 1
+        }
+      ],
+      "short_id": "IjKl9012"
+    },
+    "severity": "medium",
+    "source": "posthog",
+    "source_ref": "funnel:IjKl9012",
+    "title": "Funnel 'Report export': 30% drop at step 'export_downloaded'"
+  }
+]

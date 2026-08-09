@@ -1,0 +1,70 @@
+# cargo-deny: dependency advisories + license compliance, run in CI.
+# Added in the open-sourcing pass — the security review's "no dependency
+# vulnerability scanning" gap. Policy choices are deliberate and commented;
+# loosening one is an ordinary reviewed PR.
+
+[graph]
+all-features = true
+
+[advisories]
+# Unmaintained crates warn (visible in CI logs) rather than fail: they rot
+# on their own schedule, and failing the build for every transitive
+# unmaintained dep teaches people to ignore the checker. Actual
+# vulnerabilities fail.
+version = 2
+yanked = "deny"
+# The proxy environments this runs in (CI containers, dev sandboxes) often
+# block gix's HTTP transport; the git CLI knows how to traverse them.
+git-fetch-with-cli = true
+ignore = [
+    # Marvin timing side-channel in the `rsa` crate. It reaches this
+    # workspace ONLY as a dev-dependency of merge0-github (tests generate
+    # throwaway RSA keys to exercise App-auth JWT signing) — it is never in
+    # a shipped binary and no attacker observes its timing. No fixed
+    # version exists upstream; re-evaluate if `rsa` ever enters a non-dev
+    # dependency path (cargo tree -i rsa).
+    "RUSTSEC-2023-0071",
+]
+
+[licenses]
+version = 2
+# Workspace-internal crates are not published; the two ee/ crates are
+# deliberately unlicensed-for-SPDX (they carry the Enterprise License, see
+# ee/LICENSE) and must never reach crates.io — they set `publish = false`,
+# which is what this ignore keys on. Third-party deps are always checked.
+private = { ignore = true }
+# The allowlist for what an MIT-licensed workspace may link. Everything
+# here is permissive and MIT-compatible.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "CDLA-Permissive-2.0",
+    "OpenSSL",
+]
+confidence-threshold = 0.8
+
+# ring's license file is the OpenSSL/ISC amalgam cargo-deny can't classify
+# on its own; this is the standard clarification from cargo-deny's docs.
+[[licenses.clarify]]
+crate = "ring"
+expression = "MIT AND ISC AND OpenSSL"
+license-files = [{ path = "LICENSE", hash = 0xbd0eed23 }]
+
+[bans]
+# Duplicate versions are a fact of life in a workspace this size; warn so
+# they're visible without blocking.
+multiple-versions = "warn"
+wildcards = "deny"
+# Path dependencies between workspace crates carry no version by design;
+# only registry wildcards are the hazard `wildcards = "deny"` exists for.
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

@@ -1,0 +1,148 @@
+[
+  {
+    "body": "Reported by demo-district@example.com: resetting a password then logging in returns a 500. Blocks all district admins.",
+    "evidence": [
+      {
+        "kind": "ticket",
+        "label": "Trello card Login page throws 500 for district admin",
+        "url": "https://trello.com/c/aBcD1234"
+      }
+    ],
+    "fingerprint": "trello:5c6f47b5acdf44e1a75d330279dbf189",
+    "first_seen": "2026-08-04T08:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "ticket",
+    "last_seen": "2026-08-06T15:30:00Z",
+    "raw": {
+      "closed": false,
+      "dateLastActivity": "2026-08-06T15:30:00Z",
+      "desc": "Reported by demo-district@example.com: resetting a password then logging in returns a 500. Blocks all district admins.",
+      "id": "64f1c0ffee0badc0de000001",
+      "idList": "64f1b0000000000000000010",
+      "labels": [
+        {
+          "color": "red",
+          "id": "6501aa000000000000000001",
+          "name": "Critical"
+        },
+        {
+          "color": "orange",
+          "id": "6501aa000000000000000002",
+          "name": "bug"
+        }
+      ],
+      "name": "Login page throws 500 for district admins after password reset",
+      "shortUrl": "https://trello.com/c/aBcD1234",
+      "start": "2026-08-04T08:00:00Z"
+    },
+    "severity": "critical",
+    "source": "trello",
+    "source_ref": "64f1c0ffee0badc0de000001",
+    "title": "Login page throws 500 for district admins after password reset"
+  },
+  {
+    "body": "Exports requested after 02:00 UTC sit in the queue until morning.",
+    "evidence": [
+      {
+        "kind": "ticket",
+        "label": "Trello card Export queue backs up during nightly syn",
+        "url": "https://trello.com/c/eFgH5678"
+      }
+    ],
+    "fingerprint": "trello:266ca26972f25d4c7f83e0135bc39e4d",
+    "first_seen": "2026-08-05T22:10:00Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "ticket",
+    "last_seen": "2026-08-05T22:10:00Z",
+    "raw": {
+      "closed": false,
+      "dateLastActivity": "2026-08-05T22:10:00Z",
+      "desc": "Exports requested after 02:00 UTC sit in the queue until morning.",
+      "id": "64f1c0ffee0badc0de000002",
+      "labels": [
+        {
+          "color": "yellow",
+          "id": "6501aa000000000000000003",
+          "name": "urgent"
+        }
+      ],
+      "name": "Export queue backs up during nightly sync",
+      "shortUrl": "https://trello.com/c/eFgH5678"
+    },
+    "severity": "high",
+    "source": "trello",
+    "source_ref": "64f1c0ffee0badc0de000002",
+    "title": "Export queue backs up during nightly sync"
+  },
+  {
+    "body": "",
+    "evidence": [
+      {
+        "kind": "ticket",
+        "label": "Trello card Grade band dropdown lists each band twic",
+        "url": "https://trello.com/c/iJkL9012"
+      }
+    ],
+    "fingerprint": "trello:9dd358efc8a553d45a6e76fbd576ea37",
+    "first_seen": "2026-08-06T09:45:00Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "ticket",
+    "last_seen": "2026-08-06T09:45:00Z",
+    "raw": {
+      "closed": false,
+      "dateLastActivity": "2026-08-06T09:45:00Z",
+      "desc": "",
+      "id": "64f1c0ffee0badc0de000003",
+      "labels": [
+        {
+          "color": "orange",
+          "id": "6501aa000000000000000002",
+          "name": "Bug"
+        },
+        {
+          "color": "blue",
+          "id": "6501aa000000000000000004",
+          "name": "reports"
+        }
+      ],
+      "name": "Grade band dropdown lists each band twice on the reports page",
+      "shortUrl": "https://trello.com/c/iJkL9012"
+    },
+    "severity": "medium",
+    "source": "trello",
+    "source_ref": "64f1c0ffee0badc0de000003",
+    "title": "Grade band dropdown lists each band twice on the reports page"
+  },
+  {
+    "body": "Suggested by pilot-school@example.com during the August check-in.",
+    "evidence": [
+      {
+        "kind": "ticket",
+        "label": "Trello card Idea: let teachers reorder dashboard car",
+        "url": "https://trello.com/c/mNoP3456"
+      }
+    ],
+    "fingerprint": "trello:ecb55c84166ff0f3bbe127fe3784a311",
+    "first_seen": "2026-08-07T11:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "ticket",
+    "last_seen": "2026-08-07T11:00:00Z",
+    "raw": {
+      "closed": false,
+      "dateLastActivity": "2026-08-07T11:00:00Z",
+      "desc": "Suggested by pilot-school@example.com during the August check-in.",
+      "id": "64f1c0ffee0badc0de000004",
+      "labels": [],
+      "name": "Idea: let teachers reorder dashboard cards",
+      "shortUrl": "https://trello.com/c/mNoP3456"
+    },
+    "severity": "low",
+    "source": "trello",
+    "source_ref": "64f1c0ffee0badc0de000004",
+    "title": "Idea: let teachers reorder dashboard cards"
+  }
+]

@@ -1,0 +1,29 @@
+[
+  {
+    "body": "",
+    "evidence": [
+      {
+        "kind": "ticket",
+        "label": "Linear OPS-3",
+        "url": "https://linear.example.com/acme/issue/OPS-3/deploy-notifications-duplicated"
+      }
+    ],
+    "fingerprint": "linear:55bae66b3fabda80480c50a89ca90862",
+    "first_seen": "2026-08-05T14:00:00Z",
+    "id": "<ulid>",
+    "join_keys": {},
+    "kind": "ticket",
+    "last_seen": "2026-08-05T14:00:00Z",
+    "raw": {
+      "createdAt": "2026-08-05T14:00:00Z",
+      "identifier": "OPS-3",
+      "title": "Deploy notifications are duplicated",
+      "updatedAt": "2026-08-05T14:00:00Z",
+      "url": "https://linear.example.com/acme/issue/OPS-3/deploy-notifications-duplicated"
+    },
+    "severity": "low",
+    "source": "linear",
+    "source_ref": "OPS-3",
+    "title": "Deploy notifications are duplicated"
+  }
+]

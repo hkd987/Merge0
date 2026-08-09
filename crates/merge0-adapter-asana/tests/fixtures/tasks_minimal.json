@@ -1,0 +1,15 @@
+{
+  "endpoint": "tasks",
+  "context": {},
+  "payload": {
+    "data": [
+      {
+        "gid": "1207005556667778",
+        "name": "Follow up on sync retry behavior",
+        "completed": false,
+        "created_at": "2026-08-05T14:00:00Z",
+        "modified_at": "2026-08-05T14:00:00Z"
+      }
+    ]
+  }
+}

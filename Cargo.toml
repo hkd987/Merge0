@@ -10,6 +10,14 @@ members = [
     "crates/merge0-adapter-webhook",
     "crates/merge0-adapter-datadog",
     "crates/merge0-adapter-loopforge",
+    "crates/merge0-adapter-jira",
+    "crates/merge0-adapter-linear",
+    "crates/merge0-adapter-slack",
+    "crates/merge0-adapter-asana",
+    "crates/merge0-adapter-trello",
+    "crates/merge0-adapter-intercom",
+    "crates/merge0-adapter-mixpanel",
+    "crates/merge0-adapter-openpanel",
     "crates/merge0-store",
     "crates/merge0-fetch",
     "crates/merge0-model",
@@ -22,6 +30,7 @@ members = [
     "crates/merge0-slack",
     "crates/merge0-broker",
     "crates/merge0-registry",
+    "crates/merge0-tracker",
     "crates/merge0-server",
     "crates/merge0-e2e",
     "crates/merge0-evals",
@@ -43,6 +52,7 @@ chrono = { version = "0.4", features = ["serde"] }
 thiserror = "2"
 sha2 = "0.10"
 toml = "0.8"
+rust-embed = "8"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time", "signal"] }
 axum = "0.8"
 sqlx = { version = "0.8", default-features = false, features = ["postgres", "runtime-tokio", "tls-rustls", "chrono", "json", "migrate"] }
@@ -75,6 +85,7 @@ merge0-meta = { path = "crates/merge0-meta" }
 merge0-slack = { path = "crates/merge0-slack" }
 merge0-broker = { path = "crates/merge0-broker" }
 merge0-registry = { path = "crates/merge0-registry" }
+merge0-tracker = { path = "crates/merge0-tracker" }
 merge0-adapter-posthog = { path = "crates/merge0-adapter-posthog" }
 merge0-adapter-sentry = { path = "crates/merge0-adapter-sentry" }
 merge0-adapter-zendesk = { path = "crates/merge0-adapter-zendesk" }
@@ -82,6 +93,14 @@ merge0-adapter-github-issues = { path = "crates/merge0-adapter-github-issues" }
 merge0-adapter-webhook = { path = "crates/merge0-adapter-webhook" }
 merge0-adapter-datadog = { path = "crates/merge0-adapter-datadog" }
 merge0-adapter-loopforge = { path = "crates/merge0-adapter-loopforge" }
+merge0-adapter-jira = { path = "crates/merge0-adapter-jira" }
+merge0-adapter-linear = { path = "crates/merge0-adapter-linear" }
+merge0-adapter-slack = { path = "crates/merge0-adapter-slack" }
+merge0-adapter-asana = { path = "crates/merge0-adapter-asana" }
+merge0-adapter-trello = { path = "crates/merge0-adapter-trello" }
+merge0-adapter-intercom = { path = "crates/merge0-adapter-intercom" }
+merge0-adapter-mixpanel = { path = "crates/merge0-adapter-mixpanel" }
+merge0-adapter-openpanel = { path = "crates/merge0-adapter-openpanel" }
 merge0-server = { path = "crates/merge0-server" }
 merge0-ee = { path = "ee/merge0-ee" }
 merge0-hosted = { path = "ee/merge0-hosted" }
