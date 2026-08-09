@@ -134,6 +134,11 @@ cp .env.example .env    # fill in tokens + GitHub App credentials
 docker compose up --build
 ```
 
+Or deploy without a server of your own —
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/hkd987/Merge0)
+— plus Railway (template) and Fly.io (`fly launch --from`) paths in
+**[docs/one-click-deploy.md](docs/one-click-deploy.md)**.
+
 First time? Merge0 authenticates as a **GitHub App** (never a PAT), which
 you create once — about five minutes, walked through step by step with
 the exact permissions and events in
