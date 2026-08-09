@@ -70,7 +70,7 @@ async-trait = "0.1"
 rsa = "0.9"
 wiremock = "0.6"
 tower = { version = "0.5", features = ["util", "timeout", "limit"] }
-tower-http = { version = "0.6", features = ["trace", "limit", "timeout"] }
+tower-http = { version = "0.7", features = ["trace", "limit", "timeout"] }
 
 merge0-fetch = { path = "crates/merge0-fetch" }
 
