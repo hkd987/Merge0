@@ -157,6 +157,8 @@ full loop — inbox, agents, PRs, outcome memory.
 ```sh
 cp .env.example .env    # fill in tokens + GitHub App credentials
 docker compose up --build
+# or run the published image (tagged releases; see CHANGELOG.md):
+#   docker pull ghcr.io/hkd987/merge0:latest
 ```
 
 Or deploy without a server of your own —

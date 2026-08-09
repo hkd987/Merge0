@@ -1,0 +1,24 @@
+# Continuous dependency updates. cargo-deny in CI catches advisories at
+# build time; this keeps the fixes flowing without waiting for a human to
+# notice. Minor/patch updates are grouped to keep PR noise down — each
+# group PR still runs the full gate suite.
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      rust-minor-patch:
+        update-types: ["minor", "patch"]
+  - package-ecosystem: npm
+    directory: /ui
+    schedule:
+      interval: weekly
+    groups:
+      ui-minor-patch:
+        update-types: ["minor", "patch"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

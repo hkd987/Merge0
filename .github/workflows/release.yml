@@ -1,0 +1,57 @@
+# Release on version tags: publish the container image to GHCR and create
+# the GitHub release with generated notes. Cut a release with:
+#
+#   git tag v0.1.0 <sha-on-main> && git push origin v0.1.0
+#
+# The image is the same multi-stage Dockerfile CI already builds on every
+# push — the tag run publishes what was already proven to build.
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write # create the GitHub release
+  packages: write # push to ghcr.io
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image metadata (tags + labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/merge0
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          body: |
+            Container image: `ghcr.io/${{ github.repository_owner }}/merge0:${{ github.ref_name }}`
+
+            See CHANGELOG.md for the curated summary.
