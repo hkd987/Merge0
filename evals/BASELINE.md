@@ -18,6 +18,8 @@ sessions per fixture.
 
 | 7 | **100% (30/30)** | **0** | **0** | **0** | Outcome memory now carries each attempt's PR (schema v0.5), borderline scenarios are measured as rates rather than points, and confidence routing sends unconfident Work Orders to the board instead of an agent. Corpus at 30. 31,976 tokens. The borderline case that motivated all of it went **5/5**, and its PR-link twin also went 5/5 while *citing the prior attempt* — see below. |
 
+| 8 | **100% (30/30)** | **0** | **0** | **0** | Regression run for the growth pass (2026-08-09): no prompt or scenario change — this run validates the *plumbing* that moved under the evals. `CliModel` relocated from merge0-evals to merge0-model (the quickstart's backend), and `agent-eval.sh` refactored to per-harness commands (`--agent`). Both borderline scenarios again 5/5. 32,381 tokens. The agent fixtures also re-ran through the refactored harness with claude-code: **22/22 checks** — five fixes within budget with tests untouched, one policy-violating order refused. |
+
 Bar (enforced by exit code): accuracy ≥ 85%, zero canary leaks. **Met.**
 
 ### Run 7: did the borderline case actually get better?
