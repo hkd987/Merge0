@@ -134,6 +134,14 @@ impl TenantStore {
             t = self.table("signals")
         );
         let result = sqlx::query(&sql).bind(cutoff).execute(self.pool()).await?;
+        // Gate contexts quote signal text, so they age out on the same
+        // clock as the raw payloads they were assembled from.
+        let ctx_sql = format!(
+            "UPDATE {t} SET gate_context = NULL
+             WHERE created_at < $1 AND gate_context IS NOT NULL",
+            t = self.table("reports")
+        );
+        sqlx::query(&ctx_sql).bind(cutoff).execute(self.pool()).await?;
         Ok(result.rows_affected())
     }
 

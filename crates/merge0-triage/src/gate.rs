@@ -20,6 +20,11 @@ use serde::Deserialize;
 pub struct GateOutcome {
     pub decision: GateDecision,
     pub tokens_used: u64,
+    /// The exact system+user context the gate saw when it decided —
+    /// persisted so "why did it decide that?" is answerable by replay
+    /// rather than inference. Deterministic-guard skips record the guard
+    /// instead (no model call happened).
+    pub context: String,
 }
 
 /// What we ask the model to return.
@@ -82,6 +87,7 @@ pub async fn evaluate(
                 ),
             },
             tokens_used: 0,
+            context: "deterministic guard: severity below threshold (no model call)".into(),
         });
     }
     if report.evidence.is_empty() {
@@ -90,6 +96,7 @@ pub async fn evaluate(
                 reason: "no evidence links — nothing a reviewer could verify".into(),
             },
             tokens_used: 0,
+            context: "deterministic guard: no evidence links (no model call)".into(),
         });
     }
 
@@ -100,9 +107,14 @@ pub async fn evaluate(
     };
     let response = model.complete(&request).await?;
     let decision = interpret(&response.text, report, repo, &prior_attempts, config);
+    let context = format!(
+        "=== SYSTEM ===\n{}\n\n=== PROMPT ===\n{}",
+        request.system, request.prompt
+    );
     Ok(GateOutcome {
         decision,
         tokens_used: response.tokens_used,
+        context,
     })
 }
 

@@ -548,6 +548,7 @@ CO_ID=$(auth "$BASE/reports?status=awaiting_review" | python3 -c "import json,sy
 CO_DETAIL=$(auth "$BASE/reports/$CO_ID")
 check "report detail routes the evidence path to its CODEOWNERS team" "$CO_DETAIL" '"@acme/data-team"'
 check "routed entry names the path itself" "$CO_DETAIL" 'src/districts/roster.ts'
+check "gate decision context is replayable (audit)" "$CO_DETAIL" '=== SYSTEM ==='
 
 # CLI quickstart: the real merge0 binary end to end with a stub model CLI
 # (no spend, deterministic) — a bare Sentry array in, a work order out.

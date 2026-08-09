@@ -88,20 +88,40 @@ impl TenantStore {
     }
 
     /// Record the gate's decision and move the report to the matching status.
-    pub async fn set_gate_decision(&self, id: Ulid, decision: &GateDecision) -> Result<()> {
+    /// The exact gate input persisted with the decision (v5), if it has
+    /// not been purged by retention.
+    pub async fn gate_context(&self, id: Ulid) -> Result<Option<String>> {
+        let sql = format!(
+            "SELECT gate_context FROM {t} WHERE id = $1",
+            t = self.table("reports")
+        );
+        let row = sqlx::query(&sql)
+            .bind(id.to_string())
+            .fetch_optional(self.pool())
+            .await?;
+        Ok(row.and_then(|r| r.get("gate_context")))
+    }
+
+    pub async fn set_gate_decision(
+        &self,
+        id: Ulid,
+        decision: &GateDecision,
+        gate_context: Option<&str>,
+    ) -> Result<()> {
         let status = match decision {
             GateDecision::Work { .. } => ReportStatus::AwaitingReview,
             GateDecision::Skip { .. } => ReportStatus::Skipped,
         };
         let mut tx = self.pool().begin().await?;
         let sql = format!(
-            "UPDATE {t} SET gate_decision = $2, status = $3 WHERE id = $1",
+            "UPDATE {t} SET gate_decision = $2, status = $3, gate_context = $4 WHERE id = $1",
             t = self.table("reports")
         );
         let updated = sqlx::query(&sql)
             .bind(id.to_string())
             .bind(serde_json::to_value(decision).expect("decision serializes"))
             .bind(enum_str(&status))
+            .bind(gate_context)
             .execute(&mut *tx)
             .await?;
         if updated.rows_affected() == 0 {

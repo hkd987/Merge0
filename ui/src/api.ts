@@ -143,6 +143,11 @@ export interface ReportDetail {
    * evidence path matched an owned pattern.
    */
   code_owners: { path: string; owners: string[] }[] | null;
+  /**
+   * The exact system+user context the gate saw when it decided (audit
+   * replay). Null before the gate ran or after retention purged it.
+   */
+  gate_context: string | null;
   fix_efficacy: FixEfficacy | null;
   /**
    * Tracker story filed on approval (delivery modes "story" and

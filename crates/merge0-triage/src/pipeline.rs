@@ -186,7 +186,7 @@ pub async fn run_triage(
             GateDecision::Skip { .. } => run.skips += 1,
         }
         store
-            .set_gate_decision(report.id, &outcome.decision)
+            .set_gate_decision(report.id, &outcome.decision, Some(&outcome.context))
             .await?;
     }
 
