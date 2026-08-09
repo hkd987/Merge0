@@ -7,9 +7,12 @@ orders, and turns the approved ones into small, test-passing pull requests
 using **your own coding agent on your own compute**. A human merges every
 change. No red PRs, no auto-merge, ever.
 
-> **Status: Phase 0, pre-launch.** Private repo; the name "Merge0" is a
-> placeholder. The repo goes public after the Phase 0 gate is met: ≥60%
-> merge rate across ≥10 decided PRs (`docs/PRD.md`).
+> **Status: public preview, pre-1.0.** Everything here works and is
+> tested (the eval numbers below are measured, not aspirational), but the
+> honest milestone that matters is still ahead: the Phase 0 gate of ≥60%
+> merge rate across ≥10 decided PRs on a real repo (`docs/PRD.md`). Watch
+> the dashboard, kick the tires, open issues — adapters are the most
+> wanted contribution.
 
 **Website:** [hkd987.github.io/Merge0](https://hkd987.github.io/Merge0/) —
 screenshots, an animated tour of the loop, and the four-step quickstart.
@@ -56,7 +59,9 @@ screenshots, an animated tour of the loop, and the four-step quickstart.
   tracking, rage/dead clicks, funnel drop-offs), Sentry, Datadog,
   LoopForge, OTel logs, **Mixpanel** (saved-funnel drop-offs via the
   Query API), **OpenPanel** (your named error events via the export
-  API); everywhere work gets written down —
+  API); social feedback — **Reddit** (new posts from subreddits you own
+  or watch) and **X** (mentions of your handle or watched hashtags), both
+  triaged like any other user report; everywhere work gets written down —
   Zendesk, Intercom, GitHub Issues, **Jira, Linear, Asana, Trello, and
   designated Slack channels** (all `ticket` signals feeding the
   ticket-triage scout); plus a generic webhook envelope for anything
