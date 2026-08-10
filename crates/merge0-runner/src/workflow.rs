@@ -49,6 +49,7 @@ pub fn workflow_yaml(
     let agent_label = agent.label();
     let allowed_tools = allowed_tools(test_command);
     let secret_env = secret_env_block(agent, manifest);
+    let auth_preamble = auth_preamble(agent, manifest);
     let egress_step = egress_step(agent, manifest);
     let mcp_step = mcp_step(agent, manifest);
 
@@ -89,7 +90,7 @@ jobs:
           REPAIR_BUDGET: ${{{{ github.event.client_payload.repair_budget }}}}
 {secret_env}        run: |
           set +e
-          git checkout -b "$MERGE0_BRANCH"
+{auth_preamble}          git checkout -b "$MERGE0_BRANCH"
           {agent_command}
           for i in $(seq 1 "$REPAIR_BUDGET"); do
             if {test_command} > /tmp/test-output.txt 2>&1; then
@@ -231,6 +232,44 @@ fn secret_env_block(agent: &AgentKind, manifest: &AgentManifest) -> String {
         .chain(manifest.auth_env_names())
         .map(|name| format!("          {name}: ${{{{ secrets.{name} }}}}\n"))
         .collect()
+}
+
+/// Auth normalization at the top of the agent step. Two jobs:
+///
+/// 1. **Unset-if-empty.** An Actions secret the customer never configured
+///    still maps into the env as an EMPTY string — and an empty-but-set
+///    `ANTHROPIC_API_KEY` shadows `CLAUDE_CODE_OAUTH_TOKEN` (the CLI
+///    prefers the API key when both are present). Unsetting empties makes
+///    "configure either credential" actually true.
+/// 2. **Codex subscription seeding.** ChatGPT-subscription auth lives in
+///    `~/.codex/auth.json`; the `CODEX_AUTH_JSON` secret carries its
+///    contents and is written (0600, only if absent) before `codex exec`,
+///    then dropped from the env so the agent process never sees the raw
+///    credential blob.
+fn auth_preamble(agent: &AgentKind, manifest: &AgentManifest) -> String {
+    let mut lines: Vec<String> = agent
+        .auth_env_names()
+        .iter()
+        .copied()
+        .chain(manifest.auth_env_names())
+        .map(|name| format!("[ -n \"${name}\" ] || unset {name}"))
+        .collect();
+    if matches!(agent, AgentKind::CodexCli) {
+        lines.extend(
+            [
+                "if [ -n \"${CODEX_AUTH_JSON:-}\" ] && [ ! -f \"$HOME/.codex/auth.json\" ]; then",
+                "  mkdir -p \"$HOME/.codex\"",
+                "  printf '%s' \"$CODEX_AUTH_JSON\" > \"$HOME/.codex/auth.json\"",
+                "  chmod 600 \"$HOME/.codex/auth.json\"",
+                "fi",
+                "unset CODEX_AUTH_JSON",
+            ]
+            .map(String::from),
+        );
+    }
+    let mut block = indent(&lines.join("\n"), "          ");
+    block.push('\n');
+    block
 }
 
 /// Egress allowlist enforcement (PRD §5b): default-deny outbound with
@@ -501,11 +540,53 @@ mod tests {
         }
     }
 
+    /// Subscription credentials work exactly like API keys from the
+    /// workflow's point of view: mapped by name, normalized by the auth
+    /// preamble, never valued in the YAML.
+    #[test]
+    fn subscription_credentials_are_mapped_and_normalized() {
+        // Claude Pro/Max: the OAuth token is mapped alongside the API key,
+        // and BOTH get unset-if-empty — an empty-but-set ANTHROPIC_API_KEY
+        // would otherwise shadow the subscription token.
+        let claude = workflow_yaml(
+            &AgentKind::ClaudeCode,
+            &AgentManifest::default(),
+            template(),
+        );
+        assert!(claude.contains("CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}"));
+        assert!(claude.contains("[ -n \"$ANTHROPIC_API_KEY\" ] || unset ANTHROPIC_API_KEY"));
+        assert!(
+            claude.contains("[ -n \"$CLAUDE_CODE_OAUTH_TOKEN\" ] || unset CLAUDE_CODE_OAUTH_TOKEN")
+        );
+
+        // ChatGPT subscription: auth.json is seeded (0600, only if absent)
+        // and the raw blob is dropped from the env before the agent runs.
+        let codex = workflow_yaml(&AgentKind::CodexCli, &AgentManifest::default(), template());
+        assert!(codex.contains("CODEX_AUTH_JSON: ${{ secrets.CODEX_AUTH_JSON }}"));
+        assert!(codex.contains("printf '%s' \"$CODEX_AUTH_JSON\" > \"$HOME/.codex/auth.json\""));
+        assert!(codex.contains("chmod 600 \"$HOME/.codex/auth.json\""));
+        assert!(
+            codex.contains("[ ! -f \"$HOME/.codex/auth.json\" ]"),
+            "seed only if absent"
+        );
+        assert!(codex.contains("unset CODEX_AUTH_JSON"));
+
+        // Non-subscription harnesses get the normalization, not the seeding.
+        let gemini = workflow_yaml(&AgentKind::GeminiCli, &AgentManifest::default(), template());
+        assert!(gemini.contains("[ -n \"$GEMINI_API_KEY\" ] || unset GEMINI_API_KEY"));
+        assert!(!gemini.contains("auth.json"));
+    }
+
     #[test]
     fn egress_allowlist_includes_the_agents_own_provider_hosts() {
         let cases: &[(AgentKind, &str)] = &[
             (AgentKind::ClaudeCode, "api.anthropic.com"),
             (AgentKind::CodexCli, "api.openai.com"),
+            // Subscription inference goes elsewhere: blocking these makes
+            // subscription auth fail only under an egress allowlist.
+            (AgentKind::ClaudeCode, "claude.ai"),
+            (AgentKind::CodexCli, "chatgpt.com"),
+            (AgentKind::CodexCli, "auth.openai.com"),
             (AgentKind::GeminiCli, "generativelanguage.googleapis.com"),
             (AgentKind::CursorCli, "api.cursor.com"),
         ];

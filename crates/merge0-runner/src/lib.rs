@@ -128,12 +128,16 @@ impl AgentKind {
     /// The CI secret NAMES the generated workflow maps into the agent
     /// step's environment — resolved from the customer repo's own Actions
     /// secrets; values never transit Merge0. Multi-provider harnesses map
-    /// both common keys (an unset secret resolves to empty, which the
-    /// harness ignores).
+    /// both common keys, and the subscription-capable harnesses also map
+    /// their subscription credential (Claude Pro/Max via
+    /// `claude setup-token` → `CLAUDE_CODE_OAUTH_TOKEN`; ChatGPT via the
+    /// contents of `~/.codex/auth.json` → `CODEX_AUTH_JSON`). Unset
+    /// secrets resolve to empty and are unset again by the workflow's
+    /// auth preamble, so configuring EITHER credential is enough.
     pub fn auth_env_names(&self) -> &'static [&'static str] {
         match self {
-            AgentKind::ClaudeCode => &["ANTHROPIC_API_KEY"],
-            AgentKind::CodexCli => &["OPENAI_API_KEY"],
+            AgentKind::ClaudeCode => &["ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN"],
+            AgentKind::CodexCli => &["OPENAI_API_KEY", "CODEX_AUTH_JSON"],
             AgentKind::GeminiCli => &["GEMINI_API_KEY"],
             AgentKind::Aider | AgentKind::Opencode => &["ANTHROPIC_API_KEY", "OPENAI_API_KEY"],
             AgentKind::CursorCli => &["CURSOR_API_KEY"],
@@ -145,10 +149,15 @@ impl AgentKind {
 
     /// Model-provider hosts the egress allowlist must keep reachable for
     /// this agent (joined with the GitHub infra hosts in the workflow).
+    /// Subscription auth changes where inference goes: Claude Code's OAuth
+    /// tokens exchange against claude.ai, and Codex under ChatGPT sign-in
+    /// talks to chatgpt.com (not api.openai.com) — omitting those holes
+    /// would make subscription mode fail only under an egress allowlist,
+    /// the worst kind of works-on-my-machine.
     pub fn api_hosts(&self) -> &'static [&'static str] {
         match self {
-            AgentKind::ClaudeCode => &["api.anthropic.com"],
-            AgentKind::CodexCli => &["api.openai.com"],
+            AgentKind::ClaudeCode => &["api.anthropic.com", "claude.ai"],
+            AgentKind::CodexCli => &["api.openai.com", "chatgpt.com", "auth.openai.com"],
             AgentKind::GeminiCli => &["generativelanguage.googleapis.com"],
             AgentKind::Aider | AgentKind::Opencode => &["api.anthropic.com", "api.openai.com"],
             AgentKind::CursorCli => &["api.cursor.com"],
