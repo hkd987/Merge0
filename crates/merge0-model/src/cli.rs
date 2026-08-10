@@ -142,7 +142,7 @@ mod tests {
     /// invocation costs nothing.
     fn stub(body: &str) -> std::path::PathBuf {
         use std::os::unix::fs::PermissionsExt;
-        let path = std::env::temp_dir().join(format!("merge0-cli-stub-{}", ulid::Ulid::new()));
+        let path = std::env::temp_dir().join(format!("merge0-cli-stub-{}", ulid::Ulid::generate()));
         std::fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
 

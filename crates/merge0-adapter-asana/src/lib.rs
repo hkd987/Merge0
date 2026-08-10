@@ -108,7 +108,7 @@ fn normalize_task(raw: &serde_json::Value) -> Result<Option<Signal>, AdapterErro
     };
 
     Ok(Some(Signal {
-        id: Ulid::new(),
+        id: Ulid::generate(),
         source: Source::Asana,
         source_ref: gid.clone(),
         kind: SignalKind::Ticket,

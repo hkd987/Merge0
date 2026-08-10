@@ -179,7 +179,7 @@ async fn two_tenants_are_isolated_and_runtime_reflects_suspension() {
     let acme_store = manager.tenant_store(&acme_tenant).await.unwrap();
     let globex_store = manager.tenant_store(&globex_tenant).await.unwrap();
     let signal = merge0_signal::Signal {
-        id: ulid::Ulid::new(),
+        id: ulid::Ulid::generate(),
         source: merge0_signal::Source::Sentry,
         source_ref: "acme-1".into(),
         kind: merge0_signal::SignalKind::Exception,

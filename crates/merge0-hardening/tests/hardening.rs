@@ -25,7 +25,7 @@ fn now() -> DateTime<Utc> {
 
 fn exception_signal(reference: &str, title: &str) -> Signal {
     Signal {
-        id: Ulid::new(),
+        id: Ulid::generate(),
         source: Source::Sentry,
         source_ref: reference.to_string(),
         kind: SignalKind::Exception,
@@ -49,7 +49,7 @@ fn exception_signal(reference: &str, title: &str) -> Signal {
 
 fn maintenance_report(signal: &Signal, created_at: DateTime<Utc>) -> Report {
     Report {
-        id: Ulid::new(),
+        id: Ulid::generate(),
         kind: ReportKind::Maintenance,
         title: signal.title.clone(),
         summary: "seeded".to_string(),
@@ -101,7 +101,7 @@ async fn seed_merged_fix(tenant: &TenantStore, signal: &Signal, created_at: Date
 #[tokio::test]
 async fn merged_fix_produces_hardening_pr_report_and_dedupes() {
     let store = Store::connect(&database_url()).await.unwrap();
-    let schema = format!("t_{}", Ulid::new().to_string().to_lowercase());
+    let schema = format!("t_{}", Ulid::generate().to_string().to_lowercase());
     let tenant = store.tenant(&schema).await.unwrap();
 
     let signal = exception_signal("s1", "TypeError: Cannot read properties of undefined");
@@ -176,7 +176,7 @@ async fn merged_fix_produces_hardening_pr_report_and_dedupes() {
 #[tokio::test]
 async fn recurring_fingerprints_order_before_single_occurrence() {
     let store = Store::connect(&database_url()).await.unwrap();
-    let schema = format!("t_{}", Ulid::new().to_string().to_lowercase());
+    let schema = format!("t_{}", Ulid::generate().to_string().to_lowercase());
     let tenant = store.tenant(&schema).await.unwrap();
 
     // fp A: fixed twice (two merged reports); fp B: fixed once, more
@@ -202,7 +202,7 @@ async fn recurring_fingerprints_order_before_single_occurrence() {
 #[tokio::test]
 async fn unmerged_reports_are_not_candidates() {
     let store = Store::connect(&database_url()).await.unwrap();
-    let schema = format!("t_{}", Ulid::new().to_string().to_lowercase());
+    let schema = format!("t_{}", Ulid::generate().to_string().to_lowercase());
     let tenant = store.tenant(&schema).await.unwrap();
 
     // Report exists, PR opened, but outcome is Closed — not hardening bait.
@@ -227,7 +227,7 @@ async fn unmerged_reports_are_not_candidates() {
 #[tokio::test]
 async fn recurrence_after_merge_is_a_hard_negative() {
     let store = Store::connect(&database_url()).await.unwrap();
-    let schema = format!("t_{}", Ulid::new().to_string().to_lowercase());
+    let schema = format!("t_{}", Ulid::generate().to_string().to_lowercase());
     let tenant = store.tenant(&schema).await.unwrap();
 
     let signal = exception_signal("recur", "TypeError again");
@@ -250,7 +250,7 @@ async fn recurrence_after_merge_is_a_hard_negative() {
 
     // The fingerprint recurs after the merge → hard negative.
     let recurrence = Signal {
-        id: Ulid::new(),
+        id: Ulid::generate(),
         last_seen: merged_at + Duration::days(1),
         ..signal.clone()
     };

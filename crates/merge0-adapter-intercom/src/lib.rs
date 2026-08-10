@@ -154,7 +154,7 @@ fn normalize_conversation(
         .map(|author| author.id.clone());
 
     Ok(Some(Signal {
-        id: Ulid::new(),
+        id: Ulid::generate(),
         source: Source::Intercom,
         source_ref: id.clone(),
         kind: SignalKind::Ticket,

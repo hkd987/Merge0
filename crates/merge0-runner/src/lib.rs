@@ -257,7 +257,7 @@ mod tests {
 
     fn order() -> WorkOrder {
         WorkOrder {
-            report_id: Ulid::new(),
+            report_id: Ulid::generate(),
             repo: "chalk/chalk".into(),
             summary: "Fix crash".into(),
             evidence: vec![],

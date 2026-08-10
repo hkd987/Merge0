@@ -152,7 +152,7 @@ mod tests {
                         .as_str()
                         .ok_or_else(|| AdapterError::Malformed("item is not a string".into()))?;
                     Ok(Signal {
-                        id: ulid::Ulid::new(),
+                        id: ulid::Ulid::generate(),
                         source: Source::Webhook,
                         source_ref: reference.to_string(),
                         kind: SignalKind::Custom,

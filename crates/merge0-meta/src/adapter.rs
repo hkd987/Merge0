@@ -197,7 +197,7 @@ fn meta_signal(
     raw: &serde_json::Value,
 ) -> Signal {
     Signal {
-        id: Ulid::new(),
+        id: Ulid::generate(),
         source: Source::Meta,
         source_ref: format!("telemetry:{}", captured_at.to_rfc3339()),
         kind: SignalKind::Custom,

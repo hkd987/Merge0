@@ -137,7 +137,7 @@ pub fn assemble_report(
     }
 
     Report {
-        id: Ulid::new(),
+        id: Ulid::generate(),
         kind,
         title,
         summary: truncate_with_marker(&summary, config.max_section_chars),
@@ -225,7 +225,7 @@ mod tests {
         url_path: Option<&str>,
     ) -> Signal {
         Signal {
-            id: Ulid::new(),
+            id: Ulid::generate(),
             source,
             source_ref: fp.into(),
             kind,

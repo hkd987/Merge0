@@ -48,7 +48,7 @@ fn gate_config(max_orders: u32) -> GateConfig {
 
 fn exception(source: Source, reference: &str, shash: &str) -> Signal {
     Signal {
-        id: Ulid::new(),
+        id: Ulid::generate(),
         source,
         source_ref: reference.into(),
         kind: SignalKind::Exception,
@@ -76,7 +76,7 @@ fn exception(source: Source, reference: &str, shash: &str) -> Signal {
 
 fn rage_click(path: &str) -> Signal {
     Signal {
-        id: Ulid::new(),
+        id: Ulid::generate(),
         source: Source::Posthog,
         source_ref: format!("rageclick:{path}"),
         kind: SignalKind::UxFriction,
@@ -107,7 +107,7 @@ const WORK_JSON: &str = r#"{"decision":"work","summary":"Fix it","repro":"open t
 #[tokio::test]
 async fn cross_source_cluster_gates_into_one_work_order() {
     let store = Store::connect(&database_url()).await.unwrap();
-    let schema = format!("t_{}", Ulid::new().to_string().to_lowercase());
+    let schema = format!("t_{}", Ulid::generate().to_string().to_lowercase());
     let tenant = store.tenant(&schema).await.unwrap();
 
     // Same defect from Sentry and PostHog (shared stack hash) + timeline.
@@ -177,7 +177,7 @@ async fn cross_source_cluster_gates_into_one_work_order() {
 #[tokio::test]
 async fn opportunity_reports_hand_off_without_gate_or_work_order() {
     let store = Store::connect(&database_url()).await.unwrap();
-    let schema = format!("t_{}", Ulid::new().to_string().to_lowercase());
+    let schema = format!("t_{}", Ulid::generate().to_string().to_lowercase());
     let tenant = store.tenant(&schema).await.unwrap();
 
     tenant.upsert_signal(&rage_click("/export")).await.unwrap();
@@ -217,7 +217,7 @@ async fn opportunity_reports_hand_off_without_gate_or_work_order() {
 #[tokio::test]
 async fn intended_behavior_history_reroutes_recurrences_to_opportunity() {
     let store = Store::connect(&database_url()).await.unwrap();
-    let schema = format!("t_{}", Ulid::new().to_string().to_lowercase());
+    let schema = format!("t_{}", Ulid::generate().to_string().to_lowercase());
     let tenant = store.tenant(&schema).await.unwrap();
 
     // Round 1: a support ticket about /sync is gated as maintenance; the
@@ -253,7 +253,7 @@ async fn intended_behavior_history_reroutes_recurrences_to_opportunity() {
     // design → Opportunity, not another Work Order for the reviewer to
     // re-dismiss.
     let recurrence = Signal {
-        id: Ulid::new(),
+        id: Ulid::generate(),
         fingerprint: fingerprint(Source::Zendesk, &["ticket", "78"]),
         last_seen: now() + Duration::hours(1),
         ..ticket
@@ -284,7 +284,7 @@ async fn intended_behavior_history_reroutes_recurrences_to_opportunity() {
 #[tokio::test]
 async fn work_order_cap_leaves_overflow_pending_and_skips_persist() {
     let store = Store::connect(&database_url()).await.unwrap();
-    let schema = format!("t_{}", Ulid::new().to_string().to_lowercase());
+    let schema = format!("t_{}", Ulid::generate().to_string().to_lowercase());
     let tenant = store.tenant(&schema).await.unwrap();
 
     // Three distinct defects; cap of 1; model: 1 work then (unused) skip.
@@ -378,7 +378,7 @@ impl merge0_model::Model for FlakyModel {
 #[tokio::test]
 async fn a_failing_gate_call_isolates_the_report_and_never_loses_the_ledger() {
     let store = Store::connect(&database_url()).await.unwrap();
-    let schema = format!("t_{}", Ulid::new().to_string().to_lowercase());
+    let schema = format!("t_{}", Ulid::generate().to_string().to_lowercase());
     let tenant = store.tenant(&schema).await.unwrap();
 
     // Two distinct defects → two reports through the gate.

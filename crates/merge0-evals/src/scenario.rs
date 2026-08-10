@@ -148,7 +148,7 @@ impl Scenario {
             .iter()
             .enumerate()
             .map(|(index, spec)| Signal {
-                id: Ulid::new(),
+                id: Ulid::generate(),
                 source: spec.source,
                 source_ref: format!("eval-{index}"),
                 kind: spec.kind,
@@ -207,7 +207,7 @@ impl Scenario {
             .prior_attempts
             .iter()
             .map(|p| OutcomeRef {
-                work_order_id: Ulid::new(),
+                work_order_id: Ulid::generate(),
                 outcome: p.outcome,
                 occurred_at: now - Duration::days(p.days_ago),
                 note: p.note.clone(),

@@ -367,7 +367,7 @@ mod tests {
     #[test]
     fn work_order_round_trips() {
         let order = WorkOrder {
-            report_id: Ulid::new(),
+            report_id: Ulid::generate(),
             repo: "chalk/chalk".into(),
             summary: "Fix null district crash in SyncStatusPanel".into(),
             evidence: vec![],
@@ -376,7 +376,7 @@ mod tests {
             success_criteria: "Panel renders empty state; regression test passes".into(),
             constraints: "Do not change sync scheduling logic".into(),
             prior_attempts: vec![OutcomeRef {
-                work_order_id: Ulid::new(),
+                work_order_id: Ulid::generate(),
                 outcome: OutcomeKind::Reverted,
                 occurred_at: Utc::now(),
                 note: Some("March attempt reverted: broke district admin view".into()),

@@ -20,7 +20,7 @@ async fn fresh_tenant() -> (Store, TenantStore, String) {
     let store = Store::connect(&database_url())
         .await
         .expect("test Postgres must be reachable — see README (Testing)");
-    let schema = format!("t_{}", Ulid::new().to_string().to_lowercase());
+    let schema = format!("t_{}", Ulid::generate().to_string().to_lowercase());
     let tenant = store.tenant(&schema).await.expect("provision tenant");
     (store, tenant, schema)
 }
@@ -31,7 +31,7 @@ fn ts(day: u32, hour: u32) -> DateTime<Utc> {
 
 fn sample_signal(fp_part: &str, first: DateTime<Utc>, last: DateTime<Utc>) -> Signal {
     Signal {
-        id: Ulid::new(),
+        id: Ulid::generate(),
         source: Source::Sentry,
         source_ref: fp_part.to_string(),
         kind: SignalKind::Exception,
@@ -58,7 +58,7 @@ fn sample_signal(fp_part: &str, first: DateTime<Utc>, last: DateTime<Utc>) -> Si
 
 fn sample_report(signals: &[&Signal], kind: ReportKind) -> Report {
     Report {
-        id: Ulid::new(),
+        id: Ulid::generate(),
         kind,
         title: "Crash cluster".into(),
         summary: "42 users affected".into(),
@@ -95,7 +95,7 @@ async fn provision_is_idempotent_and_tenants_are_isolated() {
     // Re-opening the same tenant must be a no-op, not an error.
     store.tenant(&schema_a).await.expect("idempotent provision");
 
-    let schema_b = format!("t_{}", Ulid::new().to_string().to_lowercase());
+    let schema_b = format!("t_{}", Ulid::generate().to_string().to_lowercase());
     let tenant_b = store.tenant(&schema_b).await.unwrap();
 
     let signal = sample_signal("iso-1", ts(1, 0), ts(2, 0));

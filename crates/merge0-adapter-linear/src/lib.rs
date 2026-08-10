@@ -162,7 +162,7 @@ fn normalize_node(raw: &serde_json::Value) -> Result<Option<Signal>, AdapterErro
 
     let identifier = node.identifier;
     Ok(Some(Signal {
-        id: Ulid::new(),
+        id: Ulid::generate(),
         source: Source::Linear,
         source_ref: identifier.clone(),
         kind: SignalKind::Ticket,

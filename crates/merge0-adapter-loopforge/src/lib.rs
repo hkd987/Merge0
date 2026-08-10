@@ -83,7 +83,7 @@ fn normalize_finding(raw: &serde_json::Value) -> Result<Signal, AdapterError> {
         .map_err(|e| AdapterError::Malformed(format!("invalid loopforge finding: {e}")))?;
 
     Ok(Signal {
-        id: Ulid::new(),
+        id: Ulid::generate(),
         source: Source::Loopforge,
         source_ref: finding.id.clone(),
         kind: SignalKind::Custom,

@@ -383,7 +383,7 @@ mod tests {
     fn signal(kind: SignalKind, severity: Severity) -> Signal {
         let at = Utc.with_ymd_and_hms(2026, 8, 7, 0, 0, 0).unwrap();
         Signal {
-            id: Ulid::new(),
+            id: Ulid::generate(),
             source: Source::Sentry,
             source_ref: "1".into(),
             kind,

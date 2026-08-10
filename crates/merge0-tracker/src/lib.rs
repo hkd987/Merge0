@@ -229,7 +229,7 @@ mod tests {
 
     fn work_order() -> WorkOrder {
         WorkOrder {
-            report_id: Ulid::new(),
+            report_id: Ulid::generate(),
             repo: "chalk/chalk".into(),
             summary: "Attendance export drops the last student. Seen on 26 rosters.".into(),
             evidence: vec![
@@ -314,7 +314,7 @@ mod tests {
     fn prior_attempts_warn_the_reader_before_they_redo_the_work() {
         let mut order = work_order();
         order.prior_attempts = vec![OutcomeRef {
-            work_order_id: Ulid::new(),
+            work_order_id: Ulid::generate(),
             outcome: OutcomeKind::Reverted,
             occurred_at: chrono::Utc::now(),
             note: Some("broke admin view".into()),

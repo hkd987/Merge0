@@ -205,7 +205,7 @@ fn normalize_issue(raw: &serde_json::Value, base_url: &str) -> Result<Signal, Ad
         .map_err(|e| AdapterError::Malformed(format!("invalid error tracking issue: {e}")))?;
 
     Ok(Signal {
-        id: Ulid::new(),
+        id: Ulid::generate(),
         source: Source::Posthog,
         source_ref: issue.id.clone(),
         kind: SignalKind::Exception,
@@ -271,7 +271,7 @@ fn normalize_funnel(
     };
 
     Ok(Some(Signal {
-        id: Ulid::new(),
+        id: Ulid::generate(),
         source: Source::Posthog,
         source_ref: format!("funnel:{slug}"),
         kind: SignalKind::UxFriction,
@@ -384,7 +384,7 @@ fn normalize_click_events(
                 None
             };
             Signal {
-                id: Ulid::new(),
+                id: Ulid::generate(),
                 source: Source::Posthog,
                 source_ref: format!("{}:{path}", shape.key),
                 kind: SignalKind::UxFriction,

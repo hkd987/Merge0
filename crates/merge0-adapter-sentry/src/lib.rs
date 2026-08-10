@@ -117,7 +117,7 @@ fn normalize_issue(raw: &serde_json::Value) -> Result<Signal, AdapterError> {
         .map(|r| r.version.clone());
 
     Ok(Signal {
-        id: Ulid::new(),
+        id: Ulid::generate(),
         source: Source::Sentry,
         source_ref: issue.id.clone(),
         kind: SignalKind::Exception,

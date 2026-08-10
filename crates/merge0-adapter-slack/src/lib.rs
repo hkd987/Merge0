@@ -140,7 +140,7 @@ fn normalize_message(
     let thread_root = message.thread_ts.as_deref().unwrap_or(&message.ts);
 
     Ok(Some(Signal {
-        id: Ulid::new(),
+        id: Ulid::generate(),
         source: Source::Slack,
         source_ref: format!("{channel_id}:{}", message.ts),
         kind: SignalKind::Ticket,

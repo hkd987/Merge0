@@ -25,7 +25,7 @@ fn now() -> DateTime<Utc> {
 
 async fn fresh_tenant() -> (Store, TenantStore, String) {
     let store = Store::connect(&database_url()).await.unwrap();
-    let schema = format!("t_{}", Ulid::new().to_string().to_lowercase());
+    let schema = format!("t_{}", Ulid::generate().to_string().to_lowercase());
     let tenant = store.tenant(&schema).await.unwrap();
     (store, tenant, schema)
 }
@@ -410,7 +410,7 @@ async fn p2_broker_flow_work_order_scoped_short_lived_credentials() {
     use merge0_broker::{credential_helper, Broker, BrokerError, FakeMinter};
 
     let order = merge0_signal::WorkOrder {
-        report_id: Ulid::new(),
+        report_id: Ulid::generate(),
         repo: "chalk/chalk".into(),
         summary: "s".into(),
         evidence: vec![],
@@ -527,7 +527,7 @@ async fn p2_registry_flow_signed_index_to_manifest_change_pr() {
 
     // Sign with Merge0's registry key; verify against the pinned public key;
     // reject tampering.
-    let signing = ed25519_dalek::SigningKey::generate(&mut rand::rngs::OsRng);
+    let signing = ed25519_dalek::SigningKey::generate(&mut rand_core::OsRng);
     let signed = sign_index(&index, &signing).unwrap();
     let verified = verify_index(&signed, &signing.verifying_key()).unwrap();
     assert_eq!(verified.listings[0].name, "house-style");

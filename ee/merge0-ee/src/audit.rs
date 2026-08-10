@@ -39,7 +39,7 @@ impl TenantManager {
             t = Self::table("audit_log")
         );
         sqlx::query(&sql)
-            .bind(Ulid::new().to_string())
+            .bind(Ulid::generate().to_string())
             .bind(tenant_id)
             .bind(actor)
             .bind(action)

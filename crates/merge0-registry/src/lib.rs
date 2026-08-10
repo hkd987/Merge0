@@ -332,7 +332,7 @@ mod tests {
     use chrono::TimeZone;
 
     fn keypair() -> (SigningKey, VerifyingKey) {
-        let signing = SigningKey::generate(&mut rand::rngs::OsRng);
+        let signing = SigningKey::generate(&mut rand_core::OsRng);
         let verifying = signing.verifying_key();
         (signing, verifying)
     }

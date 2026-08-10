@@ -441,7 +441,7 @@ fn every_adapter_source_is_selectable_by_at_least_one_shipped_scout() {
                 // against six dead sources.
                 let mut raw = raw.clone();
                 if raw.get("id").and_then(|v| v.as_str()) == Some("<ulid>") {
-                    raw["id"] = serde_json::json!(ulid::Ulid::new().to_string());
+                    raw["id"] = serde_json::json!(ulid::Ulid::generate().to_string());
                 }
                 let mut signal = serde_json::from_value::<merge0_signal::Signal>(raw)
                     .unwrap_or_else(|e| panic!("golden in {} is not a Signal: {e}", rel(&path)));

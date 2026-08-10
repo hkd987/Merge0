@@ -199,7 +199,7 @@ fn normalize_post(
     );
 
     Some(Signal {
-        id: Ulid::new(),
+        id: Ulid::generate(),
         source: Source::X,
         source_ref: post.id.clone(),
         kind: SignalKind::Ticket,
