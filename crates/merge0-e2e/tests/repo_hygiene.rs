@@ -88,6 +88,47 @@ fn sum_in_sql_is_always_cast_to_bigint() {
     );
 }
 
+/// **Incident.** The manual e2e's subscription-gate section reused port
+/// 18081 — already held by the story server, which stays alive until
+/// script EXIT. The new server logged its boot banner, failed to bind,
+/// and every check in the section talked to the WRONG server (whose fake
+/// model answered plausibly). The checks even half-passed. Ports in
+/// `scripts/e2e-manual.sh` must be unique across all sections.
+#[test]
+fn e2e_manual_server_ports_are_unique_across_sections() {
+    let script = std::fs::read_to_string(repo_root().join("scripts/e2e-manual.sh"))
+        .expect("scripts/e2e-manual.sh readable");
+    let mut seen: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    let mut duplicates = Vec::new();
+    for (i, line) in script.lines().enumerate() {
+        // Port assignments look like `NAME_PORT=18081` or a literal port
+        // argument `launch_tenant 18091 …` — collect every 5-digit literal
+        // starting 18 (the script's port range) used as a bind/launch port.
+        let assigns_port =
+            line.contains("PORT=1") || line.trim_start().starts_with("launch_tenant ");
+        if !assigns_port || line.trim_start().starts_with("#") {
+            continue;
+        }
+        for token in line.split(|c: char| !c.is_ascii_digit()) {
+            if token.len() == 5 && token.starts_with("18") {
+                if let Some(first) = seen.insert(token.to_string(), i + 1) {
+                    duplicates.push(format!(
+                        "port {token} assigned at lines {first} and {} — earlier sections' \
+                         servers hold their ports until EXIT, so a reused port makes every \
+                         check in the later section silently talk to the wrong server",
+                        i + 1
+                    ));
+                }
+            }
+        }
+    }
+    assert!(
+        duplicates.is_empty(),
+        "duplicate server ports in scripts/e2e-manual.sh:\n{}",
+        duplicates.join("\n")
+    );
+}
+
 /// **Incident.** `auth_header()` returns the raw `Authorization` value
 /// *including* the `Bearer ` scheme prefix. `require_bearer` strips it
 /// internally, so hand-rolled comparisons that skip the strip silently

@@ -57,9 +57,38 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(_) => merge0_context::intent::MERGE0_TEMPLATE.to_string(),
     };
 
+    // MERGE0_GATE_BACKEND selects what powers the triage gate:
+    //   "api" (default) — AnthropicModel with ANTHROPIC_API_KEY (BYO key).
+    //   "claude-cli"    — the Claude Code CLI in print mode, riding whatever
+    //     auth the CLI already holds: a Pro/Max/Team subscription login on
+    //     the host, or CLAUDE_CODE_OAUTH_TOKEN from `claude setup-token`.
+    //     No API key required — the same judgment, billed to the
+    //     subscription. Binary overridable via MERGE0_GATE_CLI (tests and
+    //     the manual e2e point it at a stub).
+    let cli_gate: Option<Arc<dyn merge0_model::Model>> = match std::env::var("MERGE0_GATE_BACKEND")
+        .as_deref()
+    {
+        Err(_) | Ok("api") => None,
+        Ok("claude-cli") => {
+            let binary = std::env::var("MERGE0_GATE_CLI").unwrap_or_else(|_| "claude".into());
+            tracing::info!(
+                "gate backend: {binary} CLI (subscription auth — no ANTHROPIC_API_KEY needed)"
+            );
+            Some(Arc::new(
+                merge0_model::CliModel::with_binary(binary)
+                    .model(std::env::var("MERGE0_GATE_MODEL").ok()),
+            ))
+        }
+        Ok(other) => {
+            return Err(format!("MERGE0_GATE_BACKEND invalid: {other:?} (api|claude-cli)").into())
+        }
+    };
+
     // MERGE0_DEV_FAKES=1 swaps the model and GitHub for in-process fakes so
     // the complete loop can be driven locally (manual e2e) without a live
-    // model or GitHub App. Loudly not for production.
+    // model or GitHub App. Loudly not for production. A cli gate backend
+    // composes with it (fake GitHub, real CLI judgment) — exactly what
+    // "try the subscription gate without creating a GitHub App" needs.
     let dev_fakes = std::env::var("MERGE0_DEV_FAKES").as_deref() == Ok("1");
     let (model, github): (
         Arc<dyn merge0_model::Model>,
@@ -103,13 +132,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "constraints":"stay within the diff budget","confidence":"{fake_confidence}"}}"#
             ),
         };
-        (Arc::new(fixed), Arc::new(fake_github))
+        let model: Arc<dyn merge0_model::Model> = match cli_gate {
+            Some(cli) => cli,
+            None => Arc::new(fixed),
+        };
+        (model, Arc::new(fake_github))
     } else {
-        // Model: the customer's own key (BYO), never logged.
-        let model = AnthropicModel::new(
-            required("ANTHROPIC_API_KEY")?,
-            std::env::var("MERGE0_GATE_MODEL").unwrap_or_else(|_| "claude-sonnet-5".into()),
-        );
+        // Model: the CLI gate when selected, else the customer's own key
+        // (BYO), never logged. The API key is only required when it is
+        // actually the thing being used.
+        let model: Arc<dyn merge0_model::Model> = match cli_gate {
+            Some(cli) => cli,
+            None => Arc::new(AnthropicModel::new(
+                required("ANTHROPIC_API_KEY")?,
+                std::env::var("MERGE0_GATE_MODEL").unwrap_or_else(|_| "claude-sonnet-5".into()),
+            )),
+        };
         // GitHub App auth (P0-11): installation tokens only.
         let github = RestGitHub::new(InstallationTokenSource {
             auth: AppAuth::new(
@@ -123,7 +161,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             base_url: "https://api.github.com".into(),
             installation_id: required("MERGE0_GITHUB_INSTALLATION_ID")?.parse()?,
         });
-        (Arc::new(model), Arc::new(github))
+        (model, Arc::new(github))
     };
 
     let slack = std::env::var("MERGE0_SLACK_WEBHOOK_URL")
