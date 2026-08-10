@@ -53,12 +53,16 @@ fn secrets_to_configure(state: &AppState) -> serde_json::Value {
     let agent_label = state.agent.label();
     let mut secrets = serde_json::Map::new();
     for name in state.agent.auth_env_names() {
-        secrets.insert(
-            (*name).to_string(),
-            serde_json::json!(format!(
+        // The subscription credentials are alternatives, not additions —
+        // say so, or every reader assumes all listed secrets are required.
+        let hint = match *name {
+            "CLAUDE_CODE_OAUTH_TOKEN" => "ALTERNATIVE to ANTHROPIC_API_KEY: Claude Pro/Max/Team subscription token from `claude setup-token` — set one of the two".to_string(),
+            "CODEX_AUTH_JSON" => "ALTERNATIVE to OPENAI_API_KEY: contents of ~/.codex/auth.json after a ChatGPT-subscription `codex login` — set one of the two".to_string(),
+            _ => format!(
                 "model-provider key for the {agent_label} agent — runs on YOUR account (leave unset if this provider is unused)"
-            )),
-        );
+            ),
+        };
+        secrets.insert((*name).to_string(), serde_json::json!(hint));
     }
     secrets.insert(
         "MERGE0_RUNNER_TOKEN".into(),

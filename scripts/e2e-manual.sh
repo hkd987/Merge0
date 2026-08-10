@@ -619,5 +619,55 @@ MCP_401=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/mcp" \
   -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":4,"method":"tools/list"}')
 check "mcp without the bearer token is rejected" "$MCP_401" '401'
 
+say "18. Subscription gate: MERGE0_GATE_BACKEND=claude-cli runs the gate through the CLI"
+# A second server whose gate is the Claude Code CLI (stubbed — the exact
+# binary a Pro/Max subscription would provide) instead of the API model.
+# No ANTHROPIC_API_KEY anywhere in this environment.
+# NOTE: earlier sections' servers stay alive until script EXIT — this port
+# must be unique across ALL sections (18081 is the story server; binding it
+# here silently talks to that server instead).
+CLI_PORT=18083
+CLI_BASE="http://127.0.0.1:$CLI_PORT"
+CLI_TENANT="e2e_cli_$(date +%s)"
+MERGE0_DATABASE_URL="$DB_URL" \
+MERGE0_TENANT="$CLI_TENANT" \
+MERGE0_REPO="chalk/chalk" \
+MERGE0_DEV_FAKES=1 \
+MERGE0_GATE_BACKEND=claude-cli \
+MERGE0_GATE_CLI="$CLI_STUB" \
+MERGE0_API_TOKEN="$API_TOKEN" \
+MERGE0_RUNNER_TOKEN="$RUNNER_TOKEN" \
+MERGE0_GITHUB_WEBHOOK_SECRET="$WEBHOOK_SECRET" \
+MERGE0_TRIAGE_INTERVAL_SECS=0 \
+MERGE0_BIND="127.0.0.1:$CLI_PORT" \
+./target/debug/merge0-server &
+CLI_SERVER_PID=$!
+# trap REPLACES the previous trap — carry every earlier section's PID or
+# they orphan past EXIT and squat their ports for the next run.
+trap 'kill $SERVER_PID $STORY_PID $ROUTE_PID $EE_PID $TA_PID $TB_PID $CLI_SERVER_PID 2>/dev/null || true' EXIT
+for _ in $(seq 1 50); do
+  curl -sf "$CLI_BASE/healthz" >/dev/null 2>&1 && break
+  sleep 0.2
+done
+check "cli-gate server boots without ANTHROPIC_API_KEY" "$(curl -sf "$CLI_BASE/healthz")" "ok"
+auth -X POST "$CLI_BASE/ingest/sentry" -H "content-type: application/json" -d @- >/dev/null <<EOF
+{"endpoint": "issues", "payload": [{
+  "id": "9800", "shortId": "CHALK-98",
+  "title": "TypeError: Cannot read properties of null (reading 'planId')",
+  "permalink": "https://sentry.example.com/organizations/chalk/issues/9800/",
+  "level": "error",
+  "metadata": {"type": "TypeError", "value": "null planId"},
+  "userCount": 18, "firstSeen": "2026-08-06T04:00:00Z", "lastSeen": "$NOW"
+}]}
+EOF
+auth -X POST "$CLI_BASE/triage/run" > /dev/null
+CLI_REPORTS=$(auth "$CLI_BASE/reports?status=awaiting_review")
+check "cli-backed gate decided WORK from the subscription CLI" "$CLI_REPORTS" '"awaiting_review"'
+CLI_REPORT_ID=$(printf '%s' "$CLI_REPORTS" | python3 -c "import json,sys; print(json.load(sys.stdin)[0]['id'])")
+CLI_DETAIL=$(auth "$CLI_BASE/reports/$CLI_REPORT_ID")
+check "work order carries the CLI verdict's summary" "$CLI_DETAIL" 'Guard null plan in BillingSummary'
+check "gate context recorded through the cli backend too" "$CLI_DETAIL" '=== SYSTEM ==='
+kill $CLI_SERVER_PID 2>/dev/null || true
+
 say "Result: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

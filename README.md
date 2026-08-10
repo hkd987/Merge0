@@ -217,8 +217,10 @@ live in `config/` as reviewed files. Server environment:
 | `MERGE0_RUNNER_TOKEN` | ✅* | Token the runner callback authenticates with |
 | `MERGE0_GITHUB_WEBHOOK_SECRET` | ✅* | HMAC secret for `/webhooks/github` |
 | `MERGE0_GITHUB_APP_ID` / `MERGE0_GITHUB_APP_PRIVATE_KEY` / `MERGE0_GITHUB_INSTALLATION_ID` | ✅ | GitHub App auth (installation tokens only) |
-| `ANTHROPIC_API_KEY` | ✅ | Model key for the triage gate (BYO) |
-| `MERGE0_GATE_MODEL` | — | Gate model id (default `claude-sonnet-5`) |
+| `ANTHROPIC_API_KEY` | ✅** | Model key for the triage gate (BYO; not needed with the `claude-cli` gate backend) |
+| `MERGE0_GATE_BACKEND` | — | `api` (default) or `claude-cli` — run the gate through the Claude Code CLI on a **Claude Pro/Max/Team subscription** instead of an API key (see "Use your existing subscription") |
+| `MERGE0_GATE_CLI` | — | Binary for the `claude-cli` backend (default `claude`) |
+| `MERGE0_GATE_MODEL` | — | Gate model id (default `claude-sonnet-5`; with `claude-cli`, passed through only when set) |
 | `MERGE0_AGENT` | — | Runner agent: `claude-code` (default), `codex-cli`, `gemini-cli`, `aider`, `opencode`, `cursor-cli`, `custom:<cmd>` — see “Bring your own agent” |
 | `MERGE0_TENANT` | — | Postgres schema name (default `tenant_default`) |
 | `MERGE0_PUBLIC_URL` | — | Public base URL (Slack links, defaults callbacks) |
@@ -241,6 +243,7 @@ live in `config/` as reviewed files. Server environment:
 
 \* Technically optional — the server runs open and warns loudly. Never in
 production.
+\** Required only when the gate backend is `api` (the default).
 
 Hosted control plane (`merge0-hosted`): `MERGE0_DATABASE_URL`,
 `MERGE0_EE_ADMIN_TOKEN`, `MERGE0_EE_BIND` (default `127.0.0.1:8090`).
@@ -258,13 +261,43 @@ boundary regardless of harness.
 
 | `MERGE0_AGENT` | Invocation | Actions secret(s) |
 |---|---|---|
-| `claude-code` (default) | `claude -p … --allowedTools <scoped>` | `ANTHROPIC_API_KEY` |
-| `codex-cli` | `codex exec --sandbox workspace-write …` | `OPENAI_API_KEY` |
+| `claude-code` (default) | `claude -p … --allowedTools <scoped>` | `ANTHROPIC_API_KEY` **or** `CLAUDE_CODE_OAUTH_TOKEN` (subscription) |
+| `codex-cli` | `codex exec --sandbox workspace-write …` | `OPENAI_API_KEY` **or** `CODEX_AUTH_JSON` (subscription) |
 | `gemini-cli` | `gemini -p … --approval-mode=yolo` | `GEMINI_API_KEY` |
 | `aider` | `aider --message … --yes-always --no-auto-commits` | `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` |
 | `opencode` | `opencode run …` | `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` |
 | `cursor-cli` | `cursor-agent -p …` | `CURSOR_API_KEY` |
 | `custom:<cmd>` | your command; work order at `$MERGE0_WORK_ORDER` | whatever it needs (declare via the manifest's `auth_env`) |
+
+### Use your existing subscription (no API key)
+
+If you already pay for **Claude Pro/Max/Team** or **ChatGPT
+Plus/Pro/Team**, both halves of the loop can run on that subscription
+instead of metered API keys:
+
+- **Runner, Claude Code**: run `claude setup-token` locally (requires a
+  subscription), store the resulting token as the `CLAUDE_CODE_OAUTH_TOKEN`
+  Actions secret, and leave `ANTHROPIC_API_KEY` unset. The generated
+  workflow normalizes the env so whichever credential you configured is
+  the one the CLI sees.
+- **Runner, Codex**: run `codex login` locally (ChatGPT sign-in), store
+  the contents of `~/.codex/auth.json` as the `CODEX_AUTH_JSON` secret,
+  and leave `OPENAI_API_KEY` unset. The workflow seeds
+  `~/.codex/auth.json` (0600) before `codex exec` and drops the blob
+  from the agent's environment.
+- **Triage gate**: set `MERGE0_GATE_BACKEND=claude-cli` on the server
+  (with the `claude` CLI installed and logged in, or
+  `CLAUDE_CODE_OAUTH_TOKEN` exported) and `ANTHROPIC_API_KEY` is not
+  required at all. The two-minute CLI quickstart above already works this
+  way — it uses whatever auth your `claude` login holds.
+
+Caveats, stated honestly: subscription tokens carry your plan's rate
+limits (a burst of triage runs or repair loops shares quota with your
+interactive use); token-spend telemetry still counts tokens but they cost
+subscription quota, not dollars; and if you set both credentials, the
+API key wins. Egress allowlists are already subscription-aware — the
+generated workflow opens `claude.ai` / `chatgpt.com` alongside the API
+hosts.
 
 Change `MERGE0_AGENT`, re-download the workflow from `/setup`, and commit
 it — the egress allowlist, secret mappings, and invocation all follow the
