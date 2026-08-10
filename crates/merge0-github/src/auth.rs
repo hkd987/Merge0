@@ -182,7 +182,7 @@ mod tests {
 
     fn test_rsa_pem() -> String {
         use rsa::pkcs1::EncodeRsaPrivateKey;
-        let mut rng = rand::thread_rng();
+        let mut rng = rand_core::OsRng;
         let key = rsa::RsaPrivateKey::new(&mut rng, 2048).unwrap();
         key.to_pkcs1_pem(rsa::pkcs1::LineEnding::LF)
             .unwrap()

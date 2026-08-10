@@ -7,7 +7,7 @@
 //! lands within 14 days of the merge.
 
 use chrono::{DateTime, Duration, Utc};
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
 
 /// The revert-as-hard-negative window (PRD P0-8).

@@ -115,7 +115,7 @@ fn normalize_event(raw: &serde_json::Value, base_url: &str) -> Result<Signal, Ad
         .map(str::to_string);
 
     Ok(Signal {
-        id: Ulid::new(),
+        id: Ulid::generate(),
         source: Source::Datadog,
         source_ref: event.id.clone(),
         kind,

@@ -29,6 +29,6 @@ ulid.workspace = true
 tokio.workspace = true
 toml.workspace = true
 ed25519-dalek.workspace = true
-rand.workspace = true
+rand_core.workspace = true
 sha2.workspace = true
 hex.workspace = true

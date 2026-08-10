@@ -82,7 +82,7 @@ impl TenantManager {
         actor: &str,
         now: DateTime<Utc>,
     ) -> Result<Tenant> {
-        let id = Ulid::new();
+        let id = Ulid::generate();
         let schema_name = format!("tenant_{}", id.to_string().to_lowercase());
         // Provision through the store — its validation + DDL, never ours.
         self.store.tenant(&schema_name).await?;

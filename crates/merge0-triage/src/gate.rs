@@ -316,7 +316,7 @@ mod tests {
 
     fn report(severity: Severity, with_evidence: bool) -> Report {
         Report {
-            id: Ulid::new(),
+            id: Ulid::generate(),
             kind: ReportKind::Maintenance,
             title: "Crash".into(),
             summary: "42 users".into(),
@@ -330,7 +330,7 @@ mod tests {
             } else {
                 vec![]
             },
-            signal_ids: vec![Ulid::new()],
+            signal_ids: vec![Ulid::generate()],
             fingerprints: vec!["sentry:x".into()],
             suspect_release: Some("v2.3.0".into()),
             affected_count: Some(42),
@@ -595,7 +595,7 @@ mod tests {
         }
 
         let prior = vec![OutcomeRef {
-            work_order_id: Ulid::new(),
+            work_order_id: Ulid::generate(),
             outcome: merge0_signal::OutcomeKind::Reverted,
             occurred_at: Utc.with_ymd_and_hms(2026, 3, 1, 0, 0, 0).unwrap(),
             note: Some("broke admin view".into()),
@@ -640,14 +640,14 @@ mod tests {
         ]);
         let now = Utc::now();
         let recent = vec![OutcomeRef {
-            work_order_id: Ulid::new(),
+            work_order_id: Ulid::generate(),
             outcome: merge0_signal::OutcomeKind::Reverted,
             occurred_at: now - chrono::Duration::days(3),
             note: Some("recent revert".into()),
             pr_url: None,
         }];
         let ancient = vec![OutcomeRef {
-            work_order_id: Ulid::new(),
+            work_order_id: Ulid::generate(),
             outcome: merge0_signal::OutcomeKind::Reverted,
             occurred_at: now - chrono::Duration::days(400),
             note: Some("ancient revert".into()),

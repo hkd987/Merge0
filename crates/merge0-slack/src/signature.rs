@@ -6,7 +6,7 @@
 //! before any HMAC work.
 
 use chrono::{DateTime, Utc};
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
 
 /// Maximum accepted distance between the request timestamp and `now`,

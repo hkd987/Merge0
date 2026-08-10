@@ -323,7 +323,7 @@ impl TenantStore {
             t = self.table("triage_runs")
         );
         sqlx::query(&sql)
-            .bind(Ulid::new().to_string())
+            .bind(Ulid::generate().to_string())
             .bind(started_at)
             .bind(tokens_used as i64)
             .bind(budget_exhausted)
@@ -453,7 +453,7 @@ impl TenantStore {
             t = self.table("outcomes")
         );
         let result = sqlx::query(&sql)
-            .bind(Ulid::new().to_string())
+            .bind(Ulid::generate().to_string())
             .bind(report_id.to_string())
             .bind(enum_str(&kind))
             .bind(pr_url)

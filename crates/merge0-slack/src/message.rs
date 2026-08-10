@@ -292,7 +292,7 @@ mod tests {
                     url: "https://posthog.example.com/replay/abc".into(),
                 },
             ],
-            signal_ids: vec![Ulid::new()],
+            signal_ids: vec![Ulid::generate()],
             fingerprints: vec!["sentry:abc".into()],
             suspect_release: Some("v2.3.0".into()),
             affected_count: Some(42),

@@ -188,7 +188,7 @@ fn normalize_issue(
 
     let key = issue.key;
     Ok(Some(Signal {
-        id: Ulid::new(),
+        id: Ulid::generate(),
         source: Source::Jira,
         source_ref: key.clone(),
         kind: SignalKind::Ticket,

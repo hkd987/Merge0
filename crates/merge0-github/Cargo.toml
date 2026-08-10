@@ -23,5 +23,5 @@ tokio.workspace = true
 [dev-dependencies]
 tokio.workspace = true
 rsa = { workspace = true, features = ["pem"] }
-rand.workspace = true
+rand_core.workspace = true
 wiremock.workspace = true

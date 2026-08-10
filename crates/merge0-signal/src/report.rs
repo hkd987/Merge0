@@ -205,13 +205,13 @@ mod tests {
     #[test]
     fn report_round_trips() {
         let report = Report {
-            id: Ulid::new(),
+            id: Ulid::generate(),
             kind: ReportKind::Maintenance,
             title: "Null district crash in SyncStatusPanel".into(),
             summary: "42 users since v2.3.0, corroborated by rage clicks".into(),
             severity: Severity::High,
             evidence: vec![],
-            signal_ids: vec![Ulid::new(), Ulid::new()],
+            signal_ids: vec![Ulid::generate(), Ulid::generate()],
             fingerprints: vec!["sentry:abc".into(), "posthog:def".into()],
             suspect_release: Some("v2.3.0".into()),
             affected_count: Some(42),

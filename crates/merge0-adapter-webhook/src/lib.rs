@@ -115,7 +115,7 @@ fn normalize_submission(raw: &serde_json::Value) -> Result<Signal, AdapterError>
     }
 
     Ok(Signal {
-        id: Ulid::new(),
+        id: Ulid::generate(),
         source: Source::Webhook,
         source_ref: submission.dedupe_key.clone(),
         kind: submission.kind,
@@ -288,7 +288,7 @@ fn normalize_log_record(
         attr(&record.attributes, "url.path").or_else(|| attr(&record.attributes, "http.route"));
 
     Ok(Some(Signal {
-        id: Ulid::new(),
+        id: Ulid::generate(),
         source: Source::Otel,
         source_ref: format!("{service_name}:{}", record.time_unix_nano.0),
         kind: SignalKind::Exception,

@@ -108,7 +108,7 @@ fn normalize_issue(raw: &serde_json::Value, repo: &str) -> Result<Signal, Adapte
     let number = issue.number.to_string();
 
     Ok(Signal {
-        id: Ulid::new(),
+        id: Ulid::generate(),
         source: Source::Github,
         source_ref: number.clone(),
         kind: SignalKind::Ticket,

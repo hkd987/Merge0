@@ -171,7 +171,7 @@ fn normalize_funnel(raw: &serde_json::Value, base_url: &str) -> Option<Signal> {
         .join(" → ");
 
     Some(Signal {
-        id: Ulid::new(),
+        id: Ulid::generate(),
         source: Source::Mixpanel,
         source_ref: funnel_id.clone(),
         kind: SignalKind::UxFriction,

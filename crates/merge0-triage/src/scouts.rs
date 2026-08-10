@@ -112,7 +112,7 @@ mod tests {
 
     fn signal(source: Source, last_seen: DateTime<Utc>) -> Signal {
         Signal {
-            id: Ulid::new(),
+            id: Ulid::generate(),
             source,
             source_ref: "1".into(),
             kind: SignalKind::Exception,
@@ -120,7 +120,7 @@ mod tests {
             title: "t".into(),
             body: String::new(),
             evidence: vec![],
-            fingerprint: format!("{}:{}", source.as_str(), Ulid::new()),
+            fingerprint: format!("{}:{}", source.as_str(), Ulid::generate()),
             join_keys: JoinKeys::default(),
             affected_count: None,
             delegated: false,

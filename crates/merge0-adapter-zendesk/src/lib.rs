@@ -101,7 +101,7 @@ fn normalize_ticket(raw: &serde_json::Value, base_url: &str) -> Result<Signal, A
         .map(|n| n.to_string());
 
     Ok(Signal {
-        id: Ulid::new(),
+        id: Ulid::generate(),
         source: Source::Zendesk,
         source_ref: id.clone(),
         kind: SignalKind::Ticket,

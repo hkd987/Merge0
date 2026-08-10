@@ -321,7 +321,7 @@ pub async fn propose(
 
     let (level, _, _) = mechanism.describe();
     let report = Report {
-        id: Ulid::new(),
+        id: Ulid::generate(),
         kind: ReportKind::Hardening,
         title,
         summary: format!(
@@ -513,7 +513,7 @@ mod tests {
 
     fn signal(kind: SignalKind, title: &str, body: &str, fp: &str) -> Signal {
         Signal {
-            id: Ulid::new(),
+            id: Ulid::generate(),
             source: Source::Sentry,
             source_ref: "s1".to_string(),
             kind,

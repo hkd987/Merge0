@@ -175,7 +175,7 @@ fn normalize_events(events: &[serde_json::Value], base_url: &str) -> Vec<Signal>
                 None
             };
             Signal {
-                id: Ulid::new(),
+                id: Ulid::generate(),
                 source: Source::Openpanel,
                 source_ref: format!("{name}:{path}"),
                 kind: SignalKind::Exception,

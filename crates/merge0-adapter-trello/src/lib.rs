@@ -103,7 +103,7 @@ fn normalize_card(raw: &serde_json::Value) -> Result<Option<Signal>, AdapterErro
     let id = card.id;
 
     Ok(Some(Signal {
-        id: Ulid::new(),
+        id: Ulid::generate(),
         source: Source::Trello,
         source_ref: id.clone(),
         kind: SignalKind::Ticket,

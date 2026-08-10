@@ -185,7 +185,7 @@ fn normalize_child(raw: &serde_json::Value, base_url: &str) -> Option<Signal> {
     let engagement = u64::try_from(post.score.max(0)).unwrap_or(0) + post.num_comments;
 
     Some(Signal {
-        id: Ulid::new(),
+        id: Ulid::generate(),
         source: Source::Reddit,
         source_ref: post.id.clone(),
         kind: SignalKind::Ticket,

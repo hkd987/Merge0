@@ -36,7 +36,7 @@ async fn fresh_tenant() -> (Store, TenantStore, String) {
     let store = Store::connect(&database_url())
         .await
         .expect("test Postgres must be reachable — see README (Testing)");
-    let schema = format!("t_{}", Ulid::new().to_string().to_lowercase());
+    let schema = format!("t_{}", Ulid::generate().to_string().to_lowercase());
     let tenant = store.tenant(&schema).await.expect("provision tenant");
     (store, tenant, schema)
 }

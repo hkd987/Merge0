@@ -1,7 +1,7 @@
 //! HTTP integration tests: the real router served on an ephemeral port,
 //! real Postgres underneath, fakes for GitHub / model / Slack.
 
-use hmac::Mac;
+use hmac::{KeyInit, Mac};
 use merge0_github::api::BranchProtection;
 use merge0_github::{FakeGitHub, RepoRef};
 use merge0_model::ScriptedModel;
@@ -69,7 +69,7 @@ impl Default for HarnessOptions {
 impl Harness {
     async fn start(mut options: HarnessOptions) -> Harness {
         let store = Store::connect(&database_url()).await.unwrap();
-        let schema = format!("t_{}", Ulid::new().to_string().to_lowercase());
+        let schema = format!("t_{}", Ulid::generate().to_string().to_lowercase());
         let tenant = store.tenant(&schema).await.unwrap();
 
         let github = Arc::new(FakeGitHub::new().with_protection(BranchProtection {
@@ -238,7 +238,7 @@ impl Harness {
     }
 
     async fn webhook(&self, event: &str, payload: serde_json::Value) -> reqwest::Response {
-        self.webhook_with_delivery(event, payload, &Ulid::new().to_string())
+        self.webhook_with_delivery(event, payload, &Ulid::generate().to_string())
             .await
     }
 
@@ -406,7 +406,7 @@ async fn every_data_route_requires_the_bearer_token() {
     // Audit C2: no unauthenticated read surface. The shell page and healthz
     // are the only open GETs, and neither carries data.
     let h = Harness::start(HarnessOptions::default()).await;
-    let detail_path = format!("/reports/{}", Ulid::new());
+    let detail_path = format!("/reports/{}", Ulid::generate());
     for path in [
         "/reports",
         "/reports?status=awaiting_review",
@@ -1559,7 +1559,7 @@ async fn registry_lists_signed_index_and_installs_via_manifest_pr() {
 
     // A throwaway on-disk registry: one proven skill, index signed with a
     // fixed test key.
-    let dir = std::env::temp_dir().join(format!("merge0-registry-{}", Ulid::new()));
+    let dir = std::env::temp_dir().join(format!("merge0-registry-{}", Ulid::generate()));
     let skill_dir = dir.join("skills").join("db-migrations");
     std::fs::create_dir_all(&skill_dir).unwrap();
     let files = vec![(

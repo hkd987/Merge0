@@ -72,7 +72,7 @@ fn ts(day: u32, hour: u32) -> DateTime<Utc> {
 
 fn make_signal(source: Source, severity: Severity, tag: &str) -> Signal {
     Signal {
-        id: Ulid::new(),
+        id: Ulid::generate(),
         source,
         source_ref: tag.to_string(),
         kind: SignalKind::Exception,
@@ -104,7 +104,7 @@ async fn seed_outcome_report(
     outcome: OutcomeKind,
     occurred_at: DateTime<Utc>,
 ) -> Vec<String> {
-    let tag = Ulid::new().to_string().to_lowercase();
+    let tag = Ulid::generate().to_string().to_lowercase();
     let mut identifiers = Vec::new();
     let mut signals = Vec::new();
     for (i, source) in sources.iter().enumerate() {
@@ -116,7 +116,7 @@ async fn seed_outcome_report(
         signals.push(signal);
     }
     let report = Report {
-        id: Ulid::new(),
+        id: Ulid::generate(),
         kind: ReportKind::Maintenance,
         title: format!("SecretReport {tag}"),
         summary: format!("SecretSummary {tag}"),
@@ -149,12 +149,17 @@ async fn seed_priors_world(manager: &TenantManager) -> (Vec<String>, DateTime<Ut
     let mut identifiers = Vec::new();
 
     let tenant_a = manager
-        .create_tenant(&format!("acme-{}", Ulid::new()), "scale", ACTOR, ts(1, 0))
+        .create_tenant(
+            &format!("acme-{}", Ulid::generate()),
+            "scale",
+            ACTOR,
+            ts(1, 0),
+        )
         .await
         .unwrap();
     let tenant_b = manager
         .create_tenant(
-            &format!("bloop-{}", Ulid::new()),
+            &format!("bloop-{}", Ulid::generate()),
             "starter",
             ACTOR,
             ts(1, 0),
@@ -163,7 +168,7 @@ async fn seed_priors_world(manager: &TenantManager) -> (Vec<String>, DateTime<Ut
         .unwrap();
     let tenant_c = manager
         .create_tenant(
-            &format!("cursed-{}", Ulid::new()),
+            &format!("cursed-{}", Ulid::generate()),
             "starter",
             ACTOR,
             ts(1, 0),
@@ -291,7 +296,7 @@ async fn tenant_lifecycle_is_audited_and_suspension_gates_the_store() {
     assert_eq!(must_get(&manager, &tenant).await, tenant);
     assert_eq!(manager.list_tenants().await.unwrap(), vec![tenant.clone()]);
     assert!(matches!(
-        manager.get_tenant(Ulid::new()).await,
+        manager.get_tenant(Ulid::generate()).await,
         Err(EeError::TenantNotFound(_))
     ));
 
@@ -312,7 +317,9 @@ async fn tenant_lifecycle_is_audited_and_suspension_gates_the_store() {
         Err(EeError::TenantSuspended(_))
     ));
     assert!(matches!(
-        manager.suspend_tenant(Ulid::new(), ACTOR, ts(2, 0)).await,
+        manager
+            .suspend_tenant(Ulid::generate(), ACTOR, ts(2, 0))
+            .await,
         Err(EeError::TenantNotFound(_))
     ));
 
@@ -420,7 +427,13 @@ async fn membership_rbac_enforces_the_matrix_and_is_audited() {
     // Membership of an unknown tenant is a typed not-found.
     assert!(matches!(
         manager
-            .add_member(Ulid::new(), "x@example.com", Role::Viewer, ACTOR, ts(1, 3))
+            .add_member(
+                Ulid::generate(),
+                "x@example.com",
+                Role::Viewer,
+                ACTOR,
+                ts(1, 3)
+            )
             .await,
         Err(EeError::TenantNotFound(_))
     ));
@@ -456,7 +469,7 @@ async fn usage_meters_the_tenant_telemetry_and_prices_both_models() {
         let signal = make_signal(Source::Sentry, Severity::High, &format!("use-{i}"));
         store.upsert_signal(&signal).await.unwrap();
         let report = Report {
-            id: Ulid::new(),
+            id: Ulid::generate(),
             kind: ReportKind::Maintenance,
             title: format!("usage {i}"),
             summary: "usage".into(),

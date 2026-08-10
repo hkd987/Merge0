@@ -51,7 +51,7 @@ mod tests {
 
     fn signal(release: Option<&str>, first_seen: DateTime<Utc>) -> Signal {
         Signal {
-            id: Ulid::new(),
+            id: Ulid::generate(),
             source: Source::Sentry,
             source_ref: "1".into(),
             kind: SignalKind::Exception,

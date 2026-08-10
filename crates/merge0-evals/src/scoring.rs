@@ -294,7 +294,7 @@ mod tests {
 
     fn work_order(criteria: &str, repro: &str) -> WorkOrder {
         WorkOrder {
-            report_id: ulid::Ulid::new(),
+            report_id: ulid::Ulid::generate(),
             repo: "o/r".into(),
             summary: "Fix district crash".into(),
             evidence: vec![],
