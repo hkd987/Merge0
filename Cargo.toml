@@ -62,7 +62,7 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 jsonwebtoken = "9"
 hmac = "0.13"
 hex = "0.4"
-ed25519-dalek = { version = "2", features = ["rand_core"] }
+ed25519-dalek = { version = "3", features = ["rand_core"] }
 rand_core = { version = "0.6", features = ["std", "getrandom"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
