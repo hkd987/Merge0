@@ -57,7 +57,7 @@ toml = "0.8"
 rust-embed = "8"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time", "signal", "process", "io-util"] }
 axum = "0.8"
-sqlx = { version = "0.8", default-features = false, features = ["postgres", "runtime-tokio", "tls-rustls", "chrono", "json", "migrate"] }
+sqlx = { version = "0.9", default-features = false, features = ["postgres", "runtime-tokio", "tls-rustls", "chrono", "json", "migrate"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 jsonwebtoken = "9"
 hmac = "0.13"
