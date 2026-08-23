@@ -53,7 +53,7 @@ ulid = { version = "3", features = ["serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 thiserror = "2"
 sha2 = "0.11"
-toml = "0.8"
+toml = "1.1"
 rust-embed = "8"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time", "signal", "process", "io-util"] }
 axum = "0.8"
